@@ -151,7 +151,7 @@ export interface AiAnalysisResult {
 ## Phase Gates
 
 - [x] **Gate 1:** `pnpm typecheck && pnpm lint && pnpm test && pnpm build` passes and Chrome loads the shell without errors.
-- [ ] **Gate 2:** Fixture-backed tests pass for all four model protocols; no real credential is committed or logged.
+- [x] **Gate 2:** Fixture-backed tests pass for all four model protocols; no real credential is committed or logged.
 - [ ] **Gate 3:** Popup save, manager edit, review apply, keyboard navigation, light/dark themes, and narrow layout pass Playwright smoke tests.
 - [ ] **Gate 4:** Capture, thumbnail cleanup, keyword search, embedding version isolation, duplicate scan, health scan, and notification retention pass integration tests.
 - [ ] **Gate 5:** HTML, Siftmark JSON/ZIP, MarkAI, encrypted archive, conflict preview, onboarding, and reset pass round-trip tests.

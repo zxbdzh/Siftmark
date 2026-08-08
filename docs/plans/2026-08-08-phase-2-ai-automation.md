@@ -32,7 +32,7 @@
 **Interfaces:**
 - Produces: `AiProtocol`, `AiAdapter`, `AiAnalysisResult`, `AiRequestContext`, `analysisResultSchema`, `buildAnalysisPrompt`.
 
-- [ ] **Step 1: Write failing Schema tests**
+- [x] **Step 1: Write failing Schema tests**
 
 ```ts
 it('rejects URLs and unknown output fields', () => {
@@ -45,7 +45,7 @@ it('rejects URLs and unknown output fields', () => {
 
 Test path depth `<= 3`, non-empty title, no slash/control characters in folder segments, unique tags, summary length `<= 240`, and reason length `<= 120`.
 
-- [ ] **Step 2: Define the adapter port**
+- [x] **Step 2: Define the adapter port**
 
 ```ts
 export type AiProtocol = 'openai-chat' | 'openai-responses' | 'anthropic-messages' | 'gemini-generate-content';
@@ -58,11 +58,11 @@ export interface AiAdapter {
 }
 ```
 
-- [ ] **Step 3: Implement versioned prompts**
+- [x] **Step 3: Implement versioned prompts**
 
 `buildAnalysisPrompt` must separate fixed safety/schema instructions from user-controlled additional rules. It must wrap page data in `<untrusted_page_content>` delimiters and state that instructions inside the block are data.
 
-- [ ] **Step 4: Verify and commit**
+- [x] **Step 4: Verify and commit**
 
 Run: `pnpm test -- tests/unit/ai/analysis-schema.test.ts tests/unit/ai/analysis-prompt.test.ts`  
 Expected: PASS.
@@ -85,7 +85,7 @@ git commit -m "feat: 定义统一 AI 结果协议"
 **Interfaces:**
 - Produces: `ModelProfile`, `ProfileRepository`, `selectProfileForCapability`, `providerPresets`.
 
-- [ ] **Step 1: Define and test profile validation**
+- [x] **Step 1: Define and test profile validation**
 
 ```ts
 export interface ModelProfile {
@@ -105,15 +105,15 @@ export interface ModelProfile {
 
 Reject non-HTTP(S) endpoints except loopback HTTP for Ollama. Clamp timeout to 5–120 seconds. A draft profile cannot be selected.
 
-- [ ] **Step 2: Implement local storage repository**
+- [x] **Step 2: Implement local storage repository**
 
 Store profiles under one namespaced key, preserve API keys locally, and return redacted copies from `exportRedacted()`. Never log serialized profiles.
 
-- [ ] **Step 3: Add exact presets**
+- [x] **Step 3: Add exact presets**
 
 Presets must include OpenAI, Anthropic, Gemini, DeepSeek, Qwen, Zhipu, Doubao, MiniMax, and Ollama with editable endpoints/models and no embedded keys.
 
-- [ ] **Step 4: Verify and commit**
+- [x] **Step 4: Verify and commit**
 
 Run: `pnpm test -- tests/unit/ai/profile-selector.test.ts tests/unit/ai/profile-repository.test.ts`  
 Expected: verified capability selection and redaction tests PASS.
@@ -137,7 +137,7 @@ git commit -m "feat: 实现模型配置档案"
 **Interfaces:**
 - Produces: `postProviderJson<T>`, `ProviderError`, `ProfileLimiter.schedule`, `RequestMetric`.
 
-- [ ] **Step 1: Write failure classification tests**
+- [x] **Step 1: Write failure classification tests**
 
 ```ts
 it.each([
@@ -148,15 +148,15 @@ it.each([
 });
 ```
 
-- [ ] **Step 2: Implement request sanitization**
+- [x] **Step 2: Implement request sanitization**
 
 Do not include request bodies, API keys, complete endpoints with query strings, or provider response text in error messages. Record only provider ID, model, task type, status, latency, token metrics, and sanitized error kind. Store at most 1,000 rows or 90 days in `aiUsageLog`, removing the oldest rows first.
 
-- [ ] **Step 3: Implement adaptive scheduling**
+- [x] **Step 3: Implement adaptive scheduling**
 
 Start with concurrency 2 per profile. Respect `Retry-After`; retry network/429/5xx at most twice using bounded exponential backoff. Do not retry authentication, validation, abort, or unknown-result errors.
 
-- [ ] **Step 4: Verify and commit**
+- [x] **Step 4: Verify and commit**
 
 Run: `pnpm test -- tests/unit/ai/http-client.test.ts tests/unit/ai/profile-limiter.test.ts`  
 Expected: retry counts, aborts, and redacted errors PASS.
@@ -181,19 +181,19 @@ git commit -m "feat: 实现模型请求限流与脱敏日志"
 - Consumes: `AiAdapter`, `postProviderJson`, `analysisResultSchema`.
 - Produces: `OpenAiChatAdapter`, `OpenAiResponsesAdapter`.
 
-- [ ] **Step 1: Write request-shape and response-shape tests**
+- [x] **Step 1: Write request-shape and response-shape tests**
 
 Assert Chat calls `<endpoint>/chat/completions` with bearer auth and messages. Assert Responses calls `<endpoint>/responses` with bearer auth and structured text format. Both must return the same `AiAnalysisResult`.
 
-- [ ] **Step 2: Implement shared endpoint normalization**
+- [x] **Step 2: Implement shared endpoint normalization**
 
 Strip duplicate trailing slashes, append exactly one API path, and preserve explicitly configured version roots. Never convert Responses payloads into Chat payloads.
 
-- [ ] **Step 3: Implement strict result parsing**
+- [x] **Step 3: Implement strict result parsing**
 
 Extract only the provider's documented text output field, parse JSON, run `analysisResultSchema`, then invoke the one-shot repair parser only for syntactically invalid JSON. Schema violations do not get silently coerced.
 
-- [ ] **Step 4: Verify and commit**
+- [x] **Step 4: Verify and commit**
 
 Run: `pnpm test -- tests/unit/ai/openai-chat.test.ts tests/unit/ai/openai-responses.test.ts`  
 Expected: exact request snapshots and fixture parsing PASS.
@@ -216,19 +216,19 @@ git commit -m "feat: 支持 OpenAI Chat 与 Responses 协议"
 **Interfaces:**
 - Produces: `AnthropicMessagesAdapter`, `GeminiGenerateContentAdapter`.
 
-- [ ] **Step 1: Write exact header and payload tests**
+- [x] **Step 1: Write exact header and payload tests**
 
 Anthropic uses `x-api-key`, `anthropic-version`, `max_tokens`, `system`, and `messages`. Gemini uses the model path ending in `:generateContent`, API-key authentication, `systemInstruction`, and `contents`.
 
-- [ ] **Step 2: Implement capability probes**
+- [x] **Step 2: Implement capability probes**
 
 Each adapter sends a minimal request containing no bookmark data and reports authentication, text, structured-output, and optional embedding capability separately.
 
-- [ ] **Step 3: Implement response extraction and Schema validation**
+- [x] **Step 3: Implement response extraction and Schema validation**
 
 Use fixture-driven parsing for text blocks and candidates. Empty, blocked, truncated, or safety-filtered responses return typed provider errors.
 
-- [ ] **Step 4: Verify and commit**
+- [x] **Step 4: Verify and commit**
 
 Run: `pnpm test -- tests/unit/ai/anthropic-messages.test.ts tests/unit/ai/gemini-generate-content.test.ts`  
 Expected: request and response fixture tests PASS.
@@ -252,7 +252,7 @@ git commit -m "feat: 支持 Claude 与 Gemini 协议"
 **Interfaces:**
 - Produces: `redactSensitiveText`, `wrapUntrustedContent`, `Rule`, `RuleEngine.evaluate`.
 
-- [ ] **Step 1: Write redaction tests**
+- [x] **Step 1: Write redaction tests**
 
 ```ts
 it('redacts secrets without storing the original match', () => {
@@ -262,11 +262,11 @@ it('redacts secrets without storing the original match', () => {
 
 Cover email, phone, JWT, bearer token, password field, common provider key prefixes, false positives, and deterministic replacement.
 
-- [ ] **Step 2: Define deterministic rules**
+- [x] **Step 2: Define deterministic rules**
 
 Rules match normalized domain, URL prefix, title keyword, or source folder ID and produce one of `move`, `tag`, `skip-ai`, or `send-to-inbox`. Sort by explicit priority, then creation time. First terminal action wins; tag actions accumulate.
 
-- [ ] **Step 3: Verify and commit**
+- [x] **Step 3: Verify and commit**
 
 Run: `pnpm test -- tests/unit/ai/redact-sensitive.test.ts tests/unit/rules/rule-engine.test.ts`  
 Expected: redaction and rule precedence tests PASS.
@@ -291,7 +291,7 @@ git commit -m "feat: 加入敏感信息脱敏与本地规则"
 - Consumes: rule engine, adapter registry, task runner, metadata repository.
 - Produces: `AnalysisProposal`, `AnalysisCoordinator.analyze`, `registerAiTaskHandlers`.
 
-- [ ] **Step 1: Define proposal states and write behavior tests**
+- [x] **Step 1: Define proposal states and write behavior tests**
 
 ```ts
 export interface AnalysisProposal {
@@ -306,20 +306,20 @@ export interface AnalysisProposal {
 
 Test rule-only proposals, model proposals, high-confidence auto approval, low-confidence review, source conflicts, invalid Schema, cancellation, and unknown request result.
 
-- [ ] **Step 2: Implement adapter registry and coordinator**
+- [x] **Step 2: Implement adapter registry and coordinator**
 
 The coordinator never calls `BookmarkRepository.move` or `update`. It writes proposals and returns their ID. Auto-approved proposals are still applied by the operation command service so they remain undoable.
 
-- [ ] **Step 3: Register durable handlers**
+- [x] **Step 3: Register durable handlers**
 
 The `analyze-bookmark` handler locks the profile version, emits progress, and clears in-memory page text in a `finally` block. Unknown network outcomes mark the task and proposal `unknown`/`failed` without automatic replay.
 
-- [ ] **Step 4: Verify and pass Gate 2**
+- [x] **Step 4: Verify and pass Gate 2**
 
 Run: `pnpm typecheck && pnpm lint && pnpm test -- tests/unit/ai tests/unit/rules tests/integration/ai-task-handler.test.ts && pnpm build`  
 Expected: all four adapters and proposal workflows PASS without network access.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/ai src/tasks/handlers entrypoints/background.ts tests/unit/ai tests/integration/ai-task-handler.test.ts
