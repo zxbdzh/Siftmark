@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "storage": {
+    "local": {
+      "history": [
+        {
+          "id": "history-1",
+          "timestamp": 1767225600000,
+          "title": "Siftmark",
+          "url": "https://example.com",
+          "category": "工具",
+          "bookmarkId": "42",
+          "status": "success"
+        }
+      ],
+      "bookmarkBackups": [
+        {
+          "id": "backup-1",
+          "createdAt": "2026-01-01T00:00:00.000Z",
+          "snapshot": {
+            "version": 1,
+            "capturedAt": "2026-01-01T00:00:00.000Z",
+            "containers": [
+              {
+                "key": "1",
+                "title": "书签栏",
+                "children": [
+                  {
+                    "title": "开发",
+                    "children": [
+                      { "title": "示例", "url": "https://example.com" }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "localOnlyUnknown": true
+    },
+    "sync": {
+      "llmProvider": "custom",
+      "modelType": "custom",
+      "selectedProvider": "deepseek",
+      "model_deepseek": "deepseek-chat",
+      "apiKey_deepseek": "must-not-migrate",
+      "allowNewFolders": true,
+      "folderCreationLevel": "medium",
+      "enableSmartRename": true,
+      "renameMaxLength": 36,
+      "showFloatingButton": true,
+      "captureNativeBookmarkEvents": false,
+      "language": "zh_CN",
+      "theme": "auto",
+      "disabledDomains": ["Example.COM", " ads.example.org ", "example.com"],
+      "futureSetting": "ignored"
+    }
+  },
+  "futureRoot": { "ignored": true }
+}
