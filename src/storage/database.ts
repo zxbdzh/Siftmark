@@ -9,6 +9,7 @@ import type {
   TaskRecord,
   ThumbnailRecord,
   VisitAggregate
+  ,AnalysisProposalRecord
 } from './schema';
 import { CURRENT_SCHEMA_VERSION, schemaStores } from './migrations';
 
@@ -22,6 +23,7 @@ export class SiftmarkDatabase extends Dexie {
   aiUsageLog!: Table<AiUsageLogRecord, string>;
   softDeletedMetadata!: Table<SoftDeletedMetadata, string>;
   visitAggregates!: Table<VisitAggregate, string>;
+  analysisProposals!: Table<AnalysisProposalRecord, string>;
 
   constructor(name = 'siftmark') {
     super(name);

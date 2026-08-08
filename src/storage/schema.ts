@@ -65,3 +65,12 @@ export interface VisitAggregate {
   lastVisitedAt?: number;
   dailyBuckets: Record<string, number>;
 }
+
+export interface AnalysisProposalRecord {
+  id: string;
+  bookmarkId: string;
+  sourceSnapshot: Record<string, unknown>;
+  result: Record<string, unknown>;
+  state: string;
+  createdAt: number;
+}
