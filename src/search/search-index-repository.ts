@@ -6,13 +6,39 @@ import { tokenize } from './tokenize';
 export class SearchIndexRepository {
   constructor(private readonly db: SiftmarkDatabase) {}
   async listDocuments(): Promise<SearchDocument[]> {
-    const rows = await this.db.searchIndex.where('kind').equals('keyword').toArray();
-    return rows.flatMap((row) => row.document ? [row.document as unknown as SearchDocument] : []);
+    const rows = await this.db.searchIndex
+      .where('kind')
+      .equals('keyword')
+      .toArray();
+    return rows.flatMap((row) =>
+      row.document ? [row.document as unknown as SearchDocument] : []
+    );
   }
-  async putDocument(document: SearchDocument): Promise<void> {
-    const combined = [document.title, document.url, document.folderPath, ...document.tags, document.summary, document.note].join(' ');
-    const record: SearchIndexRecord = { id: `keyword:${document.bookmarkId}`, kind: 'keyword', bookmarkId: document.bookmarkId, keywordTokens: tokenize(combined), document: document as unknown as Record<string, unknown>, updatedAt: Date.now() };
-    await this.db.searchIndex.put(record);
+  async putDocuments(documents: SearchDocument[]): Promise<void> {
+    const updatedAt = Date.now();
+    const records = documents.map((document): SearchIndexRecord => {
+      const combined = [
+        document.title,
+        document.url,
+        document.folderPath,
+        ...document.tags,
+        document.summary,
+        document.note
+      ].join(' ');
+      return {
+        id: `keyword:${document.bookmarkId}`,
+        kind: 'keyword',
+        bookmarkId: document.bookmarkId,
+        keywordTokens: tokenize(combined),
+        document: document as unknown as Record<string, unknown>,
+        updatedAt
+      };
+    });
+    await this.db.searchIndex.bulkPut(records);
   }
-  deleteDocument(bookmarkId: string): Promise<void> { return this.db.searchIndex.delete(`keyword:${bookmarkId}`); }
+  async deleteDocuments(bookmarkIds: string[]): Promise<void> {
+    await this.db.searchIndex.bulkDelete(
+      bookmarkIds.map((bookmarkId) => `keyword:${bookmarkId}`)
+    );
+  }
 }

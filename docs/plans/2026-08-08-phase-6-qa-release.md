@@ -153,23 +153,23 @@ git commit -m "test: 加入无障碍与视觉回归门禁"
 **Interfaces:**
 - Produces: reproducible 10,000-bookmark dataset and recorded baseline.
 
-- [ ] **Step 1: Generate deterministic data**
+- [x] **Step 1: Generate deterministic data**
 
 Create 200 folders and 10,000 bookmarks from a seeded generator. Include Chinese/Latin titles, duplicates, health states, tags, notes, and metadata but no external URLs requiring network.
 
-- [ ] **Step 2: Measure virtualized manager behavior**
+- [x] **Step 2: Measure virtualized manager behavior**
 
 Assert the initial rendered bookmark row count remains bounded, scrolling reaches the last item, selection does not shift layout, search returns results, and no long task blocks Popup save.
 
-- [ ] **Step 3: Measure task recovery**
+- [x] **Step 3: Measure task recovery**
 
 Queue 1,000 local tasks, interrupt the Service Worker, resume, and assert no duplicate idempotency keys or lost terminal states.
 
-- [ ] **Step 4: Record the baseline**
+- [x] **Step 4: Record the baseline**
 
 Write machine, browser, dataset seed, timings, memory observations, and pass/fail thresholds to `performance-baseline.md`. Do not claim universal performance beyond the measured environment.
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 Run: `pnpm test:e2e -- tests/e2e/performance-10000.spec.ts tests/e2e/task-recovery-load.spec.ts`  
 Expected: bounded DOM, successful navigation/search, and exactly-once local effects PASS.
