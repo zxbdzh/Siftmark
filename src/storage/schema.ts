@@ -3,10 +3,12 @@ import type { DurableTask } from '../tasks/types';
 
 export interface ThumbnailRecord {
   bookmarkId: string;
-  blob: Blob;
-  hash: string;
-  width: number;
-  height: number;
+  blob?: Blob;
+  hash?: string;
+  width?: number;
+  height?: number;
+  state: 'ready' | 'failed' | 'capturing';
+  errorKind?: 'permission' | 'restricted' | 'tab-changed' | 'decode' | 'quota' | 'unknown';
   createdAt: number;
   lastAccessedAt: number;
 }
@@ -26,16 +28,25 @@ export interface OperationLogRecord {
 export type TaskRecord = DurableTask;
 
 export interface SearchIndexRecord {
+  id: string;
+  kind: 'keyword' | 'embedding';
   bookmarkId: string;
   keywordTokens: string[];
+  document?: Record<string, unknown>;
   embeddingProfile?: string;
   dimensions?: number;
   vectorVersion?: string;
+  vector?: number[];
+  stale?: boolean;
+  updatedAt: number;
 }
 
 export interface NotificationRecord {
   id: string;
   type: string;
+  title: string;
+  message: string;
+  details?: string;
   read: boolean;
   createdAt: number;
   taskId?: string;
@@ -72,5 +83,8 @@ export interface AnalysisProposalRecord {
   sourceSnapshot: Record<string, unknown>;
   result: Record<string, unknown>;
   state: string;
+  category?: string;
+  relatedBookmarkIds?: string[];
+  healthStatus?: string;
   createdAt: number;
 }

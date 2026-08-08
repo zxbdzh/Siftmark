@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { FloatingButton } from '../src/ui/content/FloatingButton';
 import { ContentToast } from '../src/ui/content/ContentToast';
+import { extractPageCapture } from '../src/capture/extract-page';
 
 const contentStyles = '.siftmark-floating{position:fixed;right:18px;bottom:18px;z-index:2147483647;display:flex;background:#111;border-radius:8px;box-shadow:0 8px 24px rgb(0 0 0 / 24%)}.siftmark-floating button{width:38px;height:38px;border:0;background:transparent;color:#fff;display:grid;place-items:center}.siftmark-floating svg{width:18px}.siftmark-floating .siftmark-drag{cursor:grab;color:#b7ff36}.siftmark-toast{position:fixed;right:18px;bottom:64px;z-index:2147483647;background:#111;color:#fff;padding:8px 12px;border-radius:4px;font:14px sans-serif}';
 
@@ -24,6 +25,10 @@ export default defineContentScript({
   matches: ['http://*/*', 'https://*/*'],
   cssInjectionMode: 'ui',
   async main() {
+    browser.runtime.onMessage.addListener((message: unknown) => {
+      const value = message as { type?: string; blockedDomains?: string[] };
+      if (value.type === 'capture-page') return Promise.resolve(extractPageCapture(document, location, value.blockedDomains ?? []));
+    });
     const hiddenKey = `siftmark.content.hidden.${location.hostname}`;
     const settings = await browser.storage.local.get(['siftmark.content.floating', 'siftmark.content.position', hiddenKey]);
     if (settings['siftmark.content.floating'] !== true || settings[hiddenKey] === true) return;

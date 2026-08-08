@@ -8,6 +8,17 @@ export class ReviewService {
   async applyProposal(input: { proposalId: string; fields: Array<'title' | 'folder' | 'tags' | 'summary'> }): Promise<void> {
     const proposal = await this.proposals.get(input.proposalId);
     if (!proposal) throw new Error('Proposal not found');
+    if (proposal.category === 'duplicate') {
+      const rows = await Promise.all((proposal.relatedBookmarkIds ?? []).map((bookmarkId) => this.metadata.get(bookmarkId)));
+      const current = rows.find((row) => row?.bookmarkId === proposal.bookmarkId) ?? await this.metadata.get(proposal.bookmarkId);
+      const tags = [...new Set(rows.flatMap((row) => row?.tags ?? []))];
+      const notes = [...new Set(rows.map((row) => row?.note.trim()).filter((note): note is string => Boolean(note)))];
+      const summaries = rows.map((row) => row?.summary.trim()).filter((summary): summary is string => Boolean(summary));
+      await this.commands.updateMetadata({ bookmarkId: proposal.bookmarkId, summary: current?.summary || summaries[0] || '', tags, note: notes.join('\n\n'), confidence: current?.confidence ?? 'unknown', reason: '用户确认重复项元数据合并', health: current?.health ?? 'unchecked', updatedAt: Date.now() });
+      await this.proposals.put({ ...proposal, state: 'approved' });
+      return;
+    }
+    if (proposal.category === 'dead') { await this.proposals.put({ ...proposal, state: 'approved' }); return; }
     if (input.fields.includes('title')) {
       const result = await this.commands.rename({ bookmarkId: proposal.bookmarkId, title: proposal.result.title, expectedTitle: proposal.sourceSnapshot.title });
       if (result && !result.ok) throw new Error('书签标题已变化，请重新审核');

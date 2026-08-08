@@ -1,0 +1,9 @@
+import { Check, Trash2 } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import type { AppNotification } from '../../notifications/types';
+
+export function NotificationCenter({ notifications, onMarkRead, onClear }: { notifications: AppNotification[]; onMarkRead(id: string): Promise<void> | void; onClear(): Promise<void> | void }) {
+  const [filter, setFilter] = useState<'all' | 'unread' | AppNotification['type']>('all');
+  const visible = useMemo(() => notifications.filter((notification) => filter === 'all' || filter === 'unread' ? filter === 'all' || !notification.read : notification.type === filter), [filter, notifications]);
+  return <section className="notification-center"><header><h2>通知</h2><div><select aria-label="通知筛选" value={filter} onChange={(event) => setFilter(event.target.value as typeof filter)}><option value="all">全部</option><option value="unread">未读</option><option value="task-succeeded">已完成</option><option value="task-paused">已暂停</option><option value="task-failed">失败</option><option value="health-summary">健康检查</option></select><button type="button" title="清空通知" aria-label="清空通知" onClick={() => void onClear()}><Trash2 size={16}/></button></div></header>{visible.length ? <ul>{visible.map((notification) => <li key={notification.id} data-read={notification.read}><div><strong>{notification.title}</strong><time dateTime={new Date(notification.createdAt).toISOString()}>{new Date(notification.createdAt).toLocaleString('zh-CN')}</time></div><p>{notification.message}</p>{notification.details ? <details><summary>详情</summary><pre>{notification.details}</pre></details> : null}{!notification.read ? <button type="button" onClick={() => void onMarkRead(notification.id)}><Check size={15}/>标为已读</button> : null}</li>)}</ul> : <p className="empty-state">暂无通知</p>}</section>;
+}

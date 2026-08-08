@@ -40,6 +40,12 @@ test('loads popup, manager, options, and the background worker', async () => {
     const manager = await openExtensionPage(context, extensionId, 'manager');
     await expect(manager.getByRole('complementary', { name: '文件夹', exact: true })).toBeVisible();
     await expect(manager.getByRole('main', { name: '书签列表' })).toBeVisible();
+    await expect(manager.getByLabel('搜索书签')).toBeVisible();
+    await manager.getByRole('tab', { name: '通知' }).click();
+    await expect(manager.getByRole('main', { name: '通知中心' })).toBeVisible();
+    await manager.getByRole('tab', { name: '统计' }).click();
+    await expect(manager.getByRole('main', { name: '访问统计' })).toBeVisible();
+    await manager.getByRole('tab', { name: '书签' }).click();
     await manager.setViewportSize({ width: 390, height: 844 });
     await expect(manager.getByRole('button', { name: '打开文件夹' })).toBeVisible();
     const options = await openExtensionPage(context, extensionId, 'options');
@@ -66,8 +72,7 @@ test('passes Gate 3 save, edit, keyboard, move, review, theme, and responsive wo
     });
     await manager.reload();
     await manager.getByRole('treeitem', { name: 'Gate 3 来源' }).click({ button: 'right' });
-    await expect(manager.getByRole('button', { name: '健康检查' })).toBeDisabled();
-    await expect(manager.getByRole('button', { name: '健康检查' })).toHaveAttribute('title', '健康检查服务将在增强功能启用后可用');
+    await expect(manager.getByRole('button', { name: '健康检查' })).toBeEnabled();
     manager.once('dialog', (dialog) => void dialog.accept('Gate 3 子文件夹'));
     await manager.getByRole('button', { name: '新建子文件夹' }).click();
     await expect(manager.getByRole('treeitem', { name: 'Gate 3 子文件夹' })).toBeVisible();
@@ -95,7 +100,7 @@ test('passes Gate 3 save, edit, keyboard, move, review, theme, and responsive wo
     await manager.getByRole('treeitem', { name: 'Gate 3 来源' }).click();
     await manager.getByRole('button', { name: /规格书签 已更新/ }).click({ button: 'right' });
     await manager.getByRole('button', { name: '移动到…' }).click();
-    await manager.getByRole('option', { name: 'Gate 3 目标' }).click();
+    await manager.getByRole('listbox', { name: '目标文件夹' }).getByRole('option', { name: 'Gate 3 目标' }).click();
     await expect.poll(() => manager.evaluate(async (id) => new Promise<string | undefined>((resolve) => chrome.bookmarks.get(id, (nodes) => resolve(nodes[0]?.parentId))), fixture.bookmark1Id)).toBe(fixture.destinationId);
 
     await manager.evaluate(async ({ id, parentId }) => {

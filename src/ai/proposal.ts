@@ -2,13 +2,17 @@ import type { BookmarkId, BookmarkNode } from '../bookmarks/types';
 import type { SiftmarkDatabase } from '../storage/database';
 import type { AnalysisProposalRecord } from '../storage/schema';
 import type { AiAnalysisResult } from './types';
+import type { HealthStatus } from '../storage/types';
 
 export interface AnalysisProposal {
   id: string;
   bookmarkId: BookmarkId;
   sourceSnapshot: BookmarkNode;
   result: AiAnalysisResult;
-  state: 'pending' | 'auto-approved' | 'approved' | 'rejected' | 'conflict' | 'failed';
+  state: 'pending' | 'auto-approved' | 'approved' | 'rejected' | 'conflict' | 'failed' | 'duplicate' | 'dead';
+  category?: 'analysis' | 'duplicate' | 'dead';
+  relatedBookmarkIds?: string[];
+  healthStatus?: HealthStatus;
   createdAt: number;
 }
 
@@ -37,6 +41,9 @@ export class DexieProposalRepository implements ProposalRepository {
       sourceSnapshot: proposal.sourceSnapshot as unknown as Record<string, unknown>,
       result: proposal.result as unknown as Record<string, unknown>,
       state: proposal.state,
+      category: proposal.category,
+      relatedBookmarkIds: proposal.relatedBookmarkIds,
+      healthStatus: proposal.healthStatus,
       createdAt: proposal.createdAt
     };
     await this.db.analysisProposals.put(record);

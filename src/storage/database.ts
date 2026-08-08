@@ -11,7 +11,7 @@ import type {
   ThumbnailRecord,
   VisitAggregate
 } from './schema';
-import { CURRENT_SCHEMA_VERSION, schemaStores } from './migrations';
+import { CURRENT_SCHEMA_VERSION, initialSchemaStores, schemaStores } from './migrations';
 
 export class SiftmarkDatabase extends Dexie {
   bookmarkMetadata!: Table<BookmarkMetadata, string>;
@@ -27,6 +27,7 @@ export class SiftmarkDatabase extends Dexie {
 
   constructor(name = 'siftmark') {
     super(name);
+    this.version(1).stores(initialSchemaStores);
     this.version(CURRENT_SCHEMA_VERSION).stores(schemaStores);
   }
 }

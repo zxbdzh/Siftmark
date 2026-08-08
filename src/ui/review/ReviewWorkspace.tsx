@@ -14,7 +14,7 @@ export function ReviewWorkspace({ proposals, onApply, onReject, onRetry }: { pro
     let completed = 0;
     try {
       for (const proposal of visible) {
-        if (action === 'apply') await onApply(proposal.id, ['title', 'folder', 'tags', 'summary']);
+        if (action === 'apply') await onApply(proposal.id, proposal.category === 'duplicate' || proposal.category === 'dead' ? [] : ['title', 'folder', 'tags', 'summary']);
         else await onReject(proposal.id);
         completed += 1;
       }

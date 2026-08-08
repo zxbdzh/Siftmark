@@ -34,7 +34,7 @@
 **Interfaces:**
 - Produces: `PageCapture`, `evaluatePagePolicy`, `extractPageCapture`, `truncateByParagraph`.
 
-- [ ] **Step 1: Write policy and truncation tests**
+- [x] **Step 1: Write policy and truncation tests**
 
 ```ts
 it('blocks capture when a password field is present', () => {
@@ -45,16 +45,16 @@ it('blocks capture when a password field is present', () => {
 
 Test login/payment patterns, browser/internal schemes, user blocklist, intranet detection, paragraph boundaries, title/description preference, and the 12,000-character ceiling.
 
-- [ ] **Step 2: Implement extraction**
+- [x] **Step 2: Implement extraction**
 
 Return title, canonical URL, description, keywords, language, and truncated readable text. Remove scripts, styles, navigation, hidden nodes, form values, and contenteditable input. Keep the payload in the message response only; do not call storage APIs.
 
-- [ ] **Step 3: Verify non-persistence**
+- [x] **Step 3: Verify non-persistence**
 
 Run: `pnpm test -- tests/unit/capture`  
 Expected: extraction and blocking tests PASS; a test spy confirms no storage call.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/capture entrypoints/content.ts tests/unit/capture tests/fixtures/pages
@@ -76,21 +76,21 @@ git commit -m "feat: 实现隐私受控网页采集"
 **Interfaces:**
 - Produces: `ThumbnailService.captureCurrentTab`, `ThumbnailRepository`, `enforceThumbnailBudget`.
 
-- [ ] **Step 1: Write image constraints tests**
+- [x] **Step 1: Write image constraints tests**
 
 Assert maximum edge 1280px, WebP quality 0.72, hash deduplication, metadata reference, failed-state fallback image, 200 MB budget, and least-recently-used eviction.
 
-- [ ] **Step 2: Implement capture and conversion**
+- [x] **Step 2: Implement capture and conversion**
 
 Call `chrome.tabs.captureVisibleTab` only after policy approval. Decode to an offscreen canvas, scale without upsampling, export WebP, and discard the source data URL after the Blob is committed.
 
-- [ ] **Step 3: Implement failure behavior**
+- [x] **Step 3: Implement failure behavior**
 
 Permission, restricted page, tab switch, decode, and quota failures update thumbnail state but never roll back the native bookmark. Manual refresh enqueues the same handler.
 
 The detail panel preview opens a local full-size modal first, shows capture time and refresh state, and exposes a separate explicit “打开网页” command.
 
-- [ ] **Step 4: Verify and commit**
+- [x] **Step 4: Verify and commit**
 
 Run: `pnpm test -- tests/unit/capture/image-processing.test.ts tests/integration/thumbnail-service.test.ts`  
 Expected: dimension, format, LRU, failure, and manual refresh tests PASS.
@@ -116,7 +116,7 @@ git commit -m "feat: 加入本地网页缩略图"
 **Interfaces:**
 - Produces: `SearchQuery`, `SearchResult`, `LocalSearchIndex`, `SearchService.search`.
 
-- [ ] **Step 1: Write ranking tests**
+- [x] **Step 1: Write ranking tests**
 
 ```ts
 it('ranks an exact title before a fuzzy summary match', async () => {
@@ -127,15 +127,15 @@ it('ranks an exact title before a fuzzy summary match', async () => {
 
 Cover Chinese bigrams, Latin normalization, domain matching, prefixes, limited edit distance, tag boosts, folder/status/time filters, and deterministic ties.
 
-- [ ] **Step 2: Implement incremental indexing**
+- [x] **Step 2: Implement incremental indexing**
 
 Index title, URL, folder, tags, summary, and note. Update only changed bookmark IDs after domain events. Rebuild in resumable chunks for first scan or schema migration.
 
-- [ ] **Step 3: Wire search UI**
+- [x] **Step 3: Wire search UI**
 
 Use a debounced query, keyboard result navigation, filter controls, explicit “本地搜索” mode label, and stable list dimensions.
 
-- [ ] **Step 4: Verify and commit**
+- [x] **Step 4: Verify and commit**
 
 Run: `pnpm test -- tests/unit/search tests/unit/ui/search-bar.test.tsx`  
 Expected: ranking, filters, incremental update, and accessible UI tests PASS.
@@ -161,7 +161,7 @@ git commit -m "feat: 实现本地混合检索"
 - Consumes: an enabled profile with `embed` capability.
 - Produces: `EmbeddingVersion`, `EmbeddingIndexer.enqueueMissing`, `fuseSearchResults`.
 
-- [ ] **Step 1: Write version isolation tests**
+- [x] **Step 1: Write version isolation tests**
 
 ```ts
 it('never compares vectors from different model versions', async () => {
@@ -171,15 +171,15 @@ it('never compares vectors from different model versions', async () => {
 });
 ```
 
-- [ ] **Step 2: Implement privacy-limited input**
+- [x] **Step 2: Implement privacy-limited input**
 
 Build embedding text from title, domain, folder path, tags, and AI summary only. Strip URL query/fragment and exclude note/body text.
 
-- [ ] **Step 3: Implement resumable reindex and fusion**
+- [x] **Step 3: Implement resumable reindex and fusion**
 
 New model versions mark old vectors stale and queue chunked rebuilds. Until complete, use local results plus only same-version vectors. Fuse normalized keyword and cosine scores with deterministic weights.
 
-- [ ] **Step 4: Verify and commit**
+- [x] **Step 4: Verify and commit**
 
 Run: `pnpm test -- tests/unit/search/vector-search.test.ts tests/integration/embedding-reindex.test.ts`  
 Expected: privacy input, dimensions, version isolation, pause/resume, and fallback PASS.
@@ -204,19 +204,19 @@ git commit -m "feat: 加入可选语义检索"
 **Interfaces:**
 - Produces: `normalizeUrlConservatively`, `DuplicateGroup`, `LinkHealth`, health review proposals.
 
-- [ ] **Step 1: Write URL normalization tests**
+- [x] **Step 1: Write URL normalization tests**
 
 Preserve business query parameters, remove known tracking parameters, normalize host/protocol case and default ports, preserve path case, and treat redirects as evidence rather than identity.
 
-- [ ] **Step 2: Implement duplicate grouping**
+- [x] **Step 2: Implement duplicate grouping**
 
 Create exact normalized URL groups first, then separate similarity suggestions using title/domain evidence. Never delete or merge automatically. The review proposal defaults to retaining the earliest bookmark and merging metadata.
 
-- [ ] **Step 3: Implement staged health requests**
+- [x] **Step 3: Implement staged health requests**
 
 Attempt a lightweight request, retry/transparently downgrade to GET when required, and classify `healthy`, `temporary`, `dead`, `restricted`, or `blocked`. Respect per-domain concurrency and cancellation.
 
-- [ ] **Step 4: Verify and commit**
+- [x] **Step 4: Verify and commit**
 
 Run: `pnpm test -- tests/unit/health`  
 Expected: normalization, duplicate groups, status classes, retry, and cancellation PASS.
@@ -245,26 +245,26 @@ git commit -m "feat: 实现重复与失效链接检测"
 **Interfaces:**
 - Produces: 90-day aggregates, opt-in schedules, local notifications, summary-only browser notifications.
 
-- [ ] **Step 1: Write retention tests**
+- [x] **Step 1: Write retention tests**
 
 Assert visit events collapse into daily buckets, detailed URLs are not stored, buckets older than 90 days expire, notifications expire after 30 days or 500 rows, and oldest read rows are removed first.
 
-- [ ] **Step 2: Implement opt-in scheduling**
+- [x] **Step 2: Implement opt-in scheduling**
 
 Support weekly/monthly alarms scoped to selected folders. Installation must not create a recurring health alarm until the user enables it.
 
-- [ ] **Step 3: Implement notification privacy**
+- [x] **Step 3: Implement notification privacy**
 
 Browser notifications contain counts and task state only. Titles, URLs, provider errors, and API details remain in the application center. Request optional notification permission only when enabling browser notifications.
 
 Usage insights show local aggregate counts, last visit, 90-day trends, frequent domains, and cleanup suggestions. They never display or persist a per-visit URL timeline.
 
-- [ ] **Step 4: Verify and pass Gate 4**
+- [x] **Step 4: Verify and pass Gate 4**
 
 Run: `pnpm typecheck && pnpm lint && pnpm test -- tests/unit/capture tests/unit/search tests/unit/health tests/unit/notifications tests/integration/thumbnail-service.test.ts tests/integration/embedding-reindex.test.ts tests/integration/scheduled-health-scan.test.ts && pnpm build`  
 Expected: all capture/search/health/notification tests and build PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/health src/notifications src/platform/chrome entrypoints/background.ts src/ui/notifications tests
@@ -272,3 +272,13 @@ git commit -m "feat: 完成统计调度与通知中心"
 ```
 
 Update Gate 4 in the master plan and commit `docs: 记录增强能力阶段验收结果`.
+
+## Gate 4 验收记录
+
+- 日期：2026-08-08
+- `pnpm typecheck`：通过
+- `pnpm lint`：通过
+- `pnpm test`：59 个测试文件、106 个测试通过
+- `pnpm test:e2e`：Chromium 2 个场景通过
+- `pnpm build`：Chrome MV3 生产构建通过，总大小 5.51 MB
+- 全仓 Prettier 默认规则检查未作为 Gate：仓库既有 211 个文件未采用该格式，未进行无关的全仓格式化。

@@ -10,8 +10,9 @@ export class ModelProfileService {
     const adapter = this.adapters.get(profile.protocol);
     if (!adapter) throw new Error('所选协议不可用');
     const probe = await adapter.testConnection(profile, signal);
+    const requiresText = profile.capabilities.some((capability) => capability !== 'embed');
     const requiresEmbedding = profile.capabilities.includes('embed');
-    if (!probe.authentication || !probe.text || !probe.structuredOutput || (requiresEmbedding && !probe.embedding)) throw new Error('模型未通过所需能力验证');
+    if (!probe.authentication || (requiresText && (!probe.text || !probe.structuredOutput)) || (requiresEmbedding && !probe.embedding)) throw new Error('模型未通过所需能力验证');
     const verified = await this.profiles.put({ ...profile, state: 'verified', verifiedAt: Date.now() });
     return { profile: verified, probe };
   }

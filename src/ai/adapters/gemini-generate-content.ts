@@ -7,18 +7,24 @@ import { analysisJsonSchema, appendEndpointPath, parseAnalysisText, parseProbeTe
 
 type Poster = <T>(request: ProviderJsonRequest) => Promise<T>;
 interface GeminiResponse { candidates?: Array<{ finishReason?: string; content?: { parts?: Array<{ text?: string }> } }>; promptFeedback?: { blockReason?: string }; }
+interface GeminiEmbeddingResponse { embeddings?: Array<{ values?: number[] }>; }
 
 export class GeminiGenerateContentAdapter implements AiAdapter {
   readonly protocol = 'gemini-generate-content' as const;
   constructor(private readonly post: Poster = postProviderJson) {}
 
   async testConnection(profile: ModelProfile, signal: AbortSignal): Promise<CapabilityProbe> {
-    const response = await this.post<GeminiResponse>({ url: modelUrl(profile), headers: { 'x-goog-api-key': profile.apiKey }, body: { contents: [{ role: 'user', parts: [{ text: 'Return {"ok":true}.' }] }], generationConfig: { responseMimeType: 'application/json', responseJsonSchema: probeJsonSchema } }, signal, timeoutMs: profile.timeoutMs });
-    const candidate = response.candidates?.[0];
-    const text = candidate?.content?.parts?.find((part) => part.text)?.text;
-    if (!text) throw new ProviderError('unknown-result', 'Provider returned no probe result');
-    parseProbeText(text);
-    return { authentication: true, text: true, structuredOutput: true, embedding: false };
+    const needsText = profile.capabilities.some((capability) => capability !== 'embed') || profile.capabilities.length === 0;
+    if (needsText) {
+      const response = await this.post<GeminiResponse>({ url: modelUrl(profile), headers: { 'x-goog-api-key': profile.apiKey }, body: { contents: [{ role: 'user', parts: [{ text: 'Return {"ok":true}.' }] }], generationConfig: { responseMimeType: 'application/json', responseJsonSchema: probeJsonSchema } }, signal, timeoutMs: profile.timeoutMs });
+      const candidate = response.candidates?.[0];
+      const text = candidate?.content?.parts?.find((part) => part.text)?.text;
+      if (!text) throw new ProviderError('unknown-result', 'Provider returned no probe result');
+      parseProbeText(text);
+    }
+    const embedding = profile.capabilities.includes('embed');
+    if (embedding) await this.embed(profile, ['siftmark'], signal);
+    return { authentication: true, text: needsText, structuredOutput: needsText, embedding };
   }
 
   async analyze(profile: ModelProfile, context: AiRequestContext, signal: AbortSignal): Promise<AiAnalysisResult> {
@@ -33,6 +39,20 @@ export class GeminiGenerateContentAdapter implements AiAdapter {
     const text = candidate.content?.parts?.find((part) => part.text)?.text;
     if (!text) throw new ProviderError('unknown-result', 'Provider returned no text result');
     return parseAnalysisText(text);
+  }
+
+  async embed(profile: ModelProfile, texts: string[], signal: AbortSignal): Promise<number[][]> {
+    const model = `models/${profile.model}`;
+    const response = await this.post<GeminiEmbeddingResponse>({
+      url: appendEndpointPath(profile.endpoint, `models/${encodeURIComponent(profile.model)}:batchEmbedContents`),
+      headers: { 'x-goog-api-key': profile.apiKey },
+      body: { requests: texts.map((text) => ({ model, content: { parts: [{ text }] }, taskType: 'RETRIEVAL_DOCUMENT' })) },
+      signal,
+      timeoutMs: profile.timeoutMs
+    });
+    const vectors = (response.embeddings ?? []).map((item) => item.values);
+    if (vectors.length !== texts.length || vectors.some((vector) => !vector || vector.length === 0 || vector.some((value) => !Number.isFinite(value)))) throw new ProviderError('validation', 'Provider returned invalid embeddings');
+    return vectors as number[][];
   }
 }
 

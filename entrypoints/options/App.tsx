@@ -16,6 +16,7 @@ import { PermissionsSection } from '../../src/ui/options/PermissionsSection';
 import { PromptRulesSection } from '../../src/ui/options/PromptRulesSection';
 import { RulesSection } from '../../src/ui/options/RulesSection';
 import { SpecialFoldersSection } from '../../src/ui/options/SpecialFoldersSection';
+import { HealthAutomationSection } from '../../src/ui/options/HealthAutomationSection';
 import { hydrateTheme } from '../../src/ui/theme/theme-store';
 
 export default function App() {
@@ -26,5 +27,5 @@ export default function App() {
   const profileService = useMemo(() => new ModelProfileService(profiles, createDefaultAiAdapterRegistry(), settings), [profiles, settings]);
   const [metrics, setMetrics] = useState<RequestMetric[]>([]);
   useEffect(() => { void Promise.all([hydrateTheme(settings), usage.list().then(setMetrics)]); }, [settings, usage]);
-  return <main><header><strong className="brand-type">Siftmark</strong><h1>设置</h1></header><ModelProfilesSection repository={profiles} service={profileService}/><RulesSection repository={settings} bookmarks={bookmarks}/><PermissionsSection/><AppearanceSection repository={settings}/><SpecialFoldersSection settings={settings} bookmarks={bookmarks}/><PromptRulesSection repository={settings}/><IncognitoSection/><AiUsageSection metrics={metrics} repository={usage} onClear={() => setMetrics([])}/></main>;
+  return <main><header><strong className="brand-type">Siftmark</strong><h1>设置</h1></header><ModelProfilesSection repository={profiles} service={profileService}/><RulesSection repository={settings} bookmarks={bookmarks}/><PermissionsSection/><HealthAutomationSection bookmarks={bookmarks}/><AppearanceSection repository={settings}/><SpecialFoldersSection settings={settings} bookmarks={bookmarks}/><PromptRulesSection repository={settings}/><IncognitoSection/><AiUsageSection metrics={metrics} repository={usage} onClear={() => setMetrics([])}/></main>;
 }

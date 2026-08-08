@@ -6,11 +6,14 @@ import type { ModelProfile } from '../../../src/ai/types';
 const profile: ModelProfile = { id: 'p', version: 'v1', name: 'P', protocol: 'openai-chat', endpoint: 'https://api.test/v1/', model: 'm', apiKey: 'key', timeoutMs: 1000, capabilities: ['classify'], state: 'verified' };
 
 describe('OpenAiChatAdapter', () => {
-  it('verifies a real structured response without claiming embedding support', async () => {
-    const post = vi.fn().mockResolvedValue({ choices: [{ message: { content: '{"ok":true}' } }] });
+  it('verifies structured output and embeddings when both are requested', async () => {
+    const post = vi.fn()
+      .mockResolvedValueOnce({ choices: [{ message: { content: '{"ok":true}' } }] })
+      .mockResolvedValueOnce({ data: [{ index: 0, embedding: [1, 0] }] });
     const result = await new OpenAiChatAdapter(post).testConnection({ ...profile, capabilities: ['classify', 'embed'] }, new AbortController().signal);
     expect(post).toHaveBeenCalledWith(expect.objectContaining({ body: expect.objectContaining({ response_format: { type: 'json_schema', json_schema: expect.objectContaining({ strict: true }) } }) }));
-    expect(result).toEqual({ authentication: true, text: true, structuredOutput: true, embedding: false });
+    expect(post).toHaveBeenLastCalledWith(expect.objectContaining({ url: 'https://api.test/v1/embeddings', body: { model: 'm', input: ['siftmark'], encoding_format: 'float' } }));
+    expect(result).toEqual({ authentication: true, text: true, structuredOutput: true, embedding: true });
   });
 
   it('rejects a probe response that does not match the schema', async () => {

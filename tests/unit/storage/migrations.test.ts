@@ -3,7 +3,7 @@ import { CURRENT_SCHEMA_VERSION, schemaStores } from '../../../src/storage/migra
 
 describe('storage schema', () => {
   it('declares the initial version and all durable stores', () => {
-    expect(CURRENT_SCHEMA_VERSION).toBe(1);
+    expect(CURRENT_SCHEMA_VERSION).toBe(2);
     expect(Object.keys(schemaStores)).toEqual(expect.arrayContaining(['bookmarkMetadata', 'tasks', 'softDeletedMetadata']));
   });
 });

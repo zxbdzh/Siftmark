@@ -59,6 +59,7 @@ export default function App() {
     setTaskBookmarkId(result.bookmarkId);
     setRecentOperationId(result.operationId);
     void settings.setRecentFolder(destination);
+    if (result.bookmarkId && tab?.id !== undefined) void browser.runtime.sendMessage({ type: 'queue-thumbnail', input: { bookmarkId: result.bookmarkId, tabId: tab.id } });
   };
 
   return <main><header><strong className="brand-type">Siftmark</strong><button type="button" onClick={() => void browser.tabs.create({ url: browser.runtime.getURL('/manager.html') })}>打开管理器</button></header><QuickSave service={service} tab={tab} folders={folders} defaultFolderId={folderId} destinationHint={destinationHint} queueAnalysis={queueAnalysis} recentOperationId={recentOperationId} onSaved={handleSaved} onUndo={async (operationId) => { const result = await undo.undo(operationId); if (!result.ok) throw new Error('无法撤销最近保存'); setRecentOperationId(undefined); }}/><TaskProgress repository={tasks} taskId={taskId} bookmarkId={taskBookmarkId} proposals={proposals}/><TabBatchSave service={service} tabs={tabs} folderId={folderId}/></main>;
