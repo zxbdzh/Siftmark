@@ -97,6 +97,7 @@ API Key 不使用 `chrome.storage.sync`，不跨设备同步。API Key 以扩展
 | taskQueue | taskId、type、inputSnapshot、profileVersion、state、progress、retryCount | 终态任务保留 30 天 |
 | searchIndex | bookmarkId、keywordTokens、embeddingProfile、dimensions、vectorVersion | 可重建；模型切换后渐进重建 |
 | notificationStore | notificationId、type、read、createdAt、taskId | 30 天或 500 条 |
+| aiUsageLog | requestId、profileId、model、taskType、tokens、latency、status、createdAt | 90 天或 1,000 条 |
 | softDeletedMetadata | bookmarkId、payload、deletedAt、originalLocation | 30 天 |
 | visitAggregates | bookmarkId、count、lastVisitedAt、dailyBuckets | 最近 90 天聚合 |
 
