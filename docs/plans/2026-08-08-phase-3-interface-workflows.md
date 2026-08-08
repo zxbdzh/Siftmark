@@ -39,7 +39,7 @@
 **Interfaces:**
 - Produces: `ThemePreference`, `DensityPreference`, `useThemeStore`, `AiStatusMark`.
 
-- [ ] **Step 1: Write theme and reduced-motion tests**
+- [x] **Step 1: Write theme and reduced-motion tests**
 
 ```ts
 it('uses a static fallback when reduced motion is requested', () => {
@@ -49,7 +49,7 @@ it('uses a static fallback when reduced motion is requested', () => {
 });
 ```
 
-- [ ] **Step 2: Define exact tokens**
+- [x] **Step 2: Define exact tokens**
 
 ```css
 :root {
@@ -71,15 +71,15 @@ Define dark equivalents with AA contrast. Font sizes are 13–14px for body/cont
 
 Import `@fontsource-variable/noto-sans-sc/wght.css` and `@fontsource-variable/space-grotesk/wght.css` from `fonts.css`; WXT must bundle their WOFF2 subsets locally. Record both OFL licenses in `THIRD_PARTY_NOTICES.md` during Phase 6.
 
-- [ ] **Step 3: Rebuild the selected concept as deterministic vector assets**
+- [x] **Step 3: Rebuild the selected concept as deterministic vector assets**
 
 Use the funnel/bookmark geometry from palette C only as a concept reference. Create clean SVG paths for 16/48/128px and wordmark use. Do not embed the generated PNG in production UI.
 
-- [ ] **Step 4: Create four original local Lottie states**
+- [x] **Step 4: Create four original local Lottie states**
 
 Each JSON must use vector shapes only, loop only for idle/analyzing, and have a static SVG fallback. Validate JSON parsing and nonzero bounds in tests.
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 Run: `pnpm test -- tests/unit/ui/theme-store.test.ts tests/unit/ui/ai-status-mark.test.tsx && pnpm build`  
 Expected: theme, reduced-motion, local asset, and build tests PASS.
@@ -108,11 +108,11 @@ git commit -m "feat: 建立 Siftmark 视觉与动效系统"
 - Consumes: `BookmarkRepository`, `MetadataRepository`.
 - Produces: `useManagerStore`, `ManagerLayout`, virtualized folder/bookmark row renderers.
 
-- [ ] **Step 1: Write layout behavior tests**
+- [x] **Step 1: Write layout behavior tests**
 
 Assert three labeled regions at wide width, collapsible detail at medium width, drawer buttons at narrow width, stable row height for each density, and no nested cards.
 
-- [ ] **Step 2: Define view-only manager state**
+- [x] **Step 2: Define view-only manager state**
 
 ```ts
 interface ManagerViewState {
@@ -124,15 +124,15 @@ interface ManagerViewState {
 }
 ```
 
-- [ ] **Step 3: Implement virtualized tree and list**
+- [x] **Step 3: Implement virtualized tree and list**
 
 Use stable row keys and fixed density dimensions. Persist sort per folder in local settings. Hover, selection, loading labels, and icons must not change row dimensions.
 
-- [ ] **Step 4: Implement selection and responsive details**
+- [x] **Step 4: Implement selection and responsive details**
 
 Support click, Ctrl/Command multi-select, Shift range, keyboard arrows, Home/End, and Escape. Detail edits call services rather than mutating UI state as persistence.
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 Run: `pnpm test -- tests/unit/ui/manager-layout.test.tsx tests/unit/ui/bookmark-list.test.tsx`  
 Expected: layout, virtualization, selection, and keyboard tests PASS.
@@ -162,7 +162,7 @@ git commit -m "feat: 构建三栏书签管理器"
 - Consumes: `AnalysisProposal`, `BookmarkCommandService`, `UndoService`.
 - Produces: proposal query/update repository and review apply/reject commands.
 
-- [ ] **Step 1: Write proposal application tests**
+- [x] **Step 1: Write proposal application tests**
 
 ```ts
 it('applies only checked fields and retains the proposal audit record', async () => {
@@ -173,21 +173,21 @@ it('applies only checked fields and retains the proposal audit record', async ()
 });
 ```
 
-- [ ] **Step 2: Build queue filters and field-level editor**
+- [x] **Step 2: Build queue filters and field-level editor**
 
 Expose pending, low confidence, conflict, failed, duplicate, and dead-link filters. Show confidence level and short reason, not chain-of-thought or a fabricated percentage.
 
 The note editor supports Markdown text only. Escape raw HTML, block script/style/iframe/object nodes, do not auto-load remote images, and require an explicit click before opening links.
 
-- [ ] **Step 3: Implement context menus**
+- [x] **Step 3: Implement context menus**
 
 Bookmark commands: open, move, analyze, queue review, tag, export, copy link, recycle. Folder commands add child folder and health scan. Dangerous commands require clear confirmation.
 
-- [ ] **Step 4: Implement drag/drop with keyboard parity**
+- [x] **Step 4: Implement drag/drop with keyboard parity**
 
 Drag previews must show destination. Drop calls `BookmarkCommandService.move` with the current snapshot. Provide a keyboard “移动到…” menu that invokes the same service.
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 Run: `pnpm test -- tests/unit/ui/review-workspace.test.tsx tests/integration/review-apply.test.ts`  
 Expected: queue filters, partial apply, conflict, undo, DnD, and keyboard parity PASS.
@@ -212,7 +212,7 @@ git commit -m "feat: 实现统一审核与批量操作"
 **Interfaces:**
 - Produces: `SaveService.saveCurrentTab`, `SaveService.saveTabs`, `SaveResult`, task progress subscription.
 
-- [ ] **Step 1: Write the nonblocking save test**
+- [x] **Step 1: Write the nonblocking save test**
 
 ```ts
 it('returns after native bookmark creation without waiting for AI', async () => {
@@ -221,17 +221,17 @@ it('returns after native bookmark creation without waiting for AI', async () => 
 });
 ```
 
-- [ ] **Step 2: Implement duplicate preview and destination choice**
+- [x] **Step 2: Implement duplicate preview and destination choice**
 
 Show existing matches before create. Default to the last folder; allow rule/AI suggestion and manual folder selection. AI analysis and thumbnail tasks enqueue after native creation.
 
 `saveTabs(tabIds)` supports selected tabs or every tab in the current window, filters unsupported schemes, presents a deduplicated preview, and creates native bookmarks before optionally queuing AI work.
 
-- [ ] **Step 3: Implement progress and undo**
+- [x] **Step 3: Implement progress and undo**
 
 Popup shows saved, analyzing, pending review, failed, and completed states. Undo calls the operation service and remains available after Popup reopen through operation history.
 
-- [ ] **Step 4: Verify and commit**
+- [x] **Step 4: Verify and commit**
 
 Run: `pnpm test -- tests/unit/ui/quick-save.test.tsx tests/integration/quick-save-flow.test.ts && pnpm build`  
 Expected: immediate save, duplicate handling, queued work, and undo tests PASS.
@@ -261,15 +261,15 @@ git commit -m "feat: 完成 Popup 快速保存流程"
 **Interfaces:**
 - Consumes: profile, rule, theme, permission, and special-folder services.
 
-- [ ] **Step 1: Write model profile activation tests**
+- [x] **Step 1: Write model profile activation tests**
 
 Assert draft save, masked key display, minimal connection test, capability results, verified-only activation, and per-task profile assignment.
 
-- [ ] **Step 2: Implement settings sections**
+- [x] **Step 2: Implement settings sections**
 
 Use forms with explicit labels, inline validation, save status, reset actions, and no silent autosave for API keys. Prompt customization exposes additional rules and a preview, never the protected schema/safety instructions.
 
-- [ ] **Step 3: Implement permissions and special folders**
+- [x] **Step 3: Implement permissions and special folders**
 
 Show granted/revoked state, notification opt-in, host permission consequences, and folder-ID health. Missing special folders pause their workflows and offer re-link/create actions.
 
@@ -277,7 +277,7 @@ The incognito section calls `chrome.extension.isAllowedIncognitoAccess`, explain
 
 The AI usage section lists local request count, token totals, latency, status, model, and task type from `aiUsageLog`. It offers filtering and clearing but no budget, hard limit, or telemetry upload.
 
-- [ ] **Step 4: Verify and commit**
+- [x] **Step 4: Verify and commit**
 
 Run: `pnpm test -- tests/unit/ui/model-profiles-section.test.tsx tests/unit/ui/rules-section.test.tsx`  
 Expected: forms, accessibility, verification gates, and permission fallbacks PASS.
@@ -302,24 +302,24 @@ git commit -m "feat: 构建模型与扩展设置中心"
 **Interfaces:**
 - Produces: content message handlers, registered save command, registered context menu IDs.
 
-- [ ] **Step 1: Write entrypoint registration tests**
+- [x] **Step 1: Write entrypoint registration tests**
 
 Assert one default save command, exact context menu IDs, no duplicate registration after Service Worker restart, and disabled floating button by default.
 
-- [ ] **Step 2: Implement isolated content UI**
+- [x] **Step 2: Implement isolated content UI**
 
 Mount in a shadow root. Support drag position, minimize, domain hide, keyboard focus, and Toast feedback. Do not inject into browser internal pages.
 
-- [ ] **Step 3: Implement context menu data handling**
+- [x] **Step 3: Implement context menu data handling**
 
 Page/link saves reuse `SaveService`. Selected text becomes a local Markdown draft capped at 2,000 characters and is never automatically sent to AI.
 
-- [ ] **Step 4: Verify and pass Gate 3**
+- [x] **Step 4: Verify and pass Gate 3**
 
 Run: `pnpm typecheck && pnpm lint && pnpm test -- tests/unit/ui tests/integration/browser-entrypoints.test.ts && pnpm build`  
 Expected: all UI and entrypoint tests PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add entrypoints src/ui/content src/platform/chrome tests/unit/ui/floating-button.test.tsx tests/integration/browser-entrypoints.test.ts

@@ -14,6 +14,7 @@ export interface AnalysisProposal {
 
 export interface ProposalRepository {
   get(id: string): Promise<AnalysisProposal | null>;
+  list(): Promise<AnalysisProposal[]>;
   put(proposal: AnalysisProposal): Promise<void>;
 }
 
@@ -23,6 +24,10 @@ export class DexieProposalRepository implements ProposalRepository {
   async get(id: string): Promise<AnalysisProposal | null> {
     const record = await this.db.analysisProposals.get(id);
     return record ? record as unknown as AnalysisProposal : null;
+  }
+
+  async list(): Promise<AnalysisProposal[]> {
+    return this.db.analysisProposals.orderBy('createdAt').reverse().toArray() as unknown as Promise<AnalysisProposal[]>;
   }
 
   async put(proposal: AnalysisProposal): Promise<void> {

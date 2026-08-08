@@ -1,2 +1,26 @@
-import { Brain, Copy, ExternalLink, FolderInput, Trash2 } from 'lucide-react';
-export function BookmarkContextMenu({ onOpen, onMove, onAnalyze, onCopy, onRecycle }: { onOpen(): void; onMove(): void; onAnalyze(): void; onCopy(): void; onRecycle(): void }) { return <menu aria-label="书签操作"><button onClick={onOpen}><ExternalLink size={15}/>打开</button><button onClick={onMove}><FolderInput size={15}/>移动</button><button onClick={onAnalyze}><Brain size={15}/>AI 分析</button><button onClick={onCopy}><Copy size={15}/>复制链接</button><button onClick={onRecycle}><Trash2 size={15}/>移到回收站</button></menu>; }
+import { Brain, ClipboardList, Copy, Download, ExternalLink, FolderInput, Tags, Trash2 } from 'lucide-react';
+
+interface BookmarkContextMenuProps {
+  onOpen(): void;
+  onMove(): void;
+  onAnalyze(): void;
+  onQueueReview(): void;
+  onTag(): void;
+  onExport(): void;
+  onCopy(): void;
+  onRecycle(): void;
+  recycleDisabledReason?: string;
+}
+
+export function BookmarkContextMenu(props: BookmarkContextMenuProps) {
+  return <menu aria-label="书签操作">
+    <button type="button" onClick={props.onOpen}><ExternalLink size={15}/>打开</button>
+    <button type="button" onClick={props.onMove}><FolderInput size={15}/>移动到…</button>
+    <button type="button" onClick={props.onAnalyze}><Brain size={15}/>AI 分析</button>
+    <button type="button" onClick={props.onQueueReview}><ClipboardList size={15}/>加入审核</button>
+    <button type="button" onClick={props.onTag}><Tags size={15}/>编辑标签</button>
+    <button type="button" onClick={props.onExport}><Download size={15}/>导出此项</button>
+    <button type="button" onClick={props.onCopy}><Copy size={15}/>复制链接</button>
+    <button type="button" onClick={props.onRecycle} disabled={Boolean(props.recycleDisabledReason)} title={props.recycleDisabledReason}><Trash2 size={15}/>移到回收站</button>
+  </menu>;
+}

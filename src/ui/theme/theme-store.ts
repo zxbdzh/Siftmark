@@ -23,3 +23,9 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
     root.dataset.density = density;
   }
 }));
+
+export async function hydrateTheme(repository: { getAppearance(): Promise<{ theme: ThemePreference; density: DensityPreference }> }, root = document.documentElement): Promise<void> {
+  const appearance = await repository.getAppearance();
+  useThemeStore.setState(appearance);
+  useThemeStore.getState().apply(root);
+}

@@ -2,7 +2,7 @@ import type { BookmarkId } from '../bookmarks/types';
 
 export interface OperationRecord {
   id: string;
-  type: 'move' | 'rename' | 'remove' | 'restore' | 'metadata';
+  type: 'create' | 'move' | 'rename' | 'remove' | 'restore' | 'metadata';
   bookmarkId: BookmarkId;
   batchId?: string;
   before: Record<string, unknown>;

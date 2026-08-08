@@ -18,4 +18,12 @@ export class UsageRepository {
       }
     });
   }
+
+  list(): Promise<RequestMetric[]> {
+    return this.db.aiUsageLog.orderBy('createdAt').reverse().toArray() as Promise<RequestMetric[]>;
+  }
+
+  async clear(): Promise<void> {
+    await this.db.aiUsageLog.clear();
+  }
 }

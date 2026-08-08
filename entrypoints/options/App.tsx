@@ -1,11 +1,30 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { createDefaultAiAdapterRegistry } from '../../src/ai/create-adapter-registry';
+import type { RequestMetric } from '../../src/ai/network/request-metrics';
+import { UsageRepository } from '../../src/ai/network/usage-repository';
 import { ChromeProfileRepository } from '../../src/ai/profiles/profile-repository';
-import { ModelProfilesSection } from '../../src/ui/options/ModelProfilesSection';
+import { ModelProfileService } from '../../src/ai/profiles/profile-service';
+import { ChromeBookmarkRepository } from '../../src/platform/chrome/bookmarks-adapter';
+import type { ChromeBookmarkApi } from '../../src/platform/chrome/chrome-types';
+import { ChromeSettingsRepository } from '../../src/settings/settings-repository';
+import { openSiftmarkDatabase } from '../../src/storage/database';
+import { AiUsageSection } from '../../src/ui/options/AiUsageSection';
 import { AppearanceSection } from '../../src/ui/options/AppearanceSection';
+import { IncognitoSection } from '../../src/ui/options/IncognitoSection';
+import { ModelProfilesSection } from '../../src/ui/options/ModelProfilesSection';
 import { PermissionsSection } from '../../src/ui/options/PermissionsSection';
+import { PromptRulesSection } from '../../src/ui/options/PromptRulesSection';
 import { RulesSection } from '../../src/ui/options/RulesSection';
 import { SpecialFoldersSection } from '../../src/ui/options/SpecialFoldersSection';
-import { PromptRulesSection } from '../../src/ui/options/PromptRulesSection';
-import { IncognitoSection } from '../../src/ui/options/IncognitoSection';
-import { AiUsageSection } from '../../src/ui/options/AiUsageSection';
-export default function App(){ const profiles=useMemo(()=>new ChromeProfileRepository(browser.storage.local),[]); return <main><header><strong className="brand-type">Siftmark</strong><h1>设置</h1></header><ModelProfilesSection repository={profiles}/><RulesSection/><PermissionsSection/><AppearanceSection/><SpecialFoldersSection/><PromptRulesSection/><IncognitoSection/><AiUsageSection metrics={[]}/></main>; }
+import { hydrateTheme } from '../../src/ui/theme/theme-store';
+
+export default function App() {
+  const profiles = useMemo(() => new ChromeProfileRepository(browser.storage.local), []);
+  const settings = useMemo(() => new ChromeSettingsRepository(browser.storage.local), []);
+  const bookmarks = useMemo(() => new ChromeBookmarkRepository(browser.bookmarks as unknown as ChromeBookmarkApi), []);
+  const usage = useMemo(() => new UsageRepository(openSiftmarkDatabase()), []);
+  const profileService = useMemo(() => new ModelProfileService(profiles, createDefaultAiAdapterRegistry(), settings), [profiles, settings]);
+  const [metrics, setMetrics] = useState<RequestMetric[]>([]);
+  useEffect(() => { void Promise.all([hydrateTheme(settings), usage.list().then(setMetrics)]); }, [settings, usage]);
+  return <main><header><strong className="brand-type">Siftmark</strong><h1>设置</h1></header><ModelProfilesSection repository={profiles} service={profileService}/><RulesSection repository={settings} bookmarks={bookmarks}/><PermissionsSection/><AppearanceSection repository={settings}/><SpecialFoldersSection settings={settings} bookmarks={bookmarks}/><PromptRulesSection repository={settings}/><IncognitoSection/><AiUsageSection metrics={metrics} repository={usage} onClear={() => setMetrics([])}/></main>;
+}

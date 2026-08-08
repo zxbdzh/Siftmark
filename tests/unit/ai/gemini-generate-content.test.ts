@@ -6,6 +6,14 @@ import type { ModelProfile } from '../../../src/ai/types';
 const profile: ModelProfile = { id: 'p', version: 'v1', name: 'P', protocol: 'gemini-generate-content', endpoint: 'https://generativelanguage.googleapis.com/v1beta', model: 'gemini', apiKey: 'key', timeoutMs: 1000, capabilities: ['classify'], state: 'verified' };
 
 describe('GeminiGenerateContentAdapter', () => {
+  it('probes Gemini JSON schema output', async () => {
+    const post = vi.fn().mockResolvedValue({ candidates: [{ content: { parts: [{ text: '{"ok":true}' }] } }] });
+    const result = await new GeminiGenerateContentAdapter(post).testConnection(profile, new AbortController().signal);
+    expect(post).toHaveBeenCalledWith(expect.objectContaining({ body: expect.objectContaining({ generationConfig: expect.objectContaining({ responseMimeType: 'application/json', responseJsonSchema: expect.any(Object) }) }) }));
+    expect(result.structuredOutput).toBe(true);
+    expect(result.embedding).toBe(false);
+  });
+
   it('uses model generateContent path and header authentication', async () => {
     const post = vi.fn().mockResolvedValue(fixture);
     const result = await new GeminiGenerateContentAdapter(post).analyze(profile, { title: 'A', url: 'https://a.test', currentFolderPath: [] }, new AbortController().signal);

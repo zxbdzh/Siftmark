@@ -13,7 +13,7 @@ export interface ThumbnailRecord {
 
 export interface OperationLogRecord {
   id: string;
-  type: 'move' | 'rename' | 'remove' | 'restore' | 'metadata';
+  type: 'create' | 'move' | 'rename' | 'remove' | 'restore' | 'metadata';
   bookmarkId: string;
   batchId?: string;
   before: Record<string, unknown>;

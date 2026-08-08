@@ -6,4 +6,20 @@ header button { border: 0; background: transparent; color: var(--text-2); }
 section { display: grid; gap: 10px; }
 h2 { margin: 0; font-size: 16px; }
 .popup-url { margin: 0; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-section > button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 1px solid var(--brand-ink); border-radius: var(--radius-sm); background: var(--brand-ink); color: white; }
+section > button, .batch-save > button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 1px solid var(--brand-ink); border-radius: var(--radius-sm); background: var(--brand-ink); color: white; }
+.popup-field { display: grid; grid-template-columns: 70px minmax(0, 1fr); align-items: center; gap: 8px; }
+.popup-field select { min-width: 0; width: 100%; min-height: var(--control-height); border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-0); color: var(--text-1); }
+.duplicate-panel { display: grid; gap: 7px; margin: 0; padding: 10px; border: 1px solid var(--warning); border-radius: var(--radius-sm); }
+.duplicate-panel label { display: flex; align-items: center; gap: 7px; }
+.text-button, section > .secondary-button { display: inline-flex; align-items: center; justify-content: flex-start; gap: 7px; min-height: 30px; border: 0; background: transparent; color: var(--text-1); padding: 0; }
+.task-progress { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+.task-progress progress { width: 100%; accent-color: var(--brand-ai); }
+.batch-save { margin-top: 14px; border-top: 1px solid var(--border); padding-top: 12px; }
+.batch-save summary { display: flex; align-items: center; gap: 7px; cursor: pointer; }
+.batch-save ul { max-height: 180px; overflow: auto; margin: 8px 0; padding: 0; list-style: none; }
+.batch-save li label { display: grid; grid-template-columns: 20px minmax(0, 1fr); align-items: center; min-height: 32px; }
+.batch-save li span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.batch-toolbar { margin-top: 8px; }
+.batch-confirm { display: grid; gap: 8px; padding: 10px; border: 1px solid var(--warning); border-radius: var(--radius-sm); }
+.batch-confirm p { margin: 0; }
+.batch-confirm > button:not(.text-button) { border: 1px solid var(--brand-ink); border-radius: var(--radius-sm); background: var(--brand-ink); color: white; }

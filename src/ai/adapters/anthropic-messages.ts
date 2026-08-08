@@ -3,7 +3,7 @@ import type { AiAnalysisResult, AiRequestContext, CapabilityProbe, ModelProfile 
 import { buildAnalysisPrompt } from '../prompts/analysis-prompt';
 import { postProviderJson, type ProviderJsonRequest } from '../network/http-client';
 import { ProviderError } from '../network/errors';
-import { appendEndpointPath, parseAnalysisText } from './openai-common';
+import { appendEndpointPath, parseAnalysisText, parseProbeText } from './openai-common';
 
 type Poster = <T>(request: ProviderJsonRequest) => Promise<T>;
 interface AnthropicResponse { content?: Array<{ type?: string; text?: string }>; stop_reason?: string; }
@@ -13,7 +13,10 @@ export class AnthropicMessagesAdapter implements AiAdapter {
   constructor(private readonly post: Poster = postProviderJson) {}
 
   async testConnection(profile: ModelProfile, signal: AbortSignal): Promise<CapabilityProbe> {
-    await this.post<AnthropicResponse>({ url: appendEndpointPath(profile.endpoint, 'messages'), headers: headers(profile.apiKey), body: { model: profile.model, max_tokens: 8, messages: [{ role: 'user', content: 'Reply with OK.' }] }, signal, timeoutMs: profile.timeoutMs });
+    const response = await this.post<AnthropicResponse>({ url: appendEndpointPath(profile.endpoint, 'messages'), headers: headers(profile.apiKey), body: { model: profile.model, max_tokens: 32, system: 'Return only valid JSON matching exactly {"ok":true}.', messages: [{ role: 'user', content: 'Run the connection probe.' }] }, signal, timeoutMs: profile.timeoutMs });
+    const text = response.content?.find((block) => block.type === 'text')?.text;
+    if (!text) throw new ProviderError('unknown-result', 'Provider returned no probe result');
+    parseProbeText(text);
     return { authentication: true, text: true, structuredOutput: true, embedding: false };
   }
 

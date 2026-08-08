@@ -17,7 +17,11 @@ export class UndoService {
     if (!operation) return err({ code: 'not_found', id });
     if (operation.undoneAt) return ok(operation);
 
-    if (operation.type === 'move') {
+    if (operation.type === 'create') {
+      const current = await this.bookmarks.get(operation.bookmarkId);
+      if (!matches(current, operation.after, ['parentId', 'index', 'title', 'url'])) return conflict(operation, current);
+      await this.bookmarks.remove(operation.bookmarkId);
+    } else if (operation.type === 'move') {
       const current = await this.bookmarks.get(operation.bookmarkId);
       if (!matches(current, operation.after, ['parentId', 'index'])) return conflict(operation, current);
       await this.bookmarks.move(operation.bookmarkId, String(operation.before.parentId), Number(operation.before.index));
