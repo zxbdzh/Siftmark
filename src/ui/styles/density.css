@@ -1,0 +1,2 @@
+:root, [data-density='comfortable'] { --control-height: 36px; --row-height: 44px; --space-unit: 8px; }
+[data-density='compact'] { --control-height: 30px; --row-height: 34px; --space-unit: 6px; }

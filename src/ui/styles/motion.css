@@ -1,0 +1,3 @@
+@keyframes siftmark-pulse { 50% { opacity: 0.48; transform: scale(0.92); } }
+.ai-status-mark[data-motion='animated'] { animation: siftmark-pulse 1.2s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .ai-status-mark { animation: none !important; } }

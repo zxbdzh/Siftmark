@@ -1,0 +1,12 @@
+@import './fonts.css';
+@import './tokens.css';
+@import './density.css';
+@import './motion.css';
+
+* { box-sizing: border-box; }
+html, body, #root { min-height: 100%; margin: 0; }
+body { background: var(--surface-0); color: var(--text-1); font-family: 'Noto Sans SC Variable', sans-serif; font-size: 14px; letter-spacing: 0; }
+button, input, select, textarea { font: inherit; }
+button { min-height: var(--control-height); }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.brand-type { font-family: 'Space Grotesk Variable', sans-serif; font-weight: 650; }
