@@ -73,27 +73,27 @@ git commit -m "test: 建立真实扩展验收环境"
 **Interfaces:**
 - Consumes: Phase 1–5 public UI and service behavior.
 
-- [ ] **Step 1: Test save and review**
+- [x] **Step 1: Test save and review**
 
 Use a local article fixture. Save through Popup, assert native bookmark creation precedes AI response, capture a thumbnail, receive a fixture proposal, partially apply fields, and undo.
 
-- [ ] **Step 2: Test bulk and recovery**
+- [x] **Step 2: Test bulk and recovery**
 
 Create 25 fixture bookmarks, assert secondary confirmation, simulate one provider failure and one Service Worker restart, then verify success/failure counts, resume, and batch undo.
 
-- [ ] **Step 3: Test profiles and security**
+- [x] **Step 3: Test profiles and security**
 
 Verify draft/connection/activation, four protocol request shapes through the local fixture server, masked API keys, redacted logs, invalid Schema review, and no raw page body in IndexedDB.
 
-- [ ] **Step 4: Test search, health, and backup**
+- [x] **Step 4: Test search, health, and backup**
 
 Verify Chinese keyword ranking, embedding fallback/version switch, duplicate review, link states, ZIP round trip, encrypted key archive wrong-password failure, MarkAI import preview, and conflict defaults.
 
-- [ ] **Step 5: Test onboarding and reset**
+- [x] **Step 5: Test onboarding and reset**
 
 Verify skip/resume, optional model, special folders, read-only scan, notification opt-in, tiered counts, confirmation phrase, and preservation of native bookmarks.
 
-- [ ] **Step 6: Verify and commit**
+- [x] **Step 6: Verify and commit**
 
 Run: `pnpm test:e2e`  
 Expected: all critical workflow specs PASS without external network access.

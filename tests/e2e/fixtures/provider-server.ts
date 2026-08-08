@@ -1,10 +1,47 @@
-import { createServer, type ServerResponse } from 'node:http';
+import {
+  createServer,
+  type IncomingMessage,
+  type ServerResponse
+} from 'node:http';
 
 const host = '127.0.0.1';
 const port = 4173;
+interface RecordedRequest {
+  method: string;
+  path: string;
+  headerNames: string[];
+  body: unknown;
+}
+interface ProviderBehavior {
+  delayAnalysisMs: number;
+  failAnalysisCount: number;
+  invalidAnalysisCount: number;
+}
+
+const requests: RecordedRequest[] = [];
+const behavior: ProviderBehavior = {
+  delayAnalysisMs: 0,
+  failAnalysisCount: 0,
+  invalidAnalysisCount: 0
+};
 
 const server = createServer(async (request, response) => {
   const url = new URL(request.url ?? '/', `http://${host}:${port}`);
+  if (request.method === 'OPTIONS') return text(response, 204, '');
+  if (url.pathname === '/__e2e/requests') return json(response, 200, requests);
+  if (url.pathname === '/__e2e/reset' && request.method === 'POST') {
+    requests.length = 0;
+    Object.assign(behavior, {
+      delayAnalysisMs: 0,
+      failAnalysisCount: 0,
+      invalidAnalysisCount: 0
+    });
+    return json(response, 200, { ok: true });
+  }
+  if (url.pathname === '/__e2e/behavior' && request.method === 'POST') {
+    Object.assign(behavior, await readJsonBody(request));
+    return json(response, 200, behavior);
+  }
   if (url.pathname === '/health') return json(response, 200, { ok: true });
   if (url.pathname === '/article') {
     return html(
@@ -27,28 +64,61 @@ const server = createServer(async (request, response) => {
     );
   }
   if (url.pathname.endsWith('/chat/completions')) {
+    const result = await providerPayload(request, url);
+    if (result.status !== 200)
+      return json(response, result.status, { error: 'fixture failure' });
     return json(response, 200, {
-      choices: [{ message: { content: JSON.stringify(analysis()) } }]
+      choices: [{ message: { content: JSON.stringify(result.payload) } }]
     });
   }
   if (url.pathname.endsWith('/responses')) {
+    const result = await providerPayload(request, url);
+    if (result.status !== 200)
+      return json(response, result.status, { error: 'fixture failure' });
     return json(response, 200, {
       output: [
-        { content: [{ type: 'output_text', text: JSON.stringify(analysis()) }] }
+        {
+          content: [
+            { type: 'output_text', text: JSON.stringify(result.payload) }
+          ]
+        }
       ]
     });
   }
   if (url.pathname.endsWith('/messages')) {
+    const result = await providerPayload(request, url);
+    if (result.status !== 200)
+      return json(response, result.status, { error: 'fixture failure' });
     return json(response, 200, {
-      content: [{ type: 'text', text: JSON.stringify(analysis()) }]
+      content: [{ type: 'text', text: JSON.stringify(result.payload) }]
     });
   }
   if (url.pathname.includes(':generateContent')) {
+    const result = await providerPayload(request, url);
+    if (result.status !== 200)
+      return json(response, result.status, { error: 'fixture failure' });
     return json(response, 200, {
       candidates: [
-        { content: { parts: [{ text: JSON.stringify(analysis()) }] } }
+        {
+          finishReason: 'STOP',
+          content: {
+            parts: [{ text: JSON.stringify(result.payload) }]
+          }
+        }
       ]
     });
+  }
+  if (url.pathname.endsWith('/embeddings')) {
+    const body = await recordRequest(request, url);
+    const input =
+      isRecord(body) && Array.isArray(body.input) ? body.input : [''];
+    return json(response, 200, {
+      data: input.map((_, index) => ({ embedding: [1, 0], index }))
+    });
+  }
+  if (url.pathname.includes(':batchEmbedContents')) {
+    await recordRequest(request, url);
+    return json(response, 200, { embeddings: [{ values: [1, 0] }] });
   }
   if (url.pathname === '/health/dead') return text(response, 404, 'missing');
   if (url.pathname === '/health/temporary') return text(response, 503, 'retry');
@@ -63,27 +133,94 @@ function analysis() {
     title: '本地模型建议标题',
     tags: ['端到端'],
     summary: '本地夹具摘要',
-    confidence: 'high',
+    confidence: 'medium',
     reason: '固定响应'
   };
+}
+
+async function providerPayload(request: IncomingMessage, url: URL) {
+  const body = await recordRequest(request, url);
+  const serialized = JSON.stringify(body);
+  const probe =
+    serialized.includes('siftmark_probe') ||
+    serialized.includes('"required":["ok"]') ||
+    serialized.includes('"max_tokens":32');
+  if (!probe && behavior.failAnalysisCount > 0) {
+    behavior.failAnalysisCount -= 1;
+    return { status: 503, payload: null };
+  }
+  if (!probe && behavior.delayAnalysisMs > 0)
+    await new Promise((resolve) =>
+      setTimeout(resolve, behavior.delayAnalysisMs)
+    );
+  if (!probe && behavior.invalidAnalysisCount > 0) {
+    behavior.invalidAnalysisCount -= 1;
+    return {
+      status: 200,
+      payload: { ...analysis(), url: 'https://schema-must-reject.test/' }
+    };
+  }
+  return { status: 200, payload: probe ? { ok: true } : analysis() };
+}
+
+async function recordRequest(request: IncomingMessage, url: URL) {
+  const body = await readJsonBody(request);
+  requests.push({
+    method: request.method ?? 'GET',
+    path: url.pathname,
+    headerNames: Object.keys(request.headers).sort(),
+    body
+  });
+  return body;
+}
+
+async function readJsonBody(request: IncomingMessage): Promise<unknown> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of request) chunks.push(Buffer.from(chunk));
+  const body = Buffer.concat(chunks).toString('utf8');
+  if (!body) return null;
+  try {
+    return JSON.parse(body) as unknown;
+  } catch {
+    return body;
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function json(response: ServerResponse, status: number, body: unknown) {
   response.writeHead(status, {
     'content-type': 'application/json; charset=utf-8',
-    'access-control-allow-origin': '*'
+    ...corsHeaders()
   });
   response.end(JSON.stringify(body));
 }
 
 function html(response: ServerResponse, body: string) {
-  response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+  response.writeHead(200, {
+    'content-type': 'text/html; charset=utf-8',
+    ...corsHeaders()
+  });
   response.end(body);
 }
 
 function text(response: ServerResponse, status: number, body: string) {
-  response.writeHead(status, { 'content-type': 'text/plain; charset=utf-8' });
+  response.writeHead(status, {
+    'content-type': 'text/plain; charset=utf-8',
+    ...corsHeaders()
+  });
   response.end(body);
+}
+
+function corsHeaders() {
+  return {
+    'access-control-allow-origin': '*',
+    'access-control-allow-methods': 'GET, HEAD, POST, OPTIONS',
+    'access-control-allow-headers': '*',
+    'access-control-allow-private-network': 'true'
+  };
 }
 
 function close() {
