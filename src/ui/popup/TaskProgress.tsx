@@ -1,0 +1,1 @@
+export function TaskProgress({ completed, total, state }: { completed: number; total: number; state: string }) { return <section aria-label="任务进度"><progress max={Math.max(total, 1)} value={completed}/><span>{state} · {completed}/{total}</span></section>; }

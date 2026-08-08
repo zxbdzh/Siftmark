@@ -1,0 +1,3 @@
+import { describe, expect, it, vi } from 'vitest';
+import { SaveService } from '../../src/bookmarks/save-service';
+describe('quick save flow', () => { it('returns after native creation without waiting for AI', async () => { const bookmarks = { getTree: vi.fn().mockResolvedValue([{ id: 'f', parentId: '0', index: 0, title: '书签' }]), create: vi.fn().mockResolvedValue({ id: 'b1' }) }; const queue = { enqueue: vi.fn().mockImplementation(() => new Promise(() => undefined)) }; await expect(new SaveService(bookmarks as never, queue).saveCurrentTab({ id: 1, title: 'A', url: 'https://a.test' })).resolves.toMatchObject({ bookmarkId: 'b1', analysisQueued: true }); }); });

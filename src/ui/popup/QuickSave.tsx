@@ -1,0 +1,4 @@
+import { BookmarkPlus } from 'lucide-react';
+import { useState } from 'react';
+import type { BrowserTab, SaveResult, SaveService } from '../../bookmarks/save-service';
+export function QuickSave({ service, tab }: { service: SaveService; tab?: BrowserTab }) { const [result, setResult] = useState<SaveResult>(); const [saving, setSaving] = useState(false); return <section><h2>{tab?.title || '当前页面'}</h2><p className="popup-url">{tab?.url || '正在读取标签页…'}</p><button type="button" disabled={!tab || saving} onClick={() => { if (!tab) return; setSaving(true); void service.saveCurrentTab(tab).then(setResult).finally(() => setSaving(false)); }}><BookmarkPlus size={17}/>{saving ? '正在保存' : '保存书签'}</button>{result?.status === 'saved' ? <p role="status">已保存，正在后台分析</p> : result?.status === 'duplicate' ? <p role="status">该页面已在书签中</p> : result?.status === 'unsupported' ? <p role="status">此页面无法保存</p> : null}</section>; }

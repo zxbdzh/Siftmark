@@ -1,0 +1,9 @@
+body { min-width: 340px; }
+main { padding: 16px; }
+header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+header strong { font-size: 19px; }
+header button { border: 0; background: transparent; color: var(--text-2); }
+section { display: grid; gap: 10px; }
+h2 { margin: 0; font-size: 16px; }
+.popup-url { margin: 0; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+section > button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 1px solid var(--brand-ink); border-radius: var(--radius-sm); background: var(--brand-ink); color: white; }
