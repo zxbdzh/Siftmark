@@ -124,7 +124,7 @@ test('requires secondary confirmation for more than twenty tabs and recovers dur
   const now = Date.now();
   await putDatabaseRecord(manager, 'tasks', {
     id: 'recover-after-restart',
-    type: 'ai-request',
+    type: 'analyze-bookmark',
     state: 'running',
     input: {},
     completed: 7,

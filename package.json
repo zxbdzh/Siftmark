@@ -6,6 +6,7 @@
   "packageManager": "pnpm@10.15.0",
   "engines": { "node": ">=22 <23" },
   "scripts": {
+    "postinstall": "wxt prepare",
     "dev": "wxt",
     "build": "wxt build",
     "zip": "wxt zip",

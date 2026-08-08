@@ -196,23 +196,23 @@ git commit -m "test: 验证万级书签与任务恢复性能"
 **Interfaces:**
 - Produces: complete local installation, operation, troubleshooting, and compliance documentation.
 
-- [ ] **Step 1: Write installation and user workflows**
+- [x] **Step 1: Write installation and user workflows**
 
 Document Node/pnpm prerequisites, install/build/load-unpacked steps, first-run choices, model profile setup, save/review/search/archive/recycle, backup/import, and reset.
 
-- [ ] **Step 2: Document architecture and protocols**
+- [x] **Step 2: Document architecture and protocols**
 
 Explain domain ports, storage ownership, task recovery, adapter request shapes, fixture testing, security boundaries, and how to add a preset without adding a new protocol.
 
-- [ ] **Step 3: Document privacy and permissions**
+- [x] **Step 3: Document privacy and permissions**
 
 List each required/optional permission, `<all_urls>` rationale before install, local plaintext API-key boundary, provider data flow, no telemetry, incognito behavior, body-text disposal, screenshot policy, and notification privacy.
 
-- [ ] **Step 4: Write exact manual checklists**
+- [x] **Step 4: Write exact manual checklists**
 
 Chrome and Edge checklists must include install, permissions, bookmark events, incognito opt-in, Service Worker restart, context menus, shortcuts, notifications, fonts, Lottie, ZIP import/export, and uninstall/reinstall backup recovery.
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 Run: `Get-ChildItem README.md,THIRD_PARTY_NOTICES.md,docs -Recurse -File | Measure-Object -Property Length -Sum`  
 Expected: all required documentation files exist and have nonzero size; run all documentation commands from a clean clone.

@@ -7,18 +7,34 @@ import { recoverInterruptedTasks } from '../../src/tasks/task-recovery';
 import type { DurableTask } from '../../src/tasks/types';
 
 function makeTask(patch: Partial<DurableTask> = {}): DurableTask {
-  return { id: 'task-1', type: 'local-index', state: 'running', input: {}, profileVersion: 'v1', completed: 0, failed: 0, retryCount: 0, idempotencyKey: 'key', createdAt: 1, updatedAt: 1, ...patch };
+  return {
+    id: 'task-1',
+    type: 'local-index',
+    state: 'running',
+    input: {},
+    profileVersion: 'v1',
+    completed: 0,
+    failed: 0,
+    retryCount: 0,
+    idempotencyKey: 'key',
+    createdAt: 1,
+    updatedAt: 1,
+    ...patch
+  };
 }
 
 describe('task recovery', () => {
   afterEach(async () => Dexie.delete('siftmark-task-test'));
 
-  it('marks an interrupted non-idempotent request as unknown', async () => {
+  it('marks an interrupted analysis request as unknown', async () => {
     const db = openSiftmarkDatabase('siftmark-task-test');
     const tasks = new DexieTaskRepository(db);
-    await tasks.put(makeTask({ type: 'ai-request' }));
+    await tasks.put(makeTask({ type: 'analyze-bookmark' }));
     await recoverInterruptedTasks(tasks, 10_000);
-    expect(await tasks.get('task-1')).toMatchObject({ state: 'unknown', profileVersion: 'v1' });
+    expect(await tasks.get('task-1')).toMatchObject({
+      state: 'unknown',
+      profileVersion: 'v1'
+    });
     await db.close();
   });
 

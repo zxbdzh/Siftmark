@@ -3,7 +3,8 @@ import type { TaskRepository } from './task-repository';
 export async function recoverInterruptedTasks(
   repository: TaskRepository,
   now: number,
-  isNonIdempotent: (type: string) => boolean = (type) => type === 'ai-request'
+  isNonIdempotent: (type: string) => boolean = (type) =>
+    type === 'analyze-bookmark' || type === 'ai-request'
 ): Promise<number> {
   const running = await repository.listByState(['running']);
   for (const task of running) {
