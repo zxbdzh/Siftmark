@@ -31,7 +31,7 @@
 **Interfaces:**
 - Produces: `BackupManifestV1`, `ImportGraph`, `ImportNode`, `sha256Hex`, `validateBackupManifest`.
 
-- [ ] **Step 1: Define exact version 1 structures**
+- [x] **Step 1: Define exact version 1 structures**
 
 ```ts
 export interface BackupManifestV1 {
@@ -54,15 +54,15 @@ export interface ImportNode {
 }
 ```
 
-- [ ] **Step 2: Write validation tests**
+- [x] **Step 2: Write validation tests**
 
 Cover valid v1, unknown version, duplicate paths, path traversal, count mismatch, SHA-256 mismatch, missing data file, invalid URLs, and cyclic parents.
 
-- [ ] **Step 3: Implement deterministic checksums**
+- [x] **Step 3: Implement deterministic checksums**
 
 Hash exact file bytes with `crypto.subtle.digest('SHA-256', bytes)`. Do not hash parsed/re-serialized JSON when verifying imported files.
 
-- [ ] **Step 4: Verify and commit**
+- [x] **Step 4: Verify and commit**
 
 Run: `pnpm test -- tests/unit/backup/schemas.test.ts tests/unit/backup/checksum.test.ts`  
 Expected: all manifest and integrity tests PASS.
@@ -86,21 +86,21 @@ git commit -m "feat: 定义版本化备份格式"
 **Interfaces:**
 - Produces: `exportNativeBackup`, `parseNativeBackup`, JSON and ZIP outputs.
 
-- [ ] **Step 1: Write round-trip tests**
+- [x] **Step 1: Write round-trip tests**
 
 Create a fixture with nested folders, tags, Chinese summary, Markdown note, operation history, and two thumbnails. Assert export/import equality excluding generated timestamps and source IDs.
 
-- [ ] **Step 2: Implement selected-scope export**
+- [x] **Step 2: Implement selected-scope export**
 
 Export only selected roots and descendants. Include metadata and operation history. Exclude thumbnails by default; when selected, write WebP files under `thumbnails/` and include byte estimates before generation.
 
-- [ ] **Step 3: Implement ZIP parsing without publication**
+- [x] **Step 3: Implement ZIP parsing without publication**
 
 Reject absolute paths, `..`, duplicate names, unsupported compression errors, and checksum mismatches. Return an `ImportGraph`; do not call Chrome APIs.
 
 The backup center exposes selected-scope JSON/ZIP export, optional thumbnails with estimated size, native backup import, and a separate encrypted complete-configuration action. Every generated Blob is downloaded only after validation succeeds.
 
-- [ ] **Step 4: Verify and commit**
+- [x] **Step 4: Verify and commit**
 
 Run: `pnpm test -- tests/unit/backup/native-roundtrip.test.ts`  
 Expected: JSON and ZIP round trips, checksum failures, and thumbnail options PASS.
@@ -126,23 +126,23 @@ git commit -m "feat: 实现 Siftmark 原生备份"
 **Interfaces:**
 - Produces: format-specific parsers/exporters returning `ImportGraph` or Blob.
 
-- [ ] **Step 1: Write fixture tests**
+- [x] **Step 1: Write fixture tests**
 
 Cover nested DL/DT/H3/A structures, escaped titles, icon attributes ignored, malformed partial HTML, CSV formula injection, MarkAI settings/history/domain blacklist, and absent keys.
 
-- [ ] **Step 2: Implement safe browser HTML support**
+- [x] **Step 2: Implement safe browser HTML support**
 
 Parse with `DOMParser`, accept local user-selected files only, and normalize root aliases without executing scripts. Export valid Netscape bookmark HTML with escaped text.
 
-- [ ] **Step 3: Implement CSV safety**
+- [x] **Step 3: Implement CSV safety**
 
 Prefix spreadsheet-formula-leading cells (`=`, `+`, `-`, `@`) with a single quote and quote all fields containing commas, quotes, or newlines.
 
-- [ ] **Step 4: Implement MarkAI migration**
+- [x] **Step 4: Implement MarkAI migration**
 
 Map bookmarks, compatible history, settings, and blocked domains. API keys remain omitted unless a separately supported encrypted Siftmark archive supplies them. Unknown MarkAI fields are reported but ignored.
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 Run: `pnpm test -- tests/unit/backup/netscape-html.test.ts tests/unit/backup/markai-importer.test.ts tests/unit/backup/csv-exporter.test.ts`  
 Expected: fixtures and malicious-input tests PASS.
@@ -164,7 +164,7 @@ git commit -m "feat: 支持书签与 MarkAI 数据迁移"
 **Interfaces:**
 - Produces: `encryptBackup`, `decryptBackup`, `.siftmark-backup` header, redacted/plain configuration export.
 
-- [ ] **Step 1: Define the encrypted header**
+- [x] **Step 1: Define the encrypted header**
 
 ```ts
 export interface EncryptedBackupHeader {
@@ -178,19 +178,19 @@ export interface EncryptedBackupHeader {
 }
 ```
 
-- [ ] **Step 2: Write cryptographic behavior tests**
+- [x] **Step 2: Write cryptographic behavior tests**
 
 Assert random salt/nonce per export, correct-password round trip, wrong-password failure without partial plaintext, ciphertext tamper failure, UTF-8 password handling, and absence of API key text in output bytes.
 
-- [ ] **Step 3: Implement Web Crypto flow**
+- [x] **Step 3: Implement Web Crypto flow**
 
 Derive a 256-bit key with PBKDF2-SHA-256 and encrypt the complete ZIP bytes with AES-GCM. Authenticate the serialized header as additional data. Zero mutable plaintext/key byte arrays after use where JavaScript permits.
 
-- [ ] **Step 4: Implement redacted config export**
+- [x] **Step 4: Implement redacted config export**
 
 Plain JSON includes profile ID, name, protocol, endpoint, model, timeout, capabilities, and `hasApiKey`, but never the key value. Complete export is available only through encrypted container UI.
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 Run: `pnpm test -- tests/unit/backup/encryption.test.ts tests/unit/backup/config-exporter.test.ts`  
 Expected: cryptography, tamper, and redaction tests PASS.

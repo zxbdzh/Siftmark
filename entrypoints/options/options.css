@@ -150,6 +150,20 @@ section button {
   border-radius: var(--radius-sm);
   padding: 12px;
 }
+.backup-encrypted {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(180px, 1fr)) auto;
+  align-items: end;
+  gap: 12px;
+  margin-top: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+}
+.backup-encrypted label {
+  display: grid;
+  gap: 6px;
+}
 .folder-scope label,
 .backup-roots label {
   display: flex;
@@ -235,5 +249,8 @@ output {
   .backup-preview div {
     grid-template-columns: 1fr;
     gap: 2px;
+  }
+  .backup-encrypted {
+    grid-template-columns: 1fr;
   }
 }

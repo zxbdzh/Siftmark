@@ -1,5 +1,8 @@
-import { Upload } from 'lucide-react';
+import { LockKeyhole, Upload } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import type { ProfileRepository } from '../../ai/profiles/profile-repository';
+import { exportEncryptedCompleteConfiguration } from '../../backup/config-exporter';
+import { readBlobBytes } from '../../backup/blob';
 import { exportNativeBackup } from '../../backup/native-exporter';
 import { parseNativeBackup } from '../../backup/native-importer';
 import { parseNetscapeBookmarkFile } from '../../backup/netscape-html-importer';
@@ -15,6 +18,7 @@ import { ExportDialog, type NativeExportFormat } from './ExportDialog';
 interface BackupCenterProps {
   bookmarks: BookmarkRepository;
   database: SiftmarkDatabase;
+  profiles: ProfileRepository;
   appVersion: string;
   onImportParsed?: (graph: ImportGraph) => void;
 }
@@ -28,6 +32,7 @@ interface ExportSource {
 export function BackupCenter({
   bookmarks,
   database,
+  profiles,
   appVersion,
   onImportParsed
 }: BackupCenterProps) {
@@ -41,6 +46,8 @@ export function BackupCenter({
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState('');
   const [preview, setPreview] = useState<ImportGraph | null>(null);
+  const [password, setPassword] = useState('');
+  const [passwordConfirmation, setPasswordConfirmation] = useState('');
 
   useEffect(() => {
     void Promise.all([
@@ -115,6 +122,53 @@ export function BackupCenter({
     }
   };
 
+  const exportCompleteConfiguration = async () => {
+    if (password.length < 8) {
+      setStatus('完整配置密码至少需要 8 个字符');
+      return;
+    }
+    if (password !== passwordConfirmation) {
+      setStatus('两次输入的密码不一致');
+      return;
+    }
+    setBusy(true);
+    setStatus('正在加密完整配置');
+    try {
+      const [operations, settings, modelProfiles] = await Promise.all([
+        database.operationLog.toArray(),
+        browser.storage.local.get(null),
+        profiles.list()
+      ]);
+      const native = await exportNativeBackup({
+        ...source,
+        operations,
+        settings,
+        selectedRootIds,
+        includeThumbnails,
+        appVersion
+      });
+      const archive = await exportEncryptedCompleteConfiguration(
+        {
+          profiles: modelProfiles,
+          settings,
+          nativeBackup: await readBlobBytes(native.zip)
+        },
+        password
+      );
+      downloadBlob(
+        archive,
+        `siftmark-complete-${new Date().toISOString().slice(0, 10)}.siftmark-backup`
+      );
+      setPassword('');
+      setPasswordConfirmation('');
+      setStatus('加密完整配置已开始下载');
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : '完整配置导出失败');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <section>
       <h2>备份与迁移</h2>
@@ -129,6 +183,35 @@ export function BackupCenter({
         onIncludeThumbnailsChange={setIncludeThumbnails}
         onExport={(format) => void exportBackup(format)}
       />
+      <fieldset className="backup-encrypted">
+        <legend>加密完整配置</legend>
+        <label>
+          密码
+          <input
+            type="password"
+            autoComplete="new-password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+          />
+        </label>
+        <label>
+          确认密码
+          <input
+            type="password"
+            autoComplete="new-password"
+            value={passwordConfirmation}
+            onChange={(event) => setPasswordConfirmation(event.target.value)}
+          />
+        </label>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => void exportCompleteConfiguration()}
+        >
+          <LockKeyhole size={16} />
+          导出加密归档
+        </button>
+      </fieldset>
       <label className="backup-import">
         <Upload size={16} />
         选择本地备份文件

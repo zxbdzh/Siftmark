@@ -67,6 +67,7 @@ export default function App() {
       <BackupCenter
         bookmarks={bookmarks}
         database={database}
+        profiles={profiles}
         appVersion="0.1.0"
       />
       <IncognitoSection />
