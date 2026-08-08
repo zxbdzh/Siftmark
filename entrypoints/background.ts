@@ -57,8 +57,12 @@ import {
   applyImportPlan,
   DexieImportRecoveryRepository
 } from '../src/backup/import-application-service';
+import { DexieSpecialFolderPlacementRepository } from '../src/bookmarks/placement-repository';
+import { SpecialFolderService } from '../src/bookmarks/special-folders';
+import { createPurgeRecycleBinHandler } from '../src/tasks/handlers/purge-recycle-bin';
 
 const TASK_WAKE_ALARM = 'siftmark-task-wake';
+const RECYCLE_PURGE_ALARM = 'siftmark-recycle-purge';
 const VISIT_TRACKING_KEY = 'siftmark.visits.enabled.v1';
 
 interface AnalyzeTaskInput {
@@ -83,6 +87,10 @@ export default defineBackground(() => {
     bookmarks,
     operations,
     metadata
+  );
+  const specialFolders = new SpecialFolderService(bookmarks, settings);
+  const specialFolderPlacements = new DexieSpecialFolderPlacementRepository(
+    database
   );
   const importRecoveryPoints = new DexieImportRecoveryRepository(database);
   const adapters = createDefaultAiAdapterRegistry();
@@ -371,6 +379,34 @@ export default defineBackground(() => {
       failed: result.failed
     };
   });
+  runner.register(
+    'purge-recycle-bin',
+    createPurgeRecycleBinHandler({
+      bookmarks,
+      placements: specialFolderPlacements,
+      specialFolders,
+      metadata
+    })
+  );
+
+  const enqueueRecyclePurge = async () => {
+    const now = Date.now();
+    const taskId = crypto.randomUUID();
+    await tasks.put({
+      id: taskId,
+      type: 'purge-recycle-bin',
+      state: 'queued',
+      input: {},
+      completed: 0,
+      failed: 0,
+      retryCount: 0,
+      idempotencyKey: crypto.randomUUID(),
+      createdAt: now,
+      updatedAt: now
+    });
+    void runner.runNext();
+    return { taskId };
+  };
 
   const processTasks = async () => {
     await recoverInterruptedTasks(tasks, Date.now());
@@ -383,6 +419,9 @@ export default defineBackground(() => {
   browser.runtime.onInstalled.addListener(() => {
     logger.info('扩展已安装');
     void browser.alarms.create(TASK_WAKE_ALARM, { periodInMinutes: 1 });
+    void browser.alarms.create(RECYCLE_PURGE_ALARM, {
+      periodInMinutes: 24 * 60
+    });
     void registerContextMenus(browser.contextMenus);
   });
   registerBrowserCommands(browser.commands, () => void saveActiveTab());
@@ -403,6 +442,7 @@ export default defineBackground(() => {
       return enqueueHealthScan(
         value.input?.folderId ? { folderId: value.input.folderId } : {}
       );
+    if (value.type === 'queue-recycle-purge') return enqueueRecyclePurge();
     if (value.type === 'configure-health-schedule' && value.input)
       return healthScheduler.configure(
         value.input as unknown as HealthSchedule
@@ -453,6 +493,7 @@ export default defineBackground(() => {
   });
   browser.alarms.onAlarm.addListener((alarm) => {
     if (alarm.name === TASK_WAKE_ALARM) void runner.runNext();
+    else if (alarm.name === RECYCLE_PURGE_ALARM) void enqueueRecyclePurge();
     else if (alarm.name === HEALTH_SCAN_ALARM)
       void healthScheduler.getSchedule().then(async (schedule) => {
         if (!schedule.enabled) return;

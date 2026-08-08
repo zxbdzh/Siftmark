@@ -47,6 +47,10 @@
 .manager-detail pre { max-height: 160px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; padding: 8px; background: var(--surface-0); }
 .detail-status div { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .detail-status dd { margin: 0; }
+.detail-lifecycle-actions { display: grid; gap: 8px; padding-top: 12px; border-top: 1px solid var(--border); }
+.detail-lifecycle-actions button { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 36px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-0); color: var(--text-1); }
+.detail-lifecycle-actions button:hover:not(:disabled) { border-color: var(--brand-ink); }
+.detail-lifecycle-actions button:disabled { color: var(--text-2); cursor: not-allowed; }
 .thumbnail-preview { display: grid; gap: 8px; }
 .thumbnail-preview p { margin: 0; color: var(--text-2); font-size: 12px; }
 .thumbnail-image-button { padding: 0; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-0); }

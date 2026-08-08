@@ -11,6 +11,10 @@ export interface MoveCommand {
   index?: number;
   batchId?: string;
   expected?: { parentId: string; index: number };
+  specialFolderPlacement?: {
+    before: object | null;
+    after: object | null;
+  };
 }
 
 export interface RenameCommand {
@@ -125,8 +129,20 @@ export class BookmarkCommandService {
       type: 'move',
       bookmarkId: command.bookmarkId,
       batchId: command.batchId,
-      before: { parentId: current.parentId, index: current.index },
-      after: { parentId: moved.parentId, index: moved.index }
+      before: {
+        parentId: current.parentId,
+        index: current.index,
+        ...(command.specialFolderPlacement
+          ? { specialFolderPlacement: command.specialFolderPlacement.before }
+          : {})
+      },
+      after: {
+        parentId: moved.parentId,
+        index: moved.index,
+        ...(command.specialFolderPlacement
+          ? { specialFolderPlacement: command.specialFolderPlacement.after }
+          : {})
+      }
     });
   }
 

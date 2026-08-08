@@ -253,17 +253,17 @@ git commit -m "feat: 实现备份冲突预览与恢复"
 **Interfaces:**
 - Produces: `SpecialFolderService.bind/check`, `RecycleService.recycle/restore`, `ArchiveService.archive/restore`.
 
-- [ ] **Step 1: Write ID-binding tests**
+- [x] **Step 1: Write ID-binding tests**
 
 Moving/renaming a bound folder preserves health. Deleting it pauses the feature and returns `missing-special-folder`; no folder is silently recreated by name.
 
-- [ ] **Step 2: Implement recycle and archive**
+- [x] **Step 2: Implement recycle and archive**
 
 Record original parent/index before moving. Restore to the original location when valid or require a destination choice. Purge recycle contents only after 30 days and only through an explicit or scheduled cleanup task.
 
 Wire archive, recycle, restore, and missing-folder recovery into the manager context menus and detail panel; all commands must display their actual destination before applying.
 
-- [ ] **Step 3: Verify and commit**
+- [x] **Step 3: Verify and commit**
 
 Run: `pnpm test -- tests/integration/special-folders.test.ts tests/integration/recycle-archive.test.ts`  
 Expected: bind, missing, recycle, archive, restore, retention, and undo PASS.

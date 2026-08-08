@@ -1,4 +1,5 @@
 import Dexie, { type Table } from 'dexie';
+import type { SpecialFolderPlacement } from '../bookmarks/recycle-service';
 import type { BookmarkMetadata } from './types';
 import type {
   AnalysisProposalRecord,
@@ -30,6 +31,7 @@ export class SiftmarkDatabase extends Dexie {
   visitAggregates!: Table<VisitAggregate, string>;
   analysisProposals!: Table<AnalysisProposalRecord, string>;
   importRecoveryPoints!: Table<ImportRecoveryPointRecord, string>;
+  specialFolderPlacements!: Table<SpecialFolderPlacement, string>;
 
   constructor(name = 'siftmark') {
     super(name);

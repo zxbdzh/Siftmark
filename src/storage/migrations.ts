@@ -1,4 +1,4 @@
-export const CURRENT_SCHEMA_VERSION = 3;
+export const CURRENT_SCHEMA_VERSION = 4;
 
 export const schemaStores = {
   bookmarkMetadata: '&bookmarkId, updatedAt, confidence, health',
@@ -12,7 +12,8 @@ export const schemaStores = {
   softDeletedMetadata: '&bookmarkId, deletedAt',
   visitAggregates: '&bookmarkId, lastVisitedAt',
   analysisProposals: '&id, bookmarkId, state, createdAt',
-  importRecoveryPoints: '&id, createdAt'
+  importRecoveryPoints: '&id, createdAt',
+  specialFolderPlacements: '&bookmarkId, state, movedAt, [state+movedAt]'
 } as const;
 
 export const initialSchemaStores = {
