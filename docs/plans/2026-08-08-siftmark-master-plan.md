@@ -154,7 +154,7 @@ export interface AiAnalysisResult {
 - [x] **Gate 2:** Fixture-backed tests pass for all four model protocols; no real credential is committed or logged.
 - [x] **Gate 3:** Popup save, manager edit, review apply, keyboard navigation, light/dark themes, and narrow layout pass Playwright smoke tests.
 - [x] **Gate 4:** Capture, thumbnail cleanup, keyword search, embedding version isolation, duplicate scan, health scan, and notification retention pass integration tests.
-- [ ] **Gate 5:** HTML, Siftmark JSON/ZIP, MarkAI, encrypted archive, conflict preview, onboarding, and reset pass round-trip tests.
+- [x] **Gate 5:** HTML, Siftmark JSON/ZIP, MarkAI, encrypted archive, conflict preview, onboarding, and reset pass round-trip tests. Verified 2026-08-08 with 13 targeted files / 44 tests, `pnpm typecheck`, `pnpm lint`, a 5.69 MB production build, and the Chromium extension shell smoke test.
 - [ ] **Gate 6:** Chrome and Edge manual checklists pass; `dist/siftmark-0.1.0-chromium.zip` and SHA-256 are recorded.
 
 ## Commit Sequence
