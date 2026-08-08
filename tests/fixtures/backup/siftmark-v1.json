@@ -1,0 +1,5 @@
+{
+  "format": "siftmark-backup",
+  "version": 1,
+  "description": "Version 1 native backup fixture used by round-trip tests"
+}
