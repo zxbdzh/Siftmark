@@ -3,8 +3,8 @@ import { defineConfig } from 'wxt';
 export default defineConfig({
   modules: ['@wxt-dev/module-react'],
   manifest: {
-    name: 'Siftmark',
-    description: 'AI bookmark manager',
+    name: '__MSG_extensionName__',
+    description: '__MSG_extensionDescription__',
     default_locale: 'zh_CN',
     permissions: ['bookmarks', 'storage', 'tabs', 'scripting', 'contextMenus', 'alarms'],
     optional_permissions: ['notifications'],
