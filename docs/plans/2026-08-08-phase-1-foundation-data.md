@@ -38,7 +38,7 @@
 **Interfaces:**
 - Produces: `pnpm dev`, `pnpm build`, `pnpm typecheck`, `pnpm lint`, and `pnpm test` commands.
 
-- [ ] **Step 1: Create the failing project smoke test**
+- [x] **Step 1: Create the failing project smoke test**
 
 ```ts
 import { describe, expect, it } from 'vitest';
@@ -52,7 +52,7 @@ describe('project metadata', () => {
 });
 ```
 
-- [ ] **Step 2: Create the package manifest and tool configuration**
+- [x] **Step 2: Create the package manifest and tool configuration**
 
 Use this script surface in `package.json`:
 
@@ -79,7 +79,7 @@ Use this script surface in `package.json`:
 
 Install runtime dependencies `@fontsource-variable/noto-sans-sc`, `@fontsource-variable/space-grotesk`, `@tanstack/react-virtual`, `dexie`, `jszip`, `lottie-react`, `lucide-react`, `minisearch`, `react`, `react-dom`, `zod`, and `zustand`. Install development dependencies `@axe-core/playwright`, `@playwright/test`, `@testing-library/jest-dom`, `@testing-library/react`, `@testing-library/user-event`, `@types/chrome`, `@types/react`, `@types/react-dom`, `@vitest/coverage-v8`, `@wxt-dev/module-react`, `eslint`, `eslint-plugin-react-hooks`, `fake-indexeddb`, `jsdom`, `prettier`, `typescript`, `vitest`, and `wxt`.
 
-- [ ] **Step 3: Configure the initial manifest**
+- [x] **Step 3: Configure the initial manifest**
 
 Set this WXT manifest contract in `wxt.config.ts`:
 
@@ -99,16 +99,16 @@ export default defineConfig({
 });
 ```
 
-- [ ] **Step 4: Add the smallest loadable entrypoints**
+- [x] **Step 4: Add the smallest loadable entrypoints**
 
 `background.ts` must only register an install log through a local logger. `popup/App.tsx` must render the product name and a disabled “正在初始化” button so the extension has no fake functional command.
 
-- [ ] **Step 5: Install and verify**
+- [x] **Step 5: Install and verify**
 
 Run: `pnpm install && pnpm typecheck && pnpm lint && pnpm test && pnpm build`  
 Expected: all commands exit 0 and `.output/chrome-mv3/manifest.json` exists.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add package.json pnpm-lock.yaml pnpm-workspace.yaml wxt.config.ts tsconfig.json vitest.config.ts eslint.config.js .prettierrc.json .gitignore entrypoints tests/unit/project-smoke.test.ts
@@ -127,7 +127,7 @@ git commit -m "chore: 初始化 WXT 扩展工程"
 **Interfaces:**
 - Produces: `BookmarkNode`, `BookmarkRepository`, `BookmarkMetadata`, `MetadataRepository`, and `Result<T, E>`.
 
-- [ ] **Step 1: Write compile-time and runtime contract tests**
+- [x] **Step 1: Write compile-time and runtime contract tests**
 
 ```ts
 import { describe, expect, it } from 'vitest';
@@ -141,7 +141,7 @@ describe('bookmark contracts', () => {
 });
 ```
 
-- [ ] **Step 2: Implement the contracts exactly as locked in the master plan**
+- [x] **Step 2: Implement the contracts exactly as locked in the master plan**
 
 Add these repository methods:
 
@@ -157,12 +157,12 @@ export interface MetadataRepository {
 
 Use discriminated `Result<T, E>` values instead of throwing for expected validation failures.
 
-- [ ] **Step 3: Verify contracts**
+- [x] **Step 3: Verify contracts**
 
 Run: `pnpm test -- tests/unit/bookmarks/contracts.test.ts && pnpm typecheck`  
 Expected: PASS and no TypeScript errors.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/bookmarks src/storage/types.ts src/utils/result.ts tests/unit/bookmarks
@@ -183,7 +183,7 @@ git commit -m "feat: 定义书签领域接口"
 - Consumes: `BookmarkMetadata`, `MetadataRepository`.
 - Produces: `SiftmarkDatabase`, `DexieMetadataRepository`, `openSiftmarkDatabase(name?: string)`.
 
-- [ ] **Step 1: Write failing repository tests with fake IndexedDB**
+- [x] **Step 1: Write failing repository tests with fake IndexedDB**
 
 ```ts
 import 'fake-indexeddb/auto';
@@ -206,7 +206,7 @@ describe('DexieMetadataRepository', () => {
 });
 ```
 
-- [ ] **Step 2: Define database version 1**
+- [x] **Step 2: Define database version 1**
 
 Create tables with these primary/index keys:
 
@@ -224,16 +224,16 @@ this.version(1).stores({
 });
 ```
 
-- [ ] **Step 3: Implement metadata operations and migration runner**
+- [x] **Step 3: Implement metadata operations and migration runner**
 
 Use a single Dexie transaction for moving rows between `bookmarkMetadata` and `softDeletedMetadata`. `purgeDeletedBefore` must return the deleted row count.
 
-- [ ] **Step 4: Verify persistence**
+- [x] **Step 4: Verify persistence**
 
 Run: `pnpm test -- tests/unit/storage && pnpm typecheck`  
 Expected: soft delete, restore, purge, and reopen tests PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/storage tests/unit/storage
@@ -253,7 +253,7 @@ git commit -m "feat: 建立版本化本地数据库"
 - Consumes: `BookmarkRepository`, `BookmarkNode`, `MetadataRepository`.
 - Produces: `ChromeBookmarkRepository`, `registerBookmarkEventSync(deps): () => void`.
 
-- [ ] **Step 1: Write adapter tests against a deterministic Chrome fake**
+- [x] **Step 1: Write adapter tests against a deterministic Chrome fake**
 
 ```ts
 it('maps a Chrome folder without inventing a URL', async () => {
@@ -265,20 +265,20 @@ it('maps a Chrome folder without inventing a URL', async () => {
 
 Cover create, update, move, remove, missing IDs, `runtime.lastError`, and event unsubscription.
 
-- [ ] **Step 2: Implement Chrome-to-domain mapping**
+- [x] **Step 2: Implement Chrome-to-domain mapping**
 
 All callback and Promise Chrome API variants must normalize through one `callChrome` helper. Never expose `chrome.bookmarks.BookmarkTreeNode` outside the adapter.
 
-- [ ] **Step 3: Implement incremental metadata synchronization**
+- [x] **Step 3: Implement incremental metadata synchronization**
 
 `onRemoved` calls `metadata.softDelete(id, Date.now())`. `onCreated` and `onChanged` queue index refresh events. Import begin/end events suppress per-item AI scheduling but still preserve eventual consistency.
 
-- [ ] **Step 4: Verify**
+- [x] **Step 4: Verify**
 
 Run: `pnpm test -- tests/unit/platform tests/integration/bookmark-event-sync.test.ts`  
 Expected: all adapter and event lifecycle tests PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/platform tests/unit/platform tests/integration/bookmark-event-sync.test.ts
@@ -299,7 +299,7 @@ git commit -m "feat: 接入原生书签事件"
 - Consumes: `BookmarkRepository`, `SiftmarkDatabase`.
 - Produces: `BookmarkCommandService.move`, `BookmarkCommandService.rename`, `UndoService.undo`, `OperationRecord`.
 
-- [ ] **Step 1: Write the failing move/undo test**
+- [x] **Step 1: Write the failing move/undo test**
 
 ```ts
 it('restores the original parent and index', async () => {
@@ -309,7 +309,7 @@ it('restores the original parent and index', async () => {
 });
 ```
 
-- [ ] **Step 2: Define operation records**
+- [x] **Step 2: Define operation records**
 
 ```ts
 export interface OperationRecord {
@@ -325,16 +325,16 @@ export interface OperationRecord {
 }
 ```
 
-- [ ] **Step 3: Implement command and undo transactions**
+- [x] **Step 3: Implement command and undo transactions**
 
 Read the current native node immediately before mutation. If it differs from the caller's expected snapshot, return a typed conflict and do not mutate. Persist the operation only after Chrome confirms success.
 
-- [ ] **Step 4: Verify**
+- [x] **Step 4: Verify**
 
 Run: `pnpm test -- tests/unit/operations tests/integration/operations-undo.test.ts`  
 Expected: rename/move/metadata undo and conflict tests PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/operations tests/unit/operations tests/integration/operations-undo.test.ts
@@ -355,7 +355,7 @@ git commit -m "feat: 实现可撤销书签操作"
 **Interfaces:**
 - Produces: `TaskRepository`, `TaskRunner.register(type, handler)`, `TaskRunner.runNext()`, `recoverInterruptedTasks(now)`.
 
-- [ ] **Step 1: Write failing recovery tests**
+- [x] **Step 1: Write failing recovery tests**
 
 ```ts
 it('marks an interrupted non-idempotent request as unknown', async () => {
@@ -367,20 +367,20 @@ it('marks an interrupted non-idempotent request as unknown', async () => {
 
 Also test that idempotent local tasks return to `queued`, cancelled tasks do not resume, and profile versions remain locked.
 
-- [ ] **Step 2: Implement atomic task claiming**
+- [x] **Step 2: Implement atomic task claiming**
 
 Use a Dexie transaction to change one `queued` task to `running`. A handler receives an `AbortSignal`, reports progress, and returns a terminal result. Only one runner may claim a task ID.
 
-- [ ] **Step 3: Register background lifecycle hooks**
+- [x] **Step 3: Register background lifecycle hooks**
 
 On Service Worker startup, call recovery then process the next task. Use `chrome.alarms` for scheduled wakeups; do not use long-lived timers as the persistence mechanism.
 
-- [ ] **Step 4: Verify recovery**
+- [x] **Step 4: Verify recovery**
 
 Run: `pnpm test -- tests/unit/tasks tests/integration/task-recovery.test.ts && pnpm build`  
 Expected: task state-machine tests PASS and the production build succeeds.
 
-- [ ] **Step 5: Commit and pass Gate 1**
+- [x] **Step 5: Commit and pass Gate 1**
 
 ```bash
 git add src/tasks entrypoints/background.ts tests/unit/tasks tests/integration/task-recovery.test.ts
