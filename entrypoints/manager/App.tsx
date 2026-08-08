@@ -3,6 +3,7 @@ import { ChromeBookmarkRepository } from '../../src/platform/chrome/bookmarks-ad
 import type { ChromeBookmarkApi } from '../../src/platform/chrome/chrome-types';
 import type { BookmarkNode } from '../../src/bookmarks/types';
 import { ManagerLayout } from '../../src/ui/manager/ManagerLayout';
+import { useManagerStore } from '../../src/ui/manager/manager-store';
 import { openSiftmarkDatabase } from '../../src/storage/database';
 import { DexieOperationRepository } from '../../src/operations/operation-repository';
 import { DexieMetadataRepository } from '../../src/storage/metadata-repository';
@@ -222,7 +223,14 @@ export default function App() {
       refreshProposals(),
       refreshNotifications(),
       noteDraftRepository.list().then(setNoteDrafts),
-      hydrateTheme(settings)
+      hydrateTheme(settings).then(() =>
+        useManagerStore.setState({
+          density:
+            document.documentElement.dataset.density === 'compact'
+              ? 'compact'
+              : 'comfortable'
+        })
+      )
     ]).finally(() => setLoading(false));
   }, [
     noteDraftRepository,

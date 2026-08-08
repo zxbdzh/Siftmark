@@ -35,6 +35,10 @@ form,
   gap: 12px 16px;
   align-items: center;
 }
+form > .settings-grid {
+  grid-column: 1 / -1;
+  width: 100%;
+}
 form > label,
 .settings-grid > label {
   display: contents;
@@ -304,6 +308,11 @@ details pre {
   overflow: auto;
   padding: 12px;
   background: var(--surface-1);
+}
+details > summary {
+  min-height: 24px;
+  display: flex;
+  align-items: center;
 }
 output {
   display: block;

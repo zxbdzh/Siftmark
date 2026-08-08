@@ -11,13 +11,21 @@ describe('AiStatusMark', () => {
   it('uses a static fallback when reduced motion is requested', () => {
     vi.stubGlobal('matchMedia', vi.fn().mockReturnValue({ matches: true }));
     render(<AiStatusMark state="analyzing" label="正在分析" />);
-    expect(screen.getByRole('img', { name: '正在分析' })).toHaveAttribute('data-motion', 'static');
+    expect(screen.getByRole('img', { name: '正在分析' })).toHaveAttribute(
+      'data-motion',
+      'static'
+    );
   });
   it('ships four local vector animations with nonzero bounds', () => {
     for (const animation of [idle, analyzing, success, paused]) {
       expect(animation).toMatchObject({ w: 64, h: 64 });
       expect(animation.layers.length).toBeGreaterThan(0);
       expect(animation.assets).toEqual([]);
+      expect(
+        animation.layers.every((layer) =>
+          layer.shapes.some((shape) => shape.ty === 'gr')
+        )
+      ).toBe(true);
     }
   });
 });

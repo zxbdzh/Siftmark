@@ -116,23 +116,23 @@ git commit -m "test: 覆盖 Siftmark 核心端到端流程"
 **Interfaces:**
 - Produces: screenshots and machine-readable accessibility/overlap results.
 
-- [ ] **Step 1: Add axe accessibility checks**
+- [x] **Step 1: Add axe accessibility checks**
 
 Install `@axe-core/playwright`. Scan popup, manager, options, onboarding, review, import preview, and reset confirmation. Fail on serious/critical violations. Add explicit keyboard focus-order assertions.
 
-- [ ] **Step 2: Add responsive/theme matrix**
+- [x] **Step 2: Add responsive/theme matrix**
 
 Capture manager at 1440×900, 1280×720, 1024×768, and 800×700 in light/dark and comfortable/compact combinations. Assert the expected three-column/collapsed/drawer mode.
 
-- [ ] **Step 3: Add overlap and text-fit checks**
+- [x] **Step 3: Add overlap and text-fit checks**
 
 For every visible interactive element, compare bounding boxes to its parent and adjacent controls. Fail for clipped labels, zero-size controls, unintended horizontal page scroll, or incoherent overlaps.
 
-- [ ] **Step 4: Validate Lottie pixels and reduced motion**
+- [x] **Step 4: Validate Lottie pixels and reduced motion**
 
 Wait for two animation frames, compare screenshot pixel deltas in the animation region, assert nonblank bounds, then emulate reduced motion and assert the static asset remains stable.
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 Run: `pnpm test:e2e -- tests/e2e/accessibility.spec.ts tests/e2e/responsive.spec.ts tests/e2e/themes.spec.ts tests/e2e/lottie.spec.ts tests/e2e/visual-overlap.spec.ts`  
 Expected: accessibility, layout, pixel movement, and static fallback checks PASS.
