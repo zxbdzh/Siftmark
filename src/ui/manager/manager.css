@@ -1,0 +1,25 @@
+.manager-shell { min-height: 100vh; display: grid; grid-template: 52px minmax(0, 1fr) / 240px minmax(360px, 1fr) 320px; }
+.manager-header { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; border-bottom: 1px solid var(--border); background: var(--brand-ink); color: white; }
+.manager-header strong { font-size: 20px; }
+.manager-header nav { display: none; gap: 4px; }
+.manager-header button { width: 36px; border: 0; color: white; background: transparent; }
+.manager-folders, .manager-detail { overflow: auto; background: var(--surface-1); }
+.manager-folders { border-right: 1px solid var(--border); }
+.manager-detail { border-left: 1px solid var(--border); padding: 16px; }
+.manager-list { min-width: 0; }
+.folder-tree { padding: 8px; }
+.tree-row, .bookmark-row { width: 100%; border: 0; color: inherit; background: transparent; text-align: left; }
+.tree-row { display: flex; align-items: center; gap: 8px; height: var(--row-height); padding: 0 10px; border-radius: var(--radius-sm); }
+.tree-row[aria-selected='true'], .bookmark-row[aria-pressed='true'] { background: var(--surface-2); }
+.bookmark-scroll { height: calc(100vh - 52px); overflow: auto; }
+.bookmark-virtual { position: relative; }
+.bookmark-row { position: absolute; inset-inline: 0; display: grid; grid-template-columns: minmax(0, 1fr) 180px 24px; align-items: center; gap: 12px; padding: 0 16px; border-bottom: 1px solid var(--border); }
+.bookmark-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bookmark-domain { color: var(--text-2); overflow: hidden; text-overflow: ellipsis; }
+.manager-detail form { display: grid; gap: 16px; }
+.manager-detail label { display: grid; gap: 6px; color: var(--text-2); }
+.manager-detail input { width: 100%; min-height: var(--control-height); border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-0); color: var(--text-1); padding: 0 8px; }
+.empty-state { color: var(--text-2); padding: 24px; }
+.responsive-drawer { position: fixed; z-index: 20; inset: 52px 0 0 auto; width: min(360px, 90vw); overflow: auto; padding: 12px; border-left: 1px solid var(--border); background: var(--surface-0); box-shadow: var(--shadow-menu); }
+@media (max-width: 1000px) { .manager-shell { grid-template-columns: 220px minmax(0, 1fr); } .manager-detail { display: none; } .manager-header nav { display: flex; } }
+@media (max-width: 680px) { .manager-shell { grid-template-columns: minmax(0, 1fr); } .manager-folders { display: none; } .bookmark-row { grid-template-columns: minmax(0, 1fr) 24px; } .bookmark-domain { display: none; } }
