@@ -1,0 +1,4 @@
+{
+  "content": [{ "type": "text", "text": "{\"folderPath\":[\"研究\"],\"title\":\"论文\",\"tags\":[\"研究\"],\"summary\":\"摘要\",\"confidence\":\"medium\",\"reason\":\"需要复核\"}" }],
+  "stop_reason": "end_turn"
+}
