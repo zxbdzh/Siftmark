@@ -1,0 +1,1 @@
+export function SpecialFoldersSection(){return <section><h2>特殊文件夹</h2><div className="settings-grid"><span>待整理箱</span><button type="button">选择文件夹</button><span>归档</span><button type="button">选择文件夹</button><span>回收站</span><button type="button">选择文件夹</button></div></section>}

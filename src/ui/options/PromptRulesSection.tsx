@@ -1,0 +1,1 @@
+import { useState } from 'react'; export function PromptRulesSection(){const[rules,setRules]=useState('');return <section><h2>AI 附加规则</h2><label>附加规则<textarea value={rules} onChange={(e)=>setRules(e.target.value)}/></label><details><summary>预览用户可控部分</summary><pre>{rules||'无'}</pre></details><button type="button" onClick={()=>setRules('')}>恢复默认</button></section>}

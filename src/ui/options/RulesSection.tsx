@@ -1,0 +1,2 @@
+import { useState } from 'react';
+export function RulesSection(){const[domain,setDomain]=useState('');const[saved,setSaved]=useState<string[]>([]);return <section><h2>整理规则</h2><form onSubmit={(e)=>{e.preventDefault();if(domain)setSaved((v)=>[...v,domain])}}><label>域名<input value={domain} onChange={(e)=>setDomain(e.target.value)} placeholder="example.com"/></label><button type="submit">添加规则</button></form><ul>{saved.map((item)=><li key={item}>{item}</li>)}</ul></section>}
