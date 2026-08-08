@@ -19,8 +19,15 @@ test('loads the built Siftmark popup in Chromium', async () => {
     const extensionId = new URL(worker.url()).host;
     const page = await context.newPage();
     await page.goto(`chrome-extension://${extensionId}/popup.html`);
-    await expect(page.getByRole('heading', { name: 'Siftmark' })).toBeVisible();
-    await expect(page.getByRole('button', { name: '正在初始化' })).toBeDisabled();
+    await expect(page.locator('.brand-type')).toHaveText('Siftmark');
+    await expect(page.getByRole('button', { name: '保存书签' })).toBeVisible();
+    await page.goto(`chrome-extension://${extensionId}/manager.html`);
+    await expect(page.getByRole('complementary', { name: '文件夹', exact: true })).toBeVisible();
+    await expect(page.getByRole('main', { name: '书签列表' })).toBeVisible();
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(page.getByRole('button', { name: '打开文件夹' })).toBeVisible();
+    await page.goto(`chrome-extension://${extensionId}/options.html`);
+    await expect(page.getByRole('heading', { name: '设置' })).toBeVisible();
   } finally {
     await context?.close();
     await rm(profilePath, { recursive: true, force: true });
