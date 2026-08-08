@@ -30,25 +30,63 @@ export class EmbeddingRepository {
     return rows.flatMap(toVector).filter((vector) => !vector.stale);
   }
 
-  async findCurrent(bookmarkId: string, version: EmbeddingVersion): Promise<EmbeddingVector | null> {
-    const rows = await this.db.searchIndex.where('bookmarkId').equals(bookmarkId).toArray();
-    return rows.flatMap(toVector).find((vector) => !vector.stale && vector.key.profileId === version.profileId && vector.key.vectorVersion === version.vectorVersion) ?? null;
+  async findCurrent(
+    bookmarkId: string,
+    version: EmbeddingVersion
+  ): Promise<EmbeddingVector | null> {
+    const rows = await this.db.searchIndex
+      .where('bookmarkId')
+      .equals(bookmarkId)
+      .toArray();
+    return (
+      rows
+        .flatMap(toVector)
+        .find(
+          (vector) =>
+            !vector.stale &&
+            vector.key.profileId === version.profileId &&
+            vector.key.vectorVersion === version.vectorVersion
+        ) ?? null
+    );
   }
 
   async markOtherVersionsStale(version: EmbeddingVersion): Promise<number> {
-    const rows = await this.db.searchIndex.where('kind').equals('embedding').toArray();
-    const staleRows = rows.filter((row) => row.embeddingProfile === version.profileId && row.vectorVersion !== version.vectorVersion && !row.stale);
+    const rows = await this.db.searchIndex
+      .where('kind')
+      .equals('embedding')
+      .toArray();
+    const logicalProfileId = withoutVersion(version.profileId);
+    const staleRows = rows.filter(
+      (row) =>
+        row.embeddingProfile &&
+        withoutVersion(row.embeddingProfile) === logicalProfileId &&
+        (row.embeddingProfile !== version.profileId ||
+          row.vectorVersion !== version.vectorVersion) &&
+        !row.stale
+    );
     if (staleRows.length === 0) return 0;
-    await this.db.searchIndex.bulkPut(staleRows.map((row) => ({ ...row, stale: true })));
+    await this.db.searchIndex.bulkPut(
+      staleRows.map((row) => ({ ...row, stale: true }))
+    );
     return staleRows.length;
   }
 
   async deleteProfile(profileId: string): Promise<number> {
-    const rows = await this.db.searchIndex.where('kind').equals('embedding').toArray();
-    const ids = rows.filter((row) => row.embeddingProfile === profileId).map((row) => row.id);
+    const rows = await this.db.searchIndex
+      .where('kind')
+      .equals('embedding')
+      .toArray();
+    const ids = rows
+      .filter((row) => row.embeddingProfile === profileId)
+      .map((row) => row.id);
     await this.db.searchIndex.bulkDelete(ids);
     return ids.length;
   }
+}
+
+function withoutVersion(profileId: string): string {
+  const separator = profileId.lastIndexOf('@');
+  return separator > 0 ? profileId.slice(0, separator) : profileId;
 }
 
 function idFor(bookmarkId: string, key: EmbeddingKey): string {
@@ -56,7 +94,28 @@ function idFor(bookmarkId: string, key: EmbeddingKey): string {
 }
 
 function toVector(row: SearchIndexRecord): EmbeddingVector[] {
-  if (row.kind !== 'embedding' || !row.embeddingProfile || !row.vectorVersion || !row.dimensions || !row.vector) return [];
-  const inputHash = typeof row.document?.inputHash === 'string' ? row.document.inputHash : '';
-  return [{ bookmarkId: row.bookmarkId, key: { profileId: row.embeddingProfile, vectorVersion: row.vectorVersion, dimensions: row.dimensions }, values: row.vector, inputHash, stale: row.stale ?? false, updatedAt: row.updatedAt }];
+  if (
+    row.kind !== 'embedding' ||
+    !row.embeddingProfile ||
+    !row.vectorVersion ||
+    !row.dimensions ||
+    !row.vector
+  )
+    return [];
+  const inputHash =
+    typeof row.document?.inputHash === 'string' ? row.document.inputHash : '';
+  return [
+    {
+      bookmarkId: row.bookmarkId,
+      key: {
+        profileId: row.embeddingProfile,
+        vectorVersion: row.vectorVersion,
+        dimensions: row.dimensions
+      },
+      values: row.vector,
+      inputHash,
+      stale: row.stale ?? false,
+      updatedAt: row.updatedAt
+    }
+  ];
 }

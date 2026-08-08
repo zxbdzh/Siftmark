@@ -142,7 +142,7 @@ export default defineBackground(() => {
       createdAt: now,
       updatedAt: now
     });
-    void runner.runNext();
+    void runner.runUntilIdle();
     return { taskId };
   };
   const enqueueThumbnail = async (input: {
@@ -164,7 +164,7 @@ export default defineBackground(() => {
       createdAt: now,
       updatedAt: now
     });
-    void runner.runNext();
+    void runner.runUntilIdle();
     return { taskId };
   };
   const enqueueConfiguredEmbeddings = async (bookmarkIds?: string[]) => {
@@ -197,7 +197,7 @@ export default defineBackground(() => {
       createdAt: existing?.createdAt ?? now,
       updatedAt: now
     });
-    void runner.runNext();
+    void runner.runUntilIdle();
     return { taskId };
   };
   const enqueueHealthScan = async (input: ScanHealthInput = {}) => {
@@ -215,7 +215,7 @@ export default defineBackground(() => {
       createdAt: now,
       updatedAt: now
     });
-    void runner.runNext();
+    void runner.runUntilIdle();
     return { taskId };
   };
   const saveService = new SaveService(bookmarks, { enqueue: enqueueAnalysis });
@@ -404,13 +404,13 @@ export default defineBackground(() => {
       createdAt: now,
       updatedAt: now
     });
-    void runner.runNext();
+    void runner.runUntilIdle();
     return { taskId };
   };
 
   const processTasks = async () => {
     await recoverInterruptedTasks(tasks, Date.now());
-    await runner.runNext();
+    await runner.runUntilIdle();
   };
   void processTasks();
   void enqueueConfiguredEmbeddings();
@@ -492,7 +492,7 @@ export default defineBackground(() => {
     });
   });
   browser.alarms.onAlarm.addListener((alarm) => {
-    if (alarm.name === TASK_WAKE_ALARM) void runner.runNext();
+    if (alarm.name === TASK_WAKE_ALARM) void runner.runUntilIdle();
     else if (alarm.name === RECYCLE_PURGE_ALARM) void enqueueRecyclePurge();
     else if (alarm.name === HEALTH_SCAN_ALARM)
       void healthScheduler.getSchedule().then(async (schedule) => {

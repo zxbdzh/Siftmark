@@ -87,4 +87,34 @@ describe('quick save flow', () => {
       expect.objectContaining({ batchId: 'batch-1', batchIndex: 1 })
     );
   });
+
+  it('creates every native bookmark before queuing batch analysis', async () => {
+    let created = 0;
+    const queuedAfterCreate: number[] = [];
+    const bookmarks = {
+      getTree: vi
+        .fn()
+        .mockResolvedValue([
+          { id: 'f', parentId: '0', index: 0, title: '书签' }
+        ]),
+      create: vi.fn(async (input: Record<string, unknown>) => ({
+        ...input,
+        id: `b${++created}`
+      }))
+    };
+    const queue = {
+      enqueue: vi.fn(async () => {
+        queuedAfterCreate.push(created);
+      })
+    };
+
+    const results = await new SaveService(bookmarks as never, queue).saveTabs([
+      { id: 1, title: 'A', url: 'https://a.test' },
+      { id: 2, title: 'B', url: 'https://b.test' }
+    ]);
+
+    expect(queuedAfterCreate).toEqual([2, 2]);
+    expect(results.every((result) => result.analysisQueued)).toBe(true);
+    expect(results.every((result) => result.taskId)).toBe(true);
+  });
 });
