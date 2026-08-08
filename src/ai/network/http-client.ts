@@ -1,0 +1,49 @@
+import { ProviderError, kindForStatus } from './errors';
+
+export interface ProviderJsonRequest {
+  url: string;
+  headers: Record<string, string>;
+  body: unknown;
+  signal: AbortSignal;
+  timeoutMs: number;
+  fetch?: typeof globalThis.fetch;
+}
+
+export async function postProviderJson<T>(request: ProviderJsonRequest): Promise<T> {
+  const controller = new AbortController();
+  const abort = () => controller.abort(request.signal.reason);
+  request.signal.addEventListener('abort', abort, { once: true });
+  const timeout = setTimeout(() => controller.abort(new Error('timeout')), request.timeoutMs);
+  try {
+    const response = await (request.fetch ?? globalThis.fetch)(request.url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...request.headers },
+      body: JSON.stringify(request.body),
+      signal: controller.signal
+    });
+    if (!response.ok) {
+      const retryAfter = response.headers.get('retry-after');
+      throw new ProviderError(kindForStatus(response.status), `Provider request failed with HTTP ${response.status}`, response.status, parseRetryAfter(retryAfter));
+    }
+    try {
+      return await response.json() as T;
+    } catch {
+      throw new ProviderError('validation', 'Provider returned invalid JSON', response.status);
+    }
+  } catch (error) {
+    if (error instanceof ProviderError) throw error;
+    if (controller.signal.aborted) throw new ProviderError('abort', 'Provider request aborted');
+    throw new ProviderError('network', 'Provider network request failed');
+  } finally {
+    clearTimeout(timeout);
+    request.signal.removeEventListener('abort', abort);
+  }
+}
+
+function parseRetryAfter(value: string | null): number | undefined {
+  if (!value) return undefined;
+  const seconds = Number(value);
+  if (Number.isFinite(seconds)) return Math.max(0, seconds * 1000);
+  const date = Date.parse(value);
+  return Number.isNaN(date) ? undefined : Math.max(0, date - Date.now());
+}
