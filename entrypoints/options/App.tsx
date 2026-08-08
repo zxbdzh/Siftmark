@@ -8,6 +8,7 @@ import { ChromeBookmarkRepository } from '../../src/platform/chrome/bookmarks-ad
 import type { ChromeBookmarkApi } from '../../src/platform/chrome/chrome-types';
 import { ChromeSettingsRepository } from '../../src/settings/settings-repository';
 import { openSiftmarkDatabase } from '../../src/storage/database';
+import { DexieMetadataRepository } from '../../src/storage/metadata-repository';
 import { AiUsageSection } from '../../src/ui/options/AiUsageSection';
 import { AppearanceSection } from '../../src/ui/options/AppearanceSection';
 import { IncognitoSection } from '../../src/ui/options/IncognitoSection';
@@ -19,6 +20,16 @@ import { SpecialFoldersSection } from '../../src/ui/options/SpecialFoldersSectio
 import { HealthAutomationSection } from '../../src/ui/options/HealthAutomationSection';
 import { BackupCenter } from '../../src/ui/backup/BackupCenter';
 import { hydrateTheme } from '../../src/ui/theme/theme-store';
+import { ChromeOnboardingStore } from '../../src/onboarding/onboarding-store';
+import { OnboardingWizard } from '../../src/ui/onboarding/OnboardingWizard';
+import { PermissionStep } from '../../src/ui/onboarding/PermissionStep';
+import { SpecialFoldersStep } from '../../src/ui/onboarding/SpecialFoldersStep';
+import { FloatingButtonStep } from '../../src/ui/onboarding/FloatingButtonStep';
+import { ModelStep } from '../../src/ui/onboarding/ModelStep';
+import { MigrationStep } from '../../src/ui/onboarding/MigrationStep';
+import { ScanStep } from '../../src/ui/onboarding/ScanStep';
+import { ResetService } from '../../src/settings/reset-service';
+import { ResetSection } from '../../src/ui/options/ResetSection';
 
 export default function App() {
   const database = useMemo(() => openSiftmarkDatabase(), []);
@@ -29,6 +40,18 @@ export default function App() {
   const settings = useMemo(
     () => new ChromeSettingsRepository(browser.storage.local),
     []
+  );
+  const onboardingStore = useMemo(
+    () => new ChromeOnboardingStore(browser.storage.local),
+    []
+  );
+  const resetService = useMemo(
+    () => new ResetService(database, browser.storage.local),
+    [database]
+  );
+  const metadata = useMemo(
+    () => new DexieMetadataRepository(database),
+    [database]
   );
   const bookmarks = useMemo(
     () =>
@@ -48,9 +71,74 @@ export default function App() {
     [profiles, settings]
   );
   const [metrics, setMetrics] = useState<RequestMetric[]>([]);
+  const [onboardingStatus, setOnboardingStatus] = useState<
+    'loading' | 'active' | 'completed'
+  >('loading');
   useEffect(() => {
-    void Promise.all([hydrateTheme(settings), usage.list().then(setMetrics)]);
-  }, [settings, usage]);
+    void Promise.all([
+      hydrateTheme(settings),
+      usage.list().then(setMetrics),
+      onboardingStore
+        .load()
+        .then((state) =>
+          setOnboardingStatus(
+            state.status === 'completed' ? 'completed' : 'active'
+          )
+        )
+    ]);
+  }, [onboardingStore, settings, usage]);
+  const backupCenter = (
+    <BackupCenter
+      bookmarks={bookmarks}
+      database={database}
+      profiles={profiles}
+      appVersion="0.1.0"
+    />
+  );
+  if (onboardingStatus === 'loading') {
+    return (
+      <main>
+        <header>
+          <strong className="brand-type">Siftmark</strong>
+          <h1>设置</h1>
+        </header>
+        <p>正在读取首次设置…</p>
+      </main>
+    );
+  }
+  if (onboardingStatus === 'active') {
+    return (
+      <main>
+        <header>
+          <strong className="brand-type">Siftmark</strong>
+          <h1>首次设置</h1>
+        </header>
+        <OnboardingWizard
+          store={onboardingStore}
+          onComplete={() => setOnboardingStatus('completed')}
+          steps={{
+            'permissions-privacy': <PermissionStep />,
+            'special-folders': (
+              <SpecialFoldersStep settings={settings} bookmarks={bookmarks} />
+            ),
+            'floating-button': <FloatingButtonStep />,
+            model: (
+              <ModelStep>
+                <ModelProfilesSection
+                  repository={profiles}
+                  service={profileService}
+                />
+              </ModelStep>
+            ),
+            migration: <MigrationStep>{backupCenter}</MigrationStep>,
+            'read-only-scan': (
+              <ScanStep bookmarks={bookmarks} metadata={metadata} />
+            )
+          }}
+        />
+      </main>
+    );
+  }
   return (
     <main>
       <header>
@@ -64,17 +152,21 @@ export default function App() {
       <AppearanceSection repository={settings} />
       <SpecialFoldersSection settings={settings} bookmarks={bookmarks} />
       <PromptRulesSection repository={settings} />
-      <BackupCenter
-        bookmarks={bookmarks}
-        database={database}
-        profiles={profiles}
-        appVersion="0.1.0"
-      />
+      {backupCenter}
       <IncognitoSection />
       <AiUsageSection
         metrics={metrics}
         repository={usage}
         onClear={() => setMetrics([])}
+      />
+      <ResetSection
+        service={resetService}
+        onBackup={() =>
+          document
+            .getElementById('backup-center')
+            ?.scrollIntoView({ behavior: 'smooth' })
+        }
+        onResetAll={() => setOnboardingStatus('active')}
       />
     </main>
   );

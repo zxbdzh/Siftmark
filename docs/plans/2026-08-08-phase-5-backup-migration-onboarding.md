@@ -292,24 +292,24 @@ git commit -m "feat: 完成归档回收站与特殊文件夹"
 **Interfaces:**
 - Produces: resumable onboarding state, `ResetService.preview`, `ResetService.execute`.
 
-- [ ] **Step 1: Write onboarding resume tests**
+- [x] **Step 1: Write onboarding resume tests**
 
 Assert every step can be skipped, progress survives close/reopen, model configuration is optional, files are user-selected, first scan is read-only, and no recurring job is enabled implicitly.
 
-- [ ] **Step 2: Implement six onboarding steps**
+- [x] **Step 2: Implement six onboarding steps**
 
 Use the approved sequence: permissions/privacy, special folders, floating button, optional model, MarkAI file selection, read-only existing-bookmark scan.
 
-- [ ] **Step 3: Implement tiered reset preview**
+- [x] **Step 3: Implement tiered reset preview**
 
 Support cache/thumbnails, AI metadata/index, history/tasks, model configuration, or all Siftmark data. Preview exact row/byte counts. High-risk reset requires the Chinese confirmation phrase `重置 Siftmark` and offers backup first. Native bookmarks are never removed.
 
-- [ ] **Step 4: Verify and pass Gate 5**
+- [x] **Step 4: Verify and pass Gate 5**
 
 Run: `pnpm typecheck && pnpm lint && pnpm test -- tests/unit/backup tests/unit/ui/onboarding-wizard.test.tsx tests/integration/backup-import-apply.test.ts tests/integration/recycle-archive.test.ts tests/integration/reset-service.test.ts && pnpm build`  
 Expected: all migration, archive, onboarding, reset, and build tests PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/onboarding src/ui/onboarding src/settings src/ui/options/ResetSection.tsx tests

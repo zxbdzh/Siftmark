@@ -310,6 +310,92 @@ output {
   min-height: 20px;
   color: var(--text-2);
 }
+.onboarding-wizard {
+  min-height: calc(100vh - 110px);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 20px;
+  border-bottom: 0;
+}
+.onboarding-wizard > header {
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+}
+.onboarding-wizard h2 {
+  margin: 4px 0 14px;
+  font-size: 22px;
+}
+.onboarding-wizard progress {
+  width: min(280px, 42vw);
+  accent-color: var(--brand-ink);
+}
+.onboarding-step {
+  min-height: 320px;
+}
+.onboarding-wizard > footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.onboarding-choice {
+  display: grid;
+  gap: 14px;
+}
+.onboarding-choice > button {
+  justify-self: start;
+}
+.onboarding-choice svg,
+.permission-status dt svg {
+  vertical-align: middle;
+}
+.onboarding-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.onboarding-scan-result {
+  display: grid;
+  gap: 6px;
+}
+.onboarding-embedded-section > section,
+.onboarding-choice > section {
+  padding-top: 0;
+  border-bottom: 0;
+}
+.reset-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 10px;
+}
+.reset-controls label,
+.reset-preview > label {
+  display: grid;
+  gap: 6px;
+}
+.reset-preview {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 16px 0;
+  border-top: 1px solid var(--border);
+}
+.reset-preview dl {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+}
+.reset-preview dl div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.reset-preview dd {
+  margin: 0;
+}
 @media (max-width: 620px) {
   main {
     padding: 16px;
@@ -344,5 +430,18 @@ output {
   .import-preview dl,
   .conflict-row {
     grid-template-columns: 1fr;
+  }
+  .onboarding-wizard > header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .onboarding-wizard progress {
+    width: 100%;
+  }
+  .onboarding-wizard > footer {
+    justify-content: stretch;
+  }
+  .onboarding-wizard > footer button {
+    flex: 1;
   }
 }

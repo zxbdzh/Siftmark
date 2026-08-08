@@ -304,7 +304,7 @@ export function BackupCenter({
   };
 
   return (
-    <section>
+    <section id="backup-center">
       <h2>备份与迁移</h2>
       <p>普通备份不包含 API Key；导入文件会先在本地解析和预览。</p>
       <ExportDialog
