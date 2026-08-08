@@ -4,9 +4,11 @@ import type { ModelProfile } from '../../../src/ai/types';
 import { readBlobBytes } from '../../../src/backup/blob';
 import {
   createRedactedConfiguration,
-  exportEncryptedCompleteConfiguration
+  exportEncryptedCompleteConfiguration,
+  parseEncryptedCompleteConfiguration
 } from '../../../src/backup/config-exporter';
 import { decryptEncryptedContainer } from '../../../src/backup/encrypted-container';
+import { exportNativeBackup } from '../../../src/backup/native-exporter';
 
 const profile: ModelProfile = {
   id: 'deepseek',
@@ -69,6 +71,48 @@ describe('configuration export', () => {
     );
     expect(configuration.profiles[0].apiKey).toBe(profile.apiKey);
     expect(configuration.settings).toEqual({ activeProfile: 'deepseek' });
+  });
+
+  it('restores the native graph and complete profiles only after decryption', async () => {
+    const native = await exportNativeBackup({
+      nodes: [
+        {
+          id: 'bookmark',
+          parentId: 'root',
+          index: 0,
+          title: 'Siftmark',
+          url: 'https://example.com'
+        }
+      ],
+      metadata: new Map(),
+      appVersion: '0.1.0'
+    });
+    const archive = await exportEncryptedCompleteConfiguration(
+      {
+        profiles: [profile],
+        settings: { appearance: 'dark' },
+        nativeBackup: await readBlobBytes(native.zip)
+      },
+      'strong password'
+    );
+
+    const graph = await parseEncryptedCompleteConfiguration(
+      archive,
+      'strong password'
+    );
+    expect(graph).toMatchObject({
+      format: 'siftmark',
+      keyPresence: 'encrypted',
+      settings: {
+        appearance: 'dark',
+        'siftmark.ai.profiles.v1': [
+          expect.objectContaining({ apiKey: 'sk-plain-secret' })
+        ]
+      }
+    });
+    expect(graph.nodes).toEqual([
+      expect.objectContaining({ title: 'Siftmark' })
+    ]);
   });
 });
 

@@ -1,4 +1,5 @@
 import type { BookmarkMetadata } from './types';
+import type { BookmarkNode } from '../bookmarks/types';
 import type { DurableTask } from '../tasks/types';
 
 export interface ThumbnailRecord {
@@ -8,7 +9,13 @@ export interface ThumbnailRecord {
   width?: number;
   height?: number;
   state: 'ready' | 'failed' | 'capturing';
-  errorKind?: 'permission' | 'restricted' | 'tab-changed' | 'decode' | 'quota' | 'unknown';
+  errorKind?:
+    | 'permission'
+    | 'restricted'
+    | 'tab-changed'
+    | 'decode'
+    | 'quota'
+    | 'unknown';
   createdAt: number;
   lastAccessedAt: number;
 }
@@ -87,4 +94,11 @@ export interface AnalysisProposalRecord {
   relatedBookmarkIds?: string[];
   healthStatus?: string;
   createdAt: number;
+}
+
+export interface ImportRecoveryPointRecord {
+  id: string;
+  createdAt: number;
+  nodes: BookmarkNode[];
+  metadata: BookmarkMetadata[];
 }

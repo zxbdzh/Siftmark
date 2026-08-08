@@ -3,6 +3,7 @@ import type { OperationRecord } from './types';
 
 export interface OperationRepository {
   get(id: string): Promise<OperationRecord | null>;
+  getByIdempotencyKey(key: string): Promise<OperationRecord | null>;
   listRecent(limit?: number): Promise<OperationRecord[]>;
   put(operation: OperationRecord): Promise<void>;
   markUndone(id: string, undoneAt: number): Promise<void>;
@@ -15,8 +16,20 @@ export class DexieOperationRepository implements OperationRepository {
     return this.db.operationLog.get(id).then((value) => value ?? null);
   }
 
+  getByIdempotencyKey(key: string): Promise<OperationRecord | null> {
+    return this.db.operationLog
+      .where('idempotencyKey')
+      .equals(key)
+      .first()
+      .then((value) => value ?? null);
+  }
+
   listRecent(limit = 20): Promise<OperationRecord[]> {
-    return this.db.operationLog.orderBy('createdAt').reverse().limit(limit).toArray();
+    return this.db.operationLog
+      .orderBy('createdAt')
+      .reverse()
+      .limit(limit)
+      .toArray();
   }
 
   async put(operation: OperationRecord): Promise<void> {

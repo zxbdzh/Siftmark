@@ -215,19 +215,19 @@ git commit -m "feat: 加入加密模型配置备份"
 **Interfaces:**
 - Produces: `ImportConflict`, `ImportDecision`, `ImportPlan`, `applyImportPlan`.
 
-- [ ] **Step 1: Write conflict tests**
+- [x] **Step 1: Write conflict tests**
 
 Detect exact URL, normalized URL, title/folder, duplicate source node, and metadata-only conflicts. Default every conflict to `keep-existing`; never default to overwrite/delete.
 
-- [ ] **Step 2: Implement preview UI**
+- [x] **Step 2: Implement preview UI**
 
 Display format, version, counts, integrity, key presence, thumbnail size, unknown fields, and conflicts. Allow skip, keep existing, create duplicate, or merge tags/note.
 
-- [ ] **Step 3: Implement resumable application**
+- [x] **Step 3: Implement resumable application**
 
 Create a backup recovery point first. Apply the approved plan through `BookmarkCommandService` in deterministic parent-before-child order. Store progress in a durable task. Partial failures remain reviewable and resumable.
 
-- [ ] **Step 4: Verify and commit**
+- [x] **Step 4: Verify and commit**
 
 Run: `pnpm test -- tests/unit/backup/conflict-detector.test.ts tests/integration/backup-import-apply.test.ts tests/unit/ui/import-preview.test.tsx`  
 Expected: preview, safe defaults, partial failure, resume, and undo tests PASS.

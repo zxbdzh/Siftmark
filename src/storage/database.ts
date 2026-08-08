@@ -3,6 +3,7 @@ import type { BookmarkMetadata } from './types';
 import type {
   AnalysisProposalRecord,
   AiUsageLogRecord,
+  ImportRecoveryPointRecord,
   NotificationRecord,
   OperationLogRecord,
   SearchIndexRecord,
@@ -11,7 +12,11 @@ import type {
   ThumbnailRecord,
   VisitAggregate
 } from './schema';
-import { CURRENT_SCHEMA_VERSION, initialSchemaStores, schemaStores } from './migrations';
+import {
+  CURRENT_SCHEMA_VERSION,
+  initialSchemaStores,
+  schemaStores
+} from './migrations';
 
 export class SiftmarkDatabase extends Dexie {
   bookmarkMetadata!: Table<BookmarkMetadata, string>;
@@ -24,6 +29,7 @@ export class SiftmarkDatabase extends Dexie {
   softDeletedMetadata!: Table<SoftDeletedMetadata, string>;
   visitAggregates!: Table<VisitAggregate, string>;
   analysisProposals!: Table<AnalysisProposalRecord, string>;
+  importRecoveryPoints!: Table<ImportRecoveryPointRecord, string>;
 
   constructor(name = 'siftmark') {
     super(name);

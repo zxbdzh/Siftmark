@@ -1,7 +1,14 @@
 import type { AiCapability, AiProtocol, ModelProfile } from '../ai/types';
+import { parseModelProfile } from '../ai/profiles/model-profile';
 import JSZip from 'jszip';
-import { createEncryptedContainer } from './encrypted-container';
+import { readBlobBytes } from './blob';
+import {
+  createEncryptedContainer,
+  decryptEncryptedContainer
+} from './encrypted-container';
 import { stableStringify } from './native-exporter';
+import { parseNativeBackup } from './native-importer';
+import type { ImportGraph } from './types';
 
 export interface RedactedProfileConfiguration {
   id: string;
@@ -94,6 +101,78 @@ export async function exportEncryptedCompleteConfiguration(
   } finally {
     zipBytes.fill(0);
   }
+}
+
+export async function parseEncryptedCompleteConfiguration(
+  archive: Blob,
+  password: string
+): Promise<ImportGraph> {
+  const encryptedBytes = await readBlobBytes(archive);
+  const zipBytes = await decryptEncryptedContainer(encryptedBytes, password);
+  encryptedBytes.fill(0);
+  try {
+    const zip = await JSZip.loadAsync(zipBytes);
+    const configurationFile = zip.file('configuration.json');
+    const nativeBackupFile = zip.file('native-backup.zip');
+    if (!configurationFile || !nativeBackupFile) {
+      throw new Error('invalid-complete-configuration');
+    }
+    const [configurationText, nativeBackupBytes] = await Promise.all([
+      configurationFile.async('text'),
+      nativeBackupFile.async('uint8array')
+    ]);
+    const configuration = parseCompleteConfiguration(configurationText);
+    const graph = await parseNativeBackup(
+      new Blob([Uint8Array.from(nativeBackupBytes).buffer], {
+        type: 'application/zip'
+      })
+    );
+    nativeBackupBytes.fill(0);
+    return {
+      ...graph,
+      settings: {
+        ...configuration.settings,
+        'siftmark.ai.profiles.v1': configuration.profiles
+      },
+      keyPresence: 'encrypted'
+    };
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith('invalid-'))
+      throw error;
+    throw new Error('invalid-complete-configuration');
+  } finally {
+    zipBytes.fill(0);
+  }
+}
+
+function parseCompleteConfiguration(value: string): {
+  profiles: ModelProfile[];
+  settings: Record<string, unknown>;
+} {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value) as unknown;
+  } catch {
+    throw new Error('invalid-complete-configuration');
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('invalid-complete-configuration');
+  }
+  const record = parsed as Record<string, unknown>;
+  if (
+    record.format !== 'siftmark-complete-configuration' ||
+    record.version !== 1 ||
+    !Array.isArray(record.profiles) ||
+    !record.settings ||
+    typeof record.settings !== 'object' ||
+    Array.isArray(record.settings)
+  ) {
+    throw new Error('invalid-complete-configuration');
+  }
+  return {
+    profiles: record.profiles.map(parseModelProfile),
+    settings: record.settings as Record<string, unknown>
+  };
 }
 
 function redactApiKeys(value: unknown, key = ''): unknown {
