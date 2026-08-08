@@ -31,11 +31,11 @@
 **Interfaces:**
 - Produces: `test`, `expect`, `extensionId`, `openExtensionPage`, local provider fixture.
 
-- [ ] **Step 1: Build before E2E**
+- [x] **Step 1: Build before E2E**
 
 Configure Playwright `webServer` to start a deterministic local content/provider fixture and require `pnpm build` before launch. Use a persistent Chromium context with `--disable-extensions-except` and `--load-extension` pointing to `.output/chrome-mv3`.
 
-- [ ] **Step 2: Write the extension smoke test**
+- [x] **Step 2: Write the extension smoke test**
 
 ```ts
 test('loads popup, manager, options, and background worker', async ({ context, extensionId }) => {
@@ -50,7 +50,7 @@ test('loads popup, manager, options, and background worker', async ({ context, e
 
 Resolve actual WXT output page paths from the built manifest rather than hard-coding if WXT emits entrypoint subpaths.
 
-- [ ] **Step 3: Verify and commit**
+- [x] **Step 3: Verify and commit**
 
 Run: `pnpm build && pnpm test:e2e -- tests/e2e/smoke.spec.ts`  
 Expected: real extension pages and Service Worker load without console errors.
