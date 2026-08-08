@@ -1,0 +1,73 @@
+import type { BookmarkRepository } from '../bookmarks/ports';
+import type { BookmarkMetadata, MetadataRepository } from '../storage/types';
+import { err, ok, type Result } from '../utils/result';
+import type { OperationRepository } from './operation-repository';
+import type { OperationError, OperationRecord } from './types';
+
+export interface MoveCommand {
+  bookmarkId: string;
+  parentId: string;
+  index?: number;
+  batchId?: string;
+  expected?: { parentId: string; index: number };
+}
+
+export interface RenameCommand {
+  bookmarkId: string;
+  title: string;
+  batchId?: string;
+  expectedTitle?: string;
+}
+
+export class BookmarkCommandService {
+  constructor(
+    private readonly bookmarks: BookmarkRepository,
+    private readonly operations: OperationRepository,
+    private readonly metadata?: MetadataRepository,
+    private readonly now: () => number = Date.now,
+    private readonly createId: () => string = () => crypto.randomUUID()
+  ) {}
+
+  async move(command: MoveCommand): Promise<Result<OperationRecord, OperationError>> {
+    const current = await this.bookmarks.get(command.bookmarkId);
+    if (!current) return err({ code: 'not_found', id: command.bookmarkId });
+    if (command.expected && (current.parentId !== command.expected.parentId || current.index !== command.expected.index)) {
+      return err({ code: 'conflict', bookmarkId: command.bookmarkId, expected: command.expected, actual: current });
+    }
+    const moved = await this.bookmarks.move(command.bookmarkId, command.parentId, command.index);
+    return this.record({
+      type: 'move', bookmarkId: command.bookmarkId, batchId: command.batchId,
+      before: { parentId: current.parentId, index: current.index },
+      after: { parentId: moved.parentId, index: moved.index }
+    });
+  }
+
+  async rename(command: RenameCommand): Promise<Result<OperationRecord, OperationError>> {
+    const current = await this.bookmarks.get(command.bookmarkId);
+    if (!current) return err({ code: 'not_found', id: command.bookmarkId });
+    if (command.expectedTitle !== undefined && current.title !== command.expectedTitle) {
+      return err({ code: 'conflict', bookmarkId: command.bookmarkId, expected: { title: command.expectedTitle }, actual: current });
+    }
+    const updated = await this.bookmarks.update(command.bookmarkId, { title: command.title });
+    return this.record({
+      type: 'rename', bookmarkId: command.bookmarkId, batchId: command.batchId,
+      before: { title: current.title }, after: { title: updated.title }
+    });
+  }
+
+  async updateMetadata(next: BookmarkMetadata, batchId?: string): Promise<Result<OperationRecord, OperationError>> {
+    if (!this.metadata) return err({ code: 'unsupported', type: 'metadata' });
+    const before = await this.metadata.get(next.bookmarkId);
+    await this.metadata.put(next);
+    return this.record({
+      type: 'metadata', bookmarkId: next.bookmarkId, batchId,
+      before: before ? { metadata: before } : {}, after: { metadata: next }
+    });
+  }
+
+  private async record(input: Omit<OperationRecord, 'id' | 'idempotencyKey' | 'createdAt'>): Promise<Result<OperationRecord, OperationError>> {
+    const operation: OperationRecord = { ...input, id: this.createId(), idempotencyKey: this.createId(), createdAt: this.now() };
+    await this.operations.put(operation);
+    return ok(operation);
+  }
+}

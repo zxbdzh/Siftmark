@@ -12,11 +12,14 @@ export interface ThumbnailRecord {
 
 export interface OperationLogRecord {
   id: string;
+  type: 'move' | 'rename' | 'remove' | 'restore' | 'metadata';
+  bookmarkId: string;
   batchId?: string;
   before: Record<string, unknown>;
   after: Record<string, unknown>;
   idempotencyKey: string;
   createdAt: number;
+  undoneAt?: number;
 }
 
 export interface TaskRecord {
