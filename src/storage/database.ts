@@ -1,6 +1,7 @@
 import Dexie, { type Table } from 'dexie';
 import type { BookmarkMetadata } from './types';
 import type {
+  AnalysisProposalRecord,
   AiUsageLogRecord,
   NotificationRecord,
   OperationLogRecord,
@@ -9,7 +10,6 @@ import type {
   TaskRecord,
   ThumbnailRecord,
   VisitAggregate
-  ,AnalysisProposalRecord
 } from './schema';
 import { CURRENT_SCHEMA_VERSION, schemaStores } from './migrations';
 

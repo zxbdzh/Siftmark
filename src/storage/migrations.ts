@@ -9,8 +9,8 @@ export const schemaStores = {
   notifications: '&id, read, type, createdAt',
   aiUsageLog: '&requestId, profileId, taskType, status, createdAt',
   softDeletedMetadata: '&bookmarkId, deletedAt',
-  visitAggregates: '&bookmarkId, lastVisitedAt'
-  ,analysisProposals: '&id, bookmarkId, state, createdAt'
+  visitAggregates: '&bookmarkId, lastVisitedAt',
+  analysisProposals: '&id, bookmarkId, state, createdAt'
 } as const;
 
 export type SchemaStoreName = keyof typeof schemaStores;
