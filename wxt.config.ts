@@ -10,6 +10,7 @@ export default defineConfig({
     optional_permissions: ['notifications'],
     host_permissions: ['<all_urls>'],
     action: { default_title: 'Siftmark' },
+    commands: { 'save-current-page': { suggested_key: { default: 'Ctrl+Shift+S', mac: 'Command+Shift+S' }, description: '保存当前页面' } },
     incognito: 'spanning'
   }
 });

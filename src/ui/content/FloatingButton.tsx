@@ -1,0 +1,1 @@
+import { BookmarkPlus, X } from 'lucide-react'; export function FloatingButton({enabled,onSave,onHide}:{enabled:boolean;onSave():void;onHide():void}){return enabled?<div className="siftmark-floating"><button type="button" aria-label="保存到 Siftmark" onClick={onSave}><BookmarkPlus/></button><button type="button" aria-label="在此网站隐藏" onClick={onHide}><X/></button></div>:null}

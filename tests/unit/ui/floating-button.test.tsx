@@ -1,0 +1,1 @@
+import{render,screen}from'@testing-library/react';import{describe,it,expect,vi}from'vitest';import{FloatingButton}from'../../../src/ui/content/FloatingButton';describe('FloatingButton',()=>{it('is absent by default when disabled',()=>{render(<FloatingButton enabled={false} onSave={vi.fn()} onHide={vi.fn()}/>);expect(screen.queryByRole('button')).not.toBeInTheDocument()})});
