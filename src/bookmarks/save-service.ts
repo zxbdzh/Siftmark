@@ -4,9 +4,9 @@ import type { OperationRepository } from '../operations/operation-repository';
 
 export interface BrowserTab { id?: number; title?: string; url?: string; }
 export type DuplicateAction = 'cancel' | 'create-copy' | 'update-title';
-export interface SaveResult { bookmarkId?: string; duplicateId?: string; operationId?: string; taskId?: string; analysisQueued: boolean; status: 'saved' | 'updated' | 'duplicate' | 'unsupported'; }
+export interface SaveResult { bookmarkId?: string; duplicateId?: string; operationId?: string; batchId?: string; taskId?: string; analysisQueued: boolean; status: 'saved' | 'updated' | 'duplicate' | 'unsupported'; }
 export interface AnalysisQueue { enqueue(input: { bookmarkId: string; tabId?: number; taskId: string }): Promise<unknown>; }
-export interface SaveOptions { parentId?: string; duplicateAction?: DuplicateAction; queueAnalysis?: boolean; }
+export interface SaveOptions { parentId?: string; duplicateAction?: DuplicateAction; queueAnalysis?: boolean; batchId?: string; batchIndex?: number; }
 
 export class SaveService {
   constructor(
@@ -42,18 +42,20 @@ export class SaveService {
     const operationId = this.createId();
     const taskId = this.createId();
     if (this.operations) {
-      await this.operations.put({ id: operationId, type: 'create', bookmarkId: created.id, before: {}, after: { ...created }, idempotencyKey: this.createId(), createdAt: this.now() });
+      await this.operations.put({ id: operationId, type: 'create', bookmarkId: created.id, batchId: normalizedOptions.batchId, batchIndex: normalizedOptions.batchIndex, before: {}, after: { ...created }, idempotencyKey: this.createId(), createdAt: this.now() });
     }
     const analysisQueued = normalizedOptions.queueAnalysis !== false;
     if (analysisQueued) void this.queue.enqueue({ bookmarkId: created.id, tabId: tab.id, taskId });
-    return { status: 'saved', bookmarkId: created.id, operationId: this.operations ? operationId : undefined, taskId: analysisQueued ? taskId : undefined, analysisQueued };
+    return { status: 'saved', bookmarkId: created.id, operationId: this.operations ? operationId : undefined, batchId: this.operations ? normalizedOptions.batchId : undefined, taskId: analysisQueued ? taskId : undefined, analysisQueued };
   }
 
   async saveTabs(tabs: BrowserTab[], options: string | SaveOptions = {}): Promise<SaveResult[]> {
     const seen = new Set<string>();
     const unique = tabs.filter((tab) => tab.url && isSupportedUrl(tab.url) && !seen.has(tab.url) && seen.add(tab.url));
+    const normalizedOptions = typeof options === 'string' ? { parentId: options } : options;
+    const batchId = this.operations ? this.createId() : undefined;
     const results: SaveResult[] = [];
-    for (const tab of unique) results.push(await this.saveCurrentTab(tab, options));
+    for (const [batchIndex, tab] of unique.entries()) results.push(await this.saveCurrentTab(tab, { ...normalizedOptions, batchId, batchIndex }));
     return results;
   }
 }

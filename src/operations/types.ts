@@ -5,6 +5,7 @@ export interface OperationRecord {
   type: 'create' | 'move' | 'rename' | 'remove' | 'restore' | 'metadata';
   bookmarkId: BookmarkId;
   batchId?: string;
+  batchIndex?: number;
   before: Record<string, unknown>;
   after: Record<string, unknown>;
   idempotencyKey: string;

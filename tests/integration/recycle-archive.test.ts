@@ -515,6 +515,9 @@ class MemoryOperations implements OperationRepository {
       [...this.rows.values()].find((row) => row.idempotencyKey === key) ?? null
     );
   }
+  async listByBatch(batchId: string) {
+    return [...this.rows.values()].filter((row) => row.batchId === batchId);
+  }
   async listRecent(limit = 20) {
     return [...this.rows.values()].slice(-limit).reverse();
   }

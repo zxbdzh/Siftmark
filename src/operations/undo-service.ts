@@ -17,6 +17,25 @@ export class UndoService {
     private readonly specialFolderPlacements?: SpecialFolderPlacementRepository
   ) {}
 
+  async undoBatch(
+    batchId: string
+  ): Promise<{ completed: number; failed: number }> {
+    const operations = (await this.operations.listByBatch(batchId)).sort(
+      (left, right) =>
+        (right.batchIndex ?? -1) - (left.batchIndex ?? -1) ||
+        right.createdAt - left.createdAt ||
+        right.id.localeCompare(left.id)
+    );
+    let completed = 0;
+    let failed = 0;
+    for (const operation of operations) {
+      const result = await this.undo(operation.id);
+      if (result.ok) completed += 1;
+      else failed += 1;
+    }
+    return { completed, failed };
+  }
+
   async undo(id: string): Promise<Result<OperationRecord, OperationError>> {
     const operation = await this.operations.get(id);
     if (!operation) return err({ code: 'not_found', id });

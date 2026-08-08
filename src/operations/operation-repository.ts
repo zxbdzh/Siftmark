@@ -4,6 +4,7 @@ import type { OperationRecord } from './types';
 export interface OperationRepository {
   get(id: string): Promise<OperationRecord | null>;
   getByIdempotencyKey(key: string): Promise<OperationRecord | null>;
+  listByBatch(batchId: string): Promise<OperationRecord[]>;
   listRecent(limit?: number): Promise<OperationRecord[]>;
   put(operation: OperationRecord): Promise<void>;
   markUndone(id: string, undoneAt: number): Promise<void>;
@@ -22,6 +23,10 @@ export class DexieOperationRepository implements OperationRepository {
       .equals(key)
       .first()
       .then((value) => value ?? null);
+  }
+
+  listByBatch(batchId: string): Promise<OperationRecord[]> {
+    return this.db.operationLog.where('batchId').equals(batchId).toArray();
   }
 
   listRecent(limit = 20): Promise<OperationRecord[]> {

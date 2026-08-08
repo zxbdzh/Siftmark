@@ -31,4 +31,62 @@ describe('operation undo', () => {
     expect(result).toMatchObject({ ok: false, error: { code: 'conflict' } });
     expect(bookmarks.move).not.toHaveBeenCalled();
   });
+
+  it('undoes a batch in reverse operation order and reports conflicts', async () => {
+    const first: OperationRecord = {
+      id: 'first',
+      type: 'create',
+      bookmarkId: 'b1',
+      batchId: 'batch-1',
+      batchIndex: 0,
+      before: {},
+      after: {
+        parentId: 'folder',
+        index: 0,
+        title: 'A',
+        url: 'https://a.test'
+      },
+      idempotencyKey: 'key-1',
+      createdAt: 1
+    };
+    const second: OperationRecord = {
+      ...first,
+      id: 'second',
+      bookmarkId: 'b2',
+      batchIndex: 1,
+      after: {
+        parentId: 'folder',
+        index: 0,
+        title: 'B',
+        url: 'https://b.test'
+      },
+      idempotencyKey: 'key-2',
+      createdAt: 2
+    };
+    const bookmarks = {
+      get: vi.fn(async (id: string) =>
+        id === 'b2'
+          ? { id, ...second.after }
+          : { id, ...first.after, title: 'changed' }
+      ),
+      remove: vi.fn().mockResolvedValue(undefined)
+    } as unknown as BookmarkRepository;
+    const operations = {
+      listByBatch: vi.fn().mockResolvedValue([first, second]),
+      get: vi.fn(async (id: string) => (id === 'first' ? first : second)),
+      markUndone: vi.fn().mockResolvedValue(undefined)
+    } as unknown as OperationRepository;
+
+    const result = await new UndoService(bookmarks, operations).undoBatch(
+      'batch-1'
+    );
+
+    expect(result).toEqual({ completed: 1, failed: 1 });
+    expect(bookmarks.remove).toHaveBeenCalledTimes(1);
+    expect(bookmarks.remove).toHaveBeenCalledWith('b2');
+    expect(operations.markUndone).toHaveBeenCalledWith(
+      'second',
+      expect.any(Number)
+    );
+  });
 });
