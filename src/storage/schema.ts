@@ -1,4 +1,5 @@
 import type { BookmarkMetadata } from './types';
+import type { DurableTask } from '../tasks/types';
 
 export interface ThumbnailRecord {
   bookmarkId: string;
@@ -22,19 +23,7 @@ export interface OperationLogRecord {
   undoneAt?: number;
 }
 
-export interface TaskRecord {
-  id: string;
-  type: string;
-  input: unknown;
-  profileVersion?: string;
-  state: string;
-  completed: number;
-  failed: number;
-  retryCount: number;
-  idempotencyKey: string;
-  createdAt: number;
-  updatedAt: number;
-}
+export type TaskRecord = DurableTask;
 
 export interface SearchIndexRecord {
   bookmarkId: string;
