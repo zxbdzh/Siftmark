@@ -2,7 +2,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ChromeBookmarkRepository } from '../../src/platform/chrome/bookmarks-adapter';
 import type { ChromeBookmarkApi } from '../../src/platform/chrome/chrome-types';
 import type { BookmarkNode } from '../../src/bookmarks/types';
-import { ManagerLayout } from '../../src/ui/manager/ManagerLayout';
+import {
+  ManagerLayout,
+  type ManagerAiStatus
+} from '../../src/ui/manager/ManagerLayout';
 import { useManagerStore } from '../../src/ui/manager/manager-store';
 import { openSiftmarkDatabase } from '../../src/storage/database';
 import { DexieOperationRepository } from '../../src/operations/operation-repository';
@@ -10,6 +13,7 @@ import { DexieMetadataRepository } from '../../src/storage/metadata-repository';
 import { BookmarkCommandService } from '../../src/operations/bookmark-command-service';
 import {
   ChromeSettingsRepository,
+  type ProfileAssignments,
   type SpecialFolderSettings
 } from '../../src/settings/settings-repository';
 import { hydrateTheme } from '../../src/ui/theme/theme-store';
@@ -149,6 +153,9 @@ export default function App() {
   const [visitAggregates, setVisitAggregates] = useState<VisitAggregate[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [noteDrafts, setNoteDrafts] = useState<NoteDraft[]>([]);
+  const [modelProfiles, setModelProfiles] = useState<ModelProfile[]>([]);
+  const [profileAssignments, setProfileAssignments] =
+    useState<ProfileAssignments>({});
   const [embeddingProfile, setEmbeddingProfile] = useState<ModelProfile>();
   const searchDocuments = useMemo(
     () => buildSearchDocuments(nodes, metadataById, visitsById),
@@ -217,11 +224,33 @@ export default function App() {
     async () => setNotifications(await notificationRepository.list()),
     [notificationRepository]
   );
+  const refreshAiConfiguration = useCallback(async () => {
+    const [nextProfiles, nextAssignments] = await Promise.all([
+      profiles.list(),
+      settings.getProfileAssignments()
+    ]);
+    setModelProfiles(nextProfiles);
+    setProfileAssignments(nextAssignments);
+    const assignedEmbedding = nextAssignments.embed;
+    const nextEmbeddingProfile = assignedEmbedding
+      ? nextProfiles.find(
+          (profile) =>
+            profileKey(profile) === assignedEmbedding &&
+            profile.state === 'verified' &&
+            profile.capabilities.includes('embed')
+        )
+      : undefined;
+    setEmbeddingProfile(nextEmbeddingProfile);
+  }, [profiles, settings]);
+  const openAiSettings = useCallback(() => {
+    void browser.runtime.openOptionsPage();
+  }, []);
   useEffect(() => {
     void Promise.all([
       refresh(),
       refreshProposals(),
       refreshNotifications(),
+      refreshAiConfiguration(),
       noteDraftRepository.list().then(setNoteDrafts),
       hydrateTheme(settings).then(() =>
         useManagerStore.setState({
@@ -235,6 +264,7 @@ export default function App() {
   }, [
     noteDraftRepository,
     refresh,
+    refreshAiConfiguration,
     refreshNotifications,
     refreshProposals,
     settings
@@ -254,28 +284,22 @@ export default function App() {
     return () => browser.runtime.onMessage.removeListener(listener);
   }, [refresh, refreshNotifications, refreshProposals]);
   useEffect(() => {
-    void settings.getProfileAssignments().then(async (assignments) => {
-      const key = assignments.embed;
-      if (!key) return;
-      const separator = key.lastIndexOf('@');
-      if (separator <= 0) return;
-      const profile = await profiles.get(
-        key.slice(0, separator),
-        key.slice(separator + 1)
-      );
-      if (
-        profile?.state === 'verified' &&
-        profile.capabilities.includes('embed')
-      )
-        setEmbeddingProfile(profile);
-    });
-  }, [profiles, settings]);
+    const listener = (_changes: unknown, areaName: string) => {
+      if (areaName === 'local') void refreshAiConfiguration();
+    };
+    browser.storage.onChanged.addListener(listener);
+    return () => browser.storage.onChanged.removeListener(listener);
+  }, [refreshAiConfiguration]);
   useEffect(() => {
     if (!loading)
       void searchSynchronizer
         .sync(searchDocuments)
         .catch((error: unknown) => console.error('搜索索引同步失败', error));
   }, [loading, searchDocuments, searchSynchronizer]);
+  const aiStatus = useMemo(
+    () => buildAiStatus(modelProfiles, profileAssignments),
+    [modelProfiles, profileAssignments]
+  );
   return (
     <ManagerLayout
       nodes={nodes}
@@ -299,6 +323,8 @@ export default function App() {
       archiveDestination={archiveDestination}
       recycleDestination={recycleDestination}
       specialFolderPlacements={specialFolderPlacements}
+      aiStatus={aiStatus}
+      onOpenAiSettings={openAiSettings}
       onRefresh={refresh}
       onAnalyze={(bookmark) =>
         void browser.runtime
@@ -331,6 +357,8 @@ export default function App() {
               input: { bookmarkId: proposal.bookmarkId }
             });
           }}
+          aiReady={aiStatus.state === 'ready'}
+          onConfigureAi={openAiSettings}
         />
       }
       notificationCenter={
@@ -361,4 +389,60 @@ export default function App() {
       }
     />
   );
+}
+
+function profileKey(profile: ModelProfile): string {
+  return `${profile.id}@${profile.version}`;
+}
+
+function buildAiStatus(
+  profiles: ModelProfile[],
+  assignments: ProfileAssignments
+): ManagerAiStatus {
+  if (profiles.length === 0) {
+    return {
+      state: 'unconfigured',
+      label: '未配置',
+      detail: '尚未保存 AI 模型档案'
+    };
+  }
+
+  const verified = profiles.filter((profile) => profile.state === 'verified');
+  if (verified.length === 0) {
+    return {
+      state: 'draft',
+      label: '待验证',
+      detail: `已有 ${profiles.length} 个模型草稿，请先测试连接`
+    };
+  }
+
+  const validAssignments = Object.entries(assignments).flatMap(
+    ([capability, key]) => {
+      const profile = verified.find(
+        (item) =>
+          profileKey(item) === key &&
+          item.capabilities.includes(capability as keyof ProfileAssignments)
+      );
+      return profile ? [{ capability, profile }] : [];
+    }
+  );
+  const classification = validAssignments.find(
+    (assignment) => assignment.capability === 'classify'
+  );
+  if (!classification) {
+    return {
+      state: 'verified',
+      label: '待启用',
+      detail: '模型已验证，请为“分类”任务选择模型'
+    };
+  }
+
+  const names = [
+    ...new Set(validAssignments.map(({ profile }) => profile.name))
+  ];
+  return {
+    state: 'ready',
+    label: '已启用',
+    detail: `${validAssignments.length} 项能力已绑定：${names.join('、')}`
+  };
 }

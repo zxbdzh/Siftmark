@@ -5,7 +5,14 @@ import {
   useMemo,
   useState
 } from 'react';
-import { ArrowDown, ArrowUp, Menu, PanelRight } from 'lucide-react';
+import {
+  ArrowDown,
+  ArrowUp,
+  Bot,
+  Menu,
+  PanelRight,
+  Settings2
+} from 'lucide-react';
 import type { BookmarkRepository } from '../../bookmarks/ports';
 import type { BookmarkNode } from '../../bookmarks/types';
 import { isBookmark } from '../../bookmarks/types';
@@ -58,6 +65,14 @@ interface ManagerLayoutProps {
   thumbnailRepository?: ThumbnailRepository;
   searchService?: SearchService;
   onRefreshThumbnail?(bookmark: BookmarkNode): void;
+  aiStatus?: ManagerAiStatus;
+  onOpenAiSettings?(): void;
+}
+
+export interface ManagerAiStatus {
+  state: 'unconfigured' | 'draft' | 'verified' | 'ready';
+  label: string;
+  detail: string;
 }
 
 export function ManagerLayout({
@@ -83,7 +98,13 @@ export function ManagerLayout({
   draftWorkspace,
   thumbnailRepository,
   searchService,
-  onRefreshThumbnail
+  onRefreshThumbnail,
+  aiStatus = {
+    state: 'unconfigured',
+    label: '未配置',
+    detail: '尚未配置 AI 模型'
+  },
+  onOpenAiSettings
 }: ManagerLayoutProps) {
   const [drawer, setDrawer] = useState<'folders' | 'detail' | null>(null);
   const [view, setView] = useState<
@@ -407,22 +428,36 @@ export function ManagerLayout({
             统计
           </button>
         </div>
-        <nav aria-label="管理器视图">
+        <div className="manager-header-actions">
           <button
             type="button"
-            onClick={() => setDrawer('folders')}
-            aria-label="打开文件夹"
+            className="ai-settings-button"
+            data-state={aiStatus.state}
+            title={aiStatus.detail}
+            aria-label={`AI 设置：${aiStatus.label}。${aiStatus.detail}`}
+            onClick={onOpenAiSettings}
           >
-            <Menu size={18} />
+            <Bot size={17} />
+            <span>AI {aiStatus.label}</span>
+            <Settings2 size={15} />
           </button>
-          <button
-            type="button"
-            onClick={() => setDrawer('detail')}
-            aria-label="打开详情"
-          >
-            <PanelRight size={18} />
-          </button>
-        </nav>
+          <nav aria-label="管理器视图">
+            <button
+              type="button"
+              onClick={() => setDrawer('folders')}
+              aria-label="打开文件夹"
+            >
+              <Menu size={18} />
+            </button>
+            <button
+              type="button"
+              onClick={() => setDrawer('detail')}
+              aria-label="打开详情"
+            >
+              <PanelRight size={18} />
+            </button>
+          </nav>
+        </div>
       </header>
       <aside className="manager-folders" aria-label="文件夹">
         {folderTree}

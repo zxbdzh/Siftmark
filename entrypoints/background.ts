@@ -251,7 +251,6 @@ export default defineBackground(() => {
         settings.getPromptRules(),
         settings.getProfileAssignments()
       ]);
-    const preferred = assignments.classify?.split('@')[0];
     const coordinator = new AnalysisCoordinator({
       bookmarks,
       profiles: availableProfiles,
@@ -267,7 +266,7 @@ export default defineBackground(() => {
         currentFolderPath: [snapshot.parentId],
         additionalRules: promptRules || undefined
       },
-      preferred
+      assignments
     );
     await reportProgress({ completed: 1, failed: 0 });
     return { state: 'succeeded', completed: 1 };
