@@ -6,7 +6,7 @@ import { ProviderError } from '../network/errors';
 import { analysisJsonSchema, appendEndpointPath, parseAnalysisText, parseProbeText, probeJsonSchema } from './openai-common';
 
 type Poster = <T>(request: ProviderJsonRequest) => Promise<T>;
-interface GeminiResponse { candidates?: Array<{ finishReason?: string; content?: { parts?: Array<{ text?: string }> } }>; promptFeedback?: { blockReason?: string }; }
+interface GeminiResponse { candidates?: Array<{ finishReason?: string; content?: { parts?: Array<{ text?: string }> } }>; promptFeedback?: { blockReason?: string }; usageMetadata?: { totalTokenCount?: number }; }
 interface GeminiEmbeddingResponse { embeddings?: Array<{ values?: number[] }>; }
 
 export class GeminiGenerateContentAdapter implements AiAdapter {
@@ -15,8 +15,10 @@ export class GeminiGenerateContentAdapter implements AiAdapter {
 
   async testConnection(profile: ModelProfile, signal: AbortSignal): Promise<CapabilityProbe> {
     const needsText = profile.capabilities.some((capability) => capability !== 'embed') || profile.capabilities.length === 0;
+    let usageTokens: number | undefined;
     if (needsText) {
       const response = await this.post<GeminiResponse>({ url: modelUrl(profile), headers: { 'x-goog-api-key': profile.apiKey }, body: { contents: [{ role: 'user', parts: [{ text: 'Return {"ok":true}.' }] }], generationConfig: { responseMimeType: 'application/json', responseJsonSchema: probeJsonSchema } }, signal, timeoutMs: profile.timeoutMs });
+      usageTokens = response.usageMetadata?.totalTokenCount;
       const candidate = response.candidates?.[0];
       const text = candidate?.content?.parts?.find((part) => part.text)?.text;
       if (!text) throw new ProviderError('unknown-result', 'Provider returned no probe result');
@@ -24,7 +26,7 @@ export class GeminiGenerateContentAdapter implements AiAdapter {
     }
     const embedding = profile.capabilities.includes('embed');
     if (embedding) await this.embed(profile, ['siftmark'], signal);
-    return { authentication: true, text: needsText, structuredOutput: needsText, embedding };
+    return { authentication: true, text: needsText, structuredOutput: needsText, embedding, usageTokens };
   }
 
   async analyze(profile: ModelProfile, context: AiRequestContext, signal: AbortSignal): Promise<AiAnalysisResult> {
@@ -38,7 +40,10 @@ export class GeminiGenerateContentAdapter implements AiAdapter {
     if (!candidate || (candidate.finishReason && candidate.finishReason !== 'STOP')) throw new ProviderError('unknown-result', 'Provider returned an incomplete result');
     const text = candidate.content?.parts?.find((part) => part.text)?.text;
     if (!text) throw new ProviderError('unknown-result', 'Provider returned no text result');
-    return parseAnalysisText(text);
+    return {
+      ...parseAnalysisText(text),
+      usageTokens: response.usageMetadata?.totalTokenCount
+    };
   }
 
   async embed(profile: ModelProfile, texts: string[], signal: AbortSignal): Promise<number[][]> {

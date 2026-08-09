@@ -22,6 +22,7 @@ export interface AiAnalysisResult {
   summary: string;
   confidence: 'high' | 'medium' | 'low';
   reason: string;
+  usageTokens?: number;
 }
 
 export interface AiRequestContext {
@@ -34,6 +35,7 @@ export interface AiRequestContext {
   availableFolderPaths?: string[];
   folderCreationPolicy?: 'off' | 'weak' | 'medium' | 'strong';
   maxTitleLength?: number;
+  taskType?: 'classify' | 'rename' | 'summarize' | 'analysis';
 }
 
 export interface CapabilityProbe {
@@ -41,4 +43,5 @@ export interface CapabilityProbe {
   text: boolean;
   structuredOutput: boolean;
   embedding: boolean;
+  usageTokens?: number;
 }

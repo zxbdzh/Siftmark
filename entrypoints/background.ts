@@ -61,6 +61,7 @@ import { SpecialFolderService } from '../src/bookmarks/special-folders';
 import { createPurgeRecycleBinHandler } from '../src/tasks/handlers/purge-recycle-bin';
 import { ChromeSmartBookmarkHistoryRepository } from '../src/bookmarks/history-repository';
 import { SmartBookmarkService } from '../src/bookmarks/smart-bookmark-service';
+import { UsageRepository } from '../src/ai/network/usage-repository';
 
 const TASK_WAKE_ALARM = 'siftmark-task-wake';
 const RECYCLE_PURGE_ALARM = 'siftmark-recycle-purge';
@@ -105,7 +106,8 @@ export default defineBackground(() => {
     database
   );
   const importRecoveryPoints = new DexieImportRecoveryRepository(database);
-  const adapters = createDefaultAiAdapterRegistry();
+  const usage = new UsageRepository(database);
+  const adapters = createDefaultAiAdapterRegistry(usage);
   const smartHistory = new ChromeSmartBookmarkHistoryRepository(
     browser.storage.local
   );
@@ -342,7 +344,8 @@ export default defineBackground(() => {
         title: snapshot.title,
         url: snapshot.url,
         currentFolderPath: [snapshot.parentId],
-        additionalRules: promptRules || undefined
+        additionalRules: promptRules || undefined,
+        taskType: 'classify'
       },
       assignments
     );

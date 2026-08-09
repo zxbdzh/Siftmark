@@ -63,7 +63,8 @@ export class SmartBookmarkService {
       folderCreationPolicy: preferences.allowNewFolders
         ? preferences.folderCreationLevel
         : 'off',
-      maxTitleLength: preferences.renameMaxLength
+      maxTitleLength: preferences.renameMaxLength,
+      taskType: 'classify'
     });
 
     let title = input.title;
@@ -83,7 +84,8 @@ export class SmartBookmarkService {
                 currentFolderPath: [],
                 description: input.description,
                 pageText: input.pageText,
-                maxTitleLength: preferences.renameMaxLength
+                maxTitleLength: preferences.renameMaxLength,
+                taskType: 'rename'
               });
         title = clampTitle(renamed.title, preferences.renameMaxLength, input.title);
       }
@@ -157,7 +159,8 @@ export class SmartBookmarkService {
       title: bookmark.title,
       url: bookmark.url,
       currentFolderPath: [],
-      maxTitleLength: preferences.renameMaxLength
+      maxTitleLength: preferences.renameMaxLength,
+      taskType: 'rename'
     });
     const title = clampTitle(result.title, preferences.renameMaxLength, bookmark.title);
     if (title !== bookmark.title) await this.bookmarks.update(bookmark.id, { title });

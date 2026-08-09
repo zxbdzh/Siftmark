@@ -6,7 +6,7 @@ import { ProviderError } from '../network/errors';
 import { appendEndpointPath, parseAnalysisText, parseProbeText } from './openai-common';
 
 type Poster = <T>(request: ProviderJsonRequest) => Promise<T>;
-interface AnthropicResponse { content?: Array<{ type?: string; text?: string }>; stop_reason?: string; }
+interface AnthropicResponse { content?: Array<{ type?: string; text?: string }>; stop_reason?: string; usage?: { input_tokens?: number; output_tokens?: number }; }
 
 export class AnthropicMessagesAdapter implements AiAdapter {
   readonly protocol = 'anthropic-messages' as const;
@@ -17,7 +17,7 @@ export class AnthropicMessagesAdapter implements AiAdapter {
     const text = response.content?.find((block) => block.type === 'text')?.text;
     if (!text) throw new ProviderError('unknown-result', 'Provider returned no probe result');
     parseProbeText(text);
-    return { authentication: true, text: true, structuredOutput: true, embedding: false };
+    return { authentication: true, text: true, structuredOutput: true, embedding: false, usageTokens: totalTokens(response.usage) };
   }
 
   async analyze(profile: ModelProfile, context: AiRequestContext, signal: AbortSignal): Promise<AiAnalysisResult> {
@@ -29,8 +29,16 @@ export class AnthropicMessagesAdapter implements AiAdapter {
     if (response.stop_reason === 'max_tokens') throw new ProviderError('unknown-result', 'Provider response was truncated');
     const text = response.content?.find((block) => block.type === 'text')?.text;
     if (!text) throw new ProviderError('unknown-result', 'Provider returned no text result');
-    return parseAnalysisText(text);
+    return {
+      ...parseAnalysisText(text),
+      usageTokens: totalTokens(response.usage)
+    };
   }
+}
+
+function totalTokens(usage: AnthropicResponse['usage']): number | undefined {
+  if (!usage) return undefined;
+  return (usage.input_tokens ?? 0) + (usage.output_tokens ?? 0);
 }
 
 function headers(apiKey: string): Record<string, string> {

@@ -9,6 +9,7 @@ import {
   ShieldOff,
   Sparkles
 } from 'lucide-react';
+import { liveQuery } from 'dexie';
 import { useEffect, useMemo, useState } from 'react';
 import { createDefaultAiAdapterRegistry } from '../../src/ai/create-adapter-registry';
 import type { RequestMetric } from '../../src/ai/network/request-metrics';
@@ -78,19 +79,25 @@ export default function App() {
     () =>
       new ModelProfileService(
         profiles,
-        createDefaultAiAdapterRegistry(),
+        createDefaultAiAdapterRegistry(usage),
         settings
       ),
-    [profiles, settings]
+    [profiles, settings, usage]
   );
   const [page, setPage] = useState<PageId>(pageFromHash());
   const [metrics, setMetrics] = useState<RequestMetric[]>([]);
 
   useEffect(() => {
-    void Promise.all([hydrateTheme(settings), usage.list().then(setMetrics)]);
+    void hydrateTheme(settings);
+    const usageSubscription = liveQuery(() => usage.list()).subscribe({
+      next: setMetrics
+    });
     const handleHashChange = () => setPage(pageFromHash());
     window.addEventListener('hashchange', handleHashChange);
-    return () => window.removeEventListener('hashchange', handleHashChange);
+    return () => {
+      usageSubscription.unsubscribe();
+      window.removeEventListener('hashchange', handleHashChange);
+    };
   }, [settings, usage]);
 
   const activeLabel = navigation.find((item) => item.id === page)?.label ?? '设置';

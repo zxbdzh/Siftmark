@@ -7,7 +7,7 @@ import { analysisJsonSchema, appendEndpointPath, openAiHeaders, parseAnalysisTex
 
 type Poster = <T>(request: ProviderJsonRequest) => Promise<T>;
 
-interface ChatResponse { choices?: Array<{ message?: { content?: string } }>; }
+interface ChatResponse { choices?: Array<{ message?: { content?: string } }>; usage?: { total_tokens?: number }; }
 interface EmbeddingResponse { data?: Array<{ embedding?: number[]; index?: number }>; }
 
 export class OpenAiChatAdapter implements AiAdapter {
@@ -16,15 +16,17 @@ export class OpenAiChatAdapter implements AiAdapter {
 
   async testConnection(profile: ModelProfile, signal: AbortSignal): Promise<CapabilityProbe> {
     const needsText = profile.capabilities.some((capability) => capability !== 'embed') || profile.capabilities.length === 0;
+    let usageTokens: number | undefined;
     if (needsText) {
       const response = await this.post<ChatResponse>({ url: appendEndpointPath(profile.endpoint, 'chat/completions'), headers: openAiHeaders(profile.apiKey), body: { model: profile.model, messages: [{ role: 'user', content: 'Return {"ok":true}.' }], max_tokens: 32, response_format: { type: 'json_schema', json_schema: { name: 'siftmark_probe', strict: true, schema: probeJsonSchema } } }, signal, timeoutMs: profile.timeoutMs });
+      usageTokens = response.usage?.total_tokens;
       const text = response.choices?.[0]?.message?.content;
       if (!text) throw new ProviderError('unknown-result', 'Provider returned no probe result');
       parseProbeText(text);
     }
     const embedding = profile.capabilities.includes('embed');
     if (embedding) await this.embed(profile, ['siftmark'], signal);
-    return { authentication: true, text: needsText, structuredOutput: needsText, embedding };
+    return { authentication: true, text: needsText, structuredOutput: needsText, embedding, usageTokens };
   }
 
   async analyze(profile: ModelProfile, context: AiRequestContext, signal: AbortSignal): Promise<AiAnalysisResult> {
@@ -35,7 +37,10 @@ export class OpenAiChatAdapter implements AiAdapter {
     });
     const text = response.choices?.[0]?.message?.content;
     if (!text) throw new ProviderError('unknown-result', 'Provider returned no text result');
-    return parseAnalysisText(text);
+    return {
+      ...parseAnalysisText(text),
+      usageTokens: response.usage?.total_tokens
+    };
   }
 
   async embed(profile: ModelProfile, texts: string[], signal: AbortSignal): Promise<number[][]> {
