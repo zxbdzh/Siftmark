@@ -285,6 +285,33 @@ export default defineBackground(() => {
       title: tab.title || tab.url
     });
   };
+  const findActiveTabForUrl = async (url: string) => {
+    const tabs = await browser.tabs.query({
+      active: true,
+      lastFocusedWindow: true
+    });
+    const target = normalizeUrlConservatively(url);
+    return tabs.find(
+      (tab) =>
+        tab.id !== undefined &&
+        tab.url !== undefined &&
+        normalizeUrlConservatively(tab.url) === target
+    );
+  };
+  const notifyNativeBookmarkStatus = async (
+    tabId: number | undefined,
+    status: 'processing' | 'success' | 'error',
+    detail?: string
+  ) => {
+    if (tabId === undefined) return;
+    await browser.tabs
+      .sendMessage(tabId, {
+        type: 'native-smart-bookmark-status',
+        status,
+        detail
+      })
+      .catch(() => undefined);
+  };
 
   const analyzeHandler: TaskHandler<AnalyzeTaskInput> = async ({
     task,
@@ -577,13 +604,36 @@ export default defineBackground(() => {
   });
   browser.bookmarks.onCreated.addListener((id, bookmark) => {
     if (!bookmark.url || smartProcessingUrls.has(bookmark.url)) return;
-    void settings.getSmartBookmarkSettings().then((preference) => {
+    void settings.getSmartBookmarkSettings().then(async (preference) => {
       if (!preference.captureNativeBookmarks) return;
-      void runSmartBookmark({
+      const tab = await findActiveTabForUrl(bookmark.url!);
+      await notifyNativeBookmarkStatus(
+        tab?.id,
+        'processing',
+        '正在分析页面并整理书签…'
+      );
+      const result = await runSmartBookmark({
         bookmarkId: id,
+        tabId: tab?.id,
         url: bookmark.url!,
         title: bookmark.title
       });
+      if (result.success && 'category' in result) {
+        const bookmarkPath = result.category
+          ? `书签栏 / ${result.category.split('/').join(' / ')}`
+          : '书签栏';
+        await notifyNativeBookmarkStatus(
+          tab?.id,
+          'success',
+          `收藏成功，保存到：${bookmarkPath}`
+        );
+      } else {
+        await notifyNativeBookmarkStatus(
+          tab?.id,
+          'error',
+          'error' in result ? result.error : '智能收藏失败'
+        );
+      }
     });
   });
   browser.contextMenus.onClicked.addListener((info, tab) => {
