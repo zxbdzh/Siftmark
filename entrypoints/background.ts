@@ -2,7 +2,6 @@ import { AnalysisCoordinator } from '../src/ai/analysis-coordinator';
 import { createDefaultAiAdapterRegistry } from '../src/ai/create-adapter-registry';
 import { DexieProposalRepository } from '../src/ai/proposal';
 import { ChromeProfileRepository } from '../src/ai/profiles/profile-repository';
-import { SaveService } from '../src/bookmarks/save-service';
 import { ChromeBookmarkRepository } from '../src/platform/chrome/bookmarks-adapter';
 import type { ChromeBookmarkApi } from '../src/platform/chrome/chrome-types';
 import { registerBrowserCommands } from '../src/platform/chrome/commands';
@@ -60,6 +59,8 @@ import {
 import { DexieSpecialFolderPlacementRepository } from '../src/bookmarks/placement-repository';
 import { SpecialFolderService } from '../src/bookmarks/special-folders';
 import { createPurgeRecycleBinHandler } from '../src/tasks/handlers/purge-recycle-bin';
+import { ChromeSmartBookmarkHistoryRepository } from '../src/bookmarks/history-repository';
+import { SmartBookmarkService } from '../src/bookmarks/smart-bookmark-service';
 
 const TASK_WAKE_ALARM = 'siftmark-task-wake';
 const RECYCLE_PURGE_ALARM = 'siftmark-recycle-purge';
@@ -69,6 +70,17 @@ interface AnalyzeTaskInput {
   bookmarkId: string;
   tabId?: number;
   taskId?: string;
+}
+
+interface RuntimeMessageInput {
+  bookmarkId?: string;
+  bookmarkIds?: string[];
+  folderId?: string;
+  tabId?: number;
+  taskId?: string;
+  title?: string;
+  url?: string;
+  windowId?: number;
 }
 
 export default defineBackground(() => {
@@ -94,6 +106,18 @@ export default defineBackground(() => {
   );
   const importRecoveryPoints = new DexieImportRecoveryRepository(database);
   const adapters = createDefaultAiAdapterRegistry();
+  const smartHistory = new ChromeSmartBookmarkHistoryRepository(
+    browser.storage.local
+  );
+  const smartBookmarks = new SmartBookmarkService(
+    bookmarks,
+    profiles,
+    settings,
+    adapters,
+    smartHistory,
+    metadata
+  );
+  const smartProcessingUrls = new Set<string>();
   const noteDrafts = new ChromeNoteDraftRepository(browser.storage.local);
   const thumbnailRepository = new DexieThumbnailRepository(database);
   const thumbnailService = new ThumbnailService(
@@ -218,21 +242,48 @@ export default defineBackground(() => {
     void runner.runUntilIdle();
     return { taskId };
   };
-  const saveService = new SaveService(bookmarks, { enqueue: enqueueAnalysis });
+  const runSmartBookmark = async (input: {
+    tabId?: number;
+    url: string;
+    title: string;
+    bookmarkId?: string;
+  }) => {
+    smartProcessingUrls.add(input.url);
+    try {
+      const capture = input.tabId
+        ? ((await browser.tabs
+            .sendMessage(input.tabId, { type: 'capture-page' })
+            .catch(() => undefined)) as PageCapture | undefined)
+        : undefined;
+      const result = await smartBookmarks.save({
+        ...input,
+        description: capture?.description,
+        pageText: capture?.text
+      });
+      void browser.runtime
+        .sendMessage({ type: 'smart-bookmark-history-changed' })
+        .catch(() => undefined);
+      return { success: true, ...result };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : '智能收藏失败'
+      };
+    } finally {
+      globalThis.setTimeout(() => smartProcessingUrls.delete(input.url), 10_000);
+    }
+  };
   const saveActiveTab = async () => {
     const [tab] = await browser.tabs.query({
       active: true,
       currentWindow: true
     });
-    if (!tab) return undefined;
-    const result = await saveService.saveCurrentTab(tab);
-    if (result.bookmarkId)
-      void enqueueThumbnail({
-        bookmarkId: result.bookmarkId,
-        tabId: tab.id,
-        windowId: tab.windowId
-      });
-    return result;
+    if (!tab?.url) return { success: false, error: '无法读取当前页面' };
+    return runSmartBookmark({
+      tabId: tab.id,
+      url: tab.url,
+      title: tab.title || tab.url
+    });
   };
 
   const analyzeHandler: TaskHandler<AnalyzeTaskInput> = async ({
@@ -427,12 +478,20 @@ export default defineBackground(() => {
   browser.runtime.onMessage.addListener((message: unknown) => {
     const value = message as {
       type?: string;
-      input?: AnalyzeTaskInput & { windowId?: number; folderId?: string };
+      input?: RuntimeMessageInput;
     };
-    if (value.type === 'queue-analysis' && value.input)
-      return enqueueAnalysis(value.input);
-    if (value.type === 'queue-thumbnail' && value.input)
-      return enqueueThumbnail(value.input);
+    if (value.type === 'queue-analysis' && value.input?.bookmarkId)
+      return enqueueAnalysis({
+        bookmarkId: value.input.bookmarkId,
+        tabId: value.input.tabId,
+        taskId: value.input.taskId
+      });
+    if (value.type === 'queue-thumbnail' && value.input?.bookmarkId)
+      return enqueueThumbnail({
+        bookmarkId: value.input.bookmarkId,
+        tabId: value.input.tabId,
+        windowId: value.input.windowId
+      });
     if (value.type === 'queue-embeddings')
       return enqueueConfiguredEmbeddings(
         value.input?.bookmarkId ? [value.input.bookmarkId] : undefined
@@ -447,6 +506,85 @@ export default defineBackground(() => {
         value.input as unknown as HealthSchedule
       );
     if (value.type === 'save-current-page') return saveActiveTab();
+    if (value.type === 'smart-bookmark' && value.input?.url)
+      return runSmartBookmark({
+        tabId: value.input.tabId,
+        url: value.input.url,
+        title: value.input.title || value.input.url
+      });
+    if (value.type === 'bulk-classify')
+      return Promise.all(
+        (value.input?.bookmarkIds ?? []).map(
+          async (bookmarkId) => {
+            const bookmark = await bookmarks.get(bookmarkId);
+            return bookmark?.url
+              ? runSmartBookmark({
+                  bookmarkId,
+                  url: bookmark.url,
+                  title: bookmark.title
+                })
+              : { success: false, error: '书签不存在' };
+          }
+        )
+      );
+    if (value.type === 'bulk-rename')
+      return Promise.all(
+        (value.input?.bookmarkIds ?? []).map(
+          async (bookmarkId) => {
+            try {
+              return {
+                success: true,
+                ...(await smartBookmarks.rename(bookmarkId))
+              };
+            } catch (error) {
+              return {
+                success: false,
+                bookmarkId,
+                error: error instanceof Error ? error.message : '智能重命名失败'
+              };
+            }
+          }
+        )
+      );
+    if (value.type === 'bulk-health')
+      return (async () => {
+        const bookmarkIds = value.input?.bookmarkIds ?? [];
+        const selected = (
+          await Promise.all(bookmarkIds.map((id) => bookmarks.get(id)))
+        ).filter((node): node is NonNullable<typeof node> => Boolean(node?.url));
+        const results = await new LinkChecker().checkMany(
+          selected.map((node) => node.url!)
+        );
+        for (const [index, node] of selected.entries()) {
+          const current = await metadata.get(node.id);
+          await metadata.put({
+            bookmarkId: node.id,
+            summary: current?.summary ?? '',
+            tags: current?.tags ?? [],
+            note: current?.note ?? '',
+            confidence: current?.confidence ?? 'unknown',
+            reason: current?.reason ?? '',
+            health: results[index]?.status ?? 'unchecked',
+            updatedAt: Date.now()
+          });
+        }
+        return selected.map((node, index) => ({
+          success: true,
+          bookmarkId: node.id,
+          status: results[index]?.status ?? 'unchecked'
+        }));
+      })();
+  });
+  browser.bookmarks.onCreated.addListener((id, bookmark) => {
+    if (!bookmark.url || smartProcessingUrls.has(bookmark.url)) return;
+    void settings.getSmartBookmarkSettings().then((preference) => {
+      if (!preference.captureNativeBookmarks) return;
+      void runSmartBookmark({
+        bookmarkId: id,
+        url: bookmark.url!,
+        title: bookmark.title
+      });
+    });
   });
   browser.contextMenus.onClicked.addListener((info, tab) => {
     if (info.menuItemId === contextMenuIds[3])
@@ -466,9 +604,9 @@ export default defineBackground(() => {
       });
     } else if (info.menuItemId === contextMenuIds[0]) void saveActiveTab();
     else if (info.menuItemId === contextMenuIds[1] && info.linkUrl)
-      void saveService.saveCurrentTab({
-        title: info.linkUrl,
-        url: info.linkUrl
+      void runSmartBookmark({
+        url: info.linkUrl,
+        title: info.linkUrl
       });
   });
   browser.tabs.onUpdated.addListener((_tabId, changeInfo, tab) => {

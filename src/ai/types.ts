@@ -31,6 +31,9 @@ export interface AiRequestContext {
   description?: string;
   pageText?: string;
   additionalRules?: string;
+  availableFolderPaths?: string[];
+  folderCreationPolicy?: 'off' | 'weak' | 'medium' | 'strong';
+  maxTitleLength?: number;
 }
 
 export interface CapabilityProbe {

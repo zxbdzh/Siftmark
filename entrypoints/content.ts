@@ -10,9 +10,21 @@ function ContentEntry({ host, initialPosition }: { host: HTMLElement; initialPos
   const [message, setMessage] = useState<string>();
   const hide = () => { void browser.storage.local.set({ [`siftmark.content.hidden.${location.hostname}`]: true }); host.remove(); };
   const save = async () => {
-    setMessage('正在保存');
-    try { await browser.runtime.sendMessage({ type: 'save-current-page' }); setMessage('已保存到书签'); }
-    catch { setMessage('保存失败，请打开扩展重试'); }
+    setMessage('正在分析页面…');
+    try {
+      const result = await browser.runtime.sendMessage({ type: 'save-current-page' }) as {
+        success?: boolean;
+        category?: string;
+        error?: string;
+      };
+      setMessage(
+        result.success
+          ? `已收藏到 ${result.category || '书签栏'}`
+          : result.error || '智能收藏失败，请打开扩展重试'
+      );
+    } catch {
+      setMessage('智能收藏失败，请打开扩展重试');
+    }
   };
   return React.createElement(React.Fragment, null,
     React.createElement('style', null, contentStyles),
