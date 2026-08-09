@@ -10,6 +10,7 @@
     "dev": "wxt",
     "build": "wxt build",
     "zip": "wxt zip",
+    "release:chromium": "%SystemRoot%\\System32\\WindowsPowerShell\\v1.0\\powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/package-release.ps1",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run",

@@ -27,4 +27,20 @@ describe('ChromeBookmarkRepository', () => {
     const chromeApi = api({ get: vi.fn((_id, callback) => callback?.([{ id: '1', parentId: '0', index: 0, title: 'A' }])) });
     expect(await new ChromeBookmarkRepository(chromeApi).get('1')).toMatchObject({ id: '1', title: 'A' });
   });
+
+  it('returns the single bookmark node produced by the Chrome move API', async () => {
+    const chromeApi = api({
+      move: vi.fn().mockResolvedValue({
+        id: '1',
+        parentId: '2',
+        index: 0,
+        title: 'Moved',
+        url: 'https://moved.test/'
+      }) as never
+    });
+
+    await expect(
+      new ChromeBookmarkRepository(chromeApi).move('1', '2', 0)
+    ).resolves.toMatchObject({ id: '1', parentId: '2', title: 'Moved' });
+  });
 });

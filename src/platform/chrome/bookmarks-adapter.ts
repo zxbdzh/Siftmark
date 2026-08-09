@@ -64,9 +64,7 @@ export class ChromeBookmarkRepository implements BookmarkRepository {
   }
 
   async move(id: BookmarkId, parentId: BookmarkId, index?: number): Promise<BookmarkNode> {
-    const nodes = await callChrome<ChromeBookmarkTreeNode[]>((callback) => this.api.move(id, { parentId, ...(index === undefined ? {} : { index }) }, callback));
-    const node = nodes[0];
-    if (!node) throw new Error('Chrome bookmark move returned no node');
+    const node = await callChrome<ChromeBookmarkTreeNode>((callback) => this.api.move(id, { parentId, ...(index === undefined ? {} : { index }) }, callback));
     return toBookmarkNode(node);
   }
 

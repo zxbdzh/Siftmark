@@ -50,7 +50,7 @@ import { NotificationService } from '../src/notifications/notification-service';
 import { ChromeBrowserNotifications } from '../src/platform/chrome/browser-notifications';
 import { VisitAggregator } from '../src/health/visit-aggregator';
 import { normalizeUrlConservatively } from '../src/health/url-normalization';
-import notificationIcon from '../assets/icons/siftmark.svg?url';
+import notificationIcon from '../assets/icons/siftmark-128.png?url';
 import { DexieOperationRepository } from '../src/operations/operation-repository';
 import { BookmarkCommandService } from '../src/operations/bookmark-command-service';
 import {

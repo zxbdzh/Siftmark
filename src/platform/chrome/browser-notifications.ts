@@ -9,6 +9,9 @@ export class ChromeBrowserNotifications implements BrowserNotificationPort {
 
   async showTaskSummary(summary: BrowserTaskSummary): Promise<boolean> {
     if (!await this.permissions.contains({ permissions: ['notifications'] })) return false;
+    if (!/^(?:data:image\/png(?:;base64)?,|.*\.png(?:$|[?#]))/i.test(this.iconUrl)) {
+      throw new Error('Notification icon must be a PNG asset');
+    }
     const state = summary.state === 'succeeded' ? '已完成' : summary.state === 'paused' ? '已暂停' : '失败';
     await this.notifications.create(crypto.randomUUID(), { type: 'basic', iconUrl: this.iconUrl, title: 'Siftmark 后台任务', message: `${summary.count} 个项目${state}` });
     return true;

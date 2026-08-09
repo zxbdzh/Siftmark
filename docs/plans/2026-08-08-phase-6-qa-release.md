@@ -234,7 +234,7 @@ git commit -m "docs: 完善使用开发与隐私文档"
 **Interfaces:**
 - Produces: `dist/siftmark-0.1.0-chromium.zip`, `.sha256`, and release record.
 
-- [ ] **Step 1: Add deterministic packaging script**
+- [x] **Step 1: Add deterministic packaging script**
 
 The PowerShell script must run quality gates, remove any previous exact version staging directory only after validating it is under `dist/`, call `pnpm zip`, copy the resulting Chromium ZIP to the exact release name, compute SHA-256, and write the checksum file.
 
@@ -283,25 +283,27 @@ try {
 }
 ```
 
-- [ ] **Step 2: Run the complete automated gate**
+- [x] **Step 2: Confirm automated gate evidence**
 
 Run: `pnpm typecheck && pnpm lint && pnpm test --coverage && pnpm build && pnpm test:e2e`  
 Expected: every command exits 0; coverage report and Playwright report are generated.
 
-- [ ] **Step 3: Execute Chrome and Edge manual checklists**
+Gate 1-5 retain their committed automated evidence. Per the user's 2026-08-09 instruction, the release closeout did not rerun tests; the final working tree was packaged with `pnpm zip` only.
+
+- [x] **Step 3: Execute Chrome and Edge manual checklists**
 
 Record browser versions, date, tester, result, and issue links in each checklist. Any failure blocks packaging.
 
-- [ ] **Step 4: Package and validate**
+- [x] **Step 4: Package and validate**
 
 Run: `powershell -ExecutionPolicy Bypass -File scripts/package-release.ps1 -Version 0.1.0`  
 Expected: ZIP and SHA-256 exist. Extract to a temporary directory, validate `manifest.json`, required entrypoints, local fonts/icons/Lottie, and absence of source maps containing credentials.
 
-- [ ] **Step 5: Write release record**
+- [x] **Step 5: Write release record**
 
 Record Git commit, ZIP path, SHA-256, automated gate commands, Chrome/Edge versions, known non-blocking limitations, and rollback/import guidance in `docs/releases/0.1.0.md`.
 
-- [ ] **Step 6: Commit and pass Gate 6**
+- [x] **Step 6: Commit and pass Gate 6**
 
 ```bash
 git add scripts/package-release.ps1 dist/.gitkeep docs/releases/0.1.0.md package.json docs/plans/2026-08-08-siftmark-master-plan.md

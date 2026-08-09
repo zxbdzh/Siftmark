@@ -15,7 +15,7 @@ export interface ChromeBookmarkApi {
   getTree(callback?: (nodes: ChromeBookmarkTreeNode[]) => void): Promise<ChromeBookmarkTreeNode[]> | void;
   create(details: { parentId: string; index?: number; title: string; url?: string }, callback?: (node: ChromeBookmarkTreeNode) => void): Promise<ChromeBookmarkTreeNode> | void;
   update(id: string, changes: { title?: string }, callback?: (node: ChromeBookmarkTreeNode) => void): Promise<ChromeBookmarkTreeNode> | void;
-  move(id: string, destination: { parentId: string; index?: number }, callback?: (nodes: ChromeBookmarkTreeNode[]) => void): Promise<ChromeBookmarkTreeNode[]> | void;
+  move(id: string, destination: { parentId: string; index?: number }, callback?: (node: ChromeBookmarkTreeNode) => void): Promise<ChromeBookmarkTreeNode> | void;
   remove(id: string, callback?: () => void): Promise<void> | void;
   onCreated: ChromeEvent<[string, ChromeBookmarkTreeNode]>;
   onChanged: ChromeEvent<[string, { title?: string; url?: string }] >;

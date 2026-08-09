@@ -155,7 +155,7 @@ export interface AiAnalysisResult {
 - [x] **Gate 3:** Popup save, manager edit, review apply, keyboard navigation, light/dark themes, and narrow layout pass Playwright smoke tests.
 - [x] **Gate 4:** Capture, thumbnail cleanup, keyword search, embedding version isolation, duplicate scan, health scan, and notification retention pass integration tests.
 - [x] **Gate 5:** HTML, Siftmark JSON/ZIP, MarkAI, encrypted archive, conflict preview, onboarding, and reset pass round-trip tests. Verified 2026-08-08 with 13 targeted files / 44 tests, `pnpm typecheck`, `pnpm lint`, a 5.69 MB production build, and the Chromium extension shell smoke test.
-- [ ] **Gate 6:** Chrome and Edge manual checklists pass; `dist/siftmark-0.1.0-chromium.zip` and SHA-256 are recorded.
+- [x] **Gate 6:** Chrome and Edge manual checklists pass; `dist/siftmark-0.1.0-chromium.zip` SHA-256 is `37386e035dd3d14080ab92325f9ebbba6f87d05e20153d443146088e6e9bd996`.
 
 ## Commit Sequence
 
