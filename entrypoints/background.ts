@@ -281,11 +281,17 @@ export default defineBackground(() => {
       currentWindow: true
     });
     if (!tab?.url) return { success: false, error: '无法读取当前页面' };
-    return runSmartBookmark({
+    await notificationService.showBrowserMessage(
+      '正在智能收藏',
+      '正在分析当前页面并整理书签…'
+    );
+    const result = await runSmartBookmark({
       tabId: tab.id,
       url: tab.url,
       title: tab.title || tab.url
     });
+    await showSmartBookmarkResult(result);
+    return result;
   };
   const findActiveTabForUrl = async (url: string) => {
     const tabs = await browser.tabs.query({
@@ -313,6 +319,26 @@ export default defineBackground(() => {
         detail
       })
       .catch(() => undefined);
+  };
+  const showSmartBookmarkResult = async (result: {
+    success: boolean;
+    category?: string;
+    error?: string;
+  }) => {
+    if (result.success) {
+      const path = result.category
+        ? `书签栏 / ${result.category.split('/').join(' / ')}`
+        : '书签栏';
+      await notificationService.showBrowserMessage(
+        '收藏成功',
+        `已保存到：${path}`
+      );
+    } else {
+      await notificationService.showBrowserMessage(
+        '智能收藏失败',
+        result.error || '请打开 Siftmark 查看详情'
+      );
+    }
   };
 
   const analyzeHandler: TaskHandler<AnalyzeTaskInput> = async ({
@@ -610,6 +636,10 @@ export default defineBackground(() => {
     void settings.getSmartBookmarkSettings().then(async (preference) => {
       if (!preference.captureNativeBookmarks) return;
       const tab = await findActiveTabForUrl(bookmark.url!);
+      await notificationService.showBrowserMessage(
+        '正在智能收藏',
+        '正在分析当前页面并整理书签…'
+      );
       await notifyNativeBookmarkStatus(
         tab?.id,
         'processing',
@@ -621,6 +651,7 @@ export default defineBackground(() => {
         url: bookmark.url!,
         title: bookmark.title
       });
+      await showSmartBookmarkResult(result);
       if (result.success && 'category' in result) {
         const bookmarkPath = result.category
           ? `书签栏 / ${result.category.split('/').join(' / ')}`
