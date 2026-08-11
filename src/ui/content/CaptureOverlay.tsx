@@ -2,6 +2,7 @@ import {
   Bot,
   Check,
   CheckCircle2,
+  ChevronDown,
   ChevronRight,
   CircleDashed,
   Folder,
@@ -51,7 +52,13 @@ const phaseCopy: Record<
   error: { eyebrow: '整理未完成', heading: '收藏已保留原位' }
 };
 
-function FolderRoute({ path = [] }: { path?: string[] }) {
+function FolderRoute({
+  path = [],
+  newFolderName
+}: {
+  path?: string[];
+  newFolderName?: string;
+}) {
   const visiblePath = path.length > 0 ? path : ['书签栏'];
   return (
     <ol className="siftmark-route" aria-label="收藏位置">
@@ -64,6 +71,16 @@ function FolderRoute({ path = [] }: { path?: string[] }) {
           </span>
         </li>
       ))}
+      {newFolderName ? (
+        <li>
+          <ChevronRight aria-hidden="true" />
+          <span className="siftmark-route-node siftmark-route-new">
+            <FolderPlus aria-hidden="true" />
+            {newFolderName}
+            <small>新建</small>
+          </span>
+        </li>
+      ) : null}
     </ol>
   );
 }
@@ -107,43 +124,68 @@ function ProcessingTrace({
   const completed = activities.filter((activity) =>
     ['completed', 'skipped'].includes(activity.status)
   ).length;
+  const running = activities.find((activity) => activity.status === 'running');
+  const failed = activities.find((activity) => activity.status === 'failed');
+  const latestMeaningful = [...activities]
+    .reverse()
+    .find((activity) => activity.status !== 'skipped');
+  const featured = running ?? failed ?? latestMeaningful ?? activities.at(-1)!;
+  const traceState = running
+    ? '正在分析'
+    : failed
+      ? '分析遇到问题'
+      : completed === activities.length
+        ? '分析完成'
+        : '等待继续';
+
   return (
-    <div className="siftmark-processing-trace">
-      <div className="siftmark-trace-heading">
-        <span>分析过程</span>
-        <span>
-          {completed} / {activities.length}
+    <details className="siftmark-processing-trace">
+      <summary data-status={featured.status}>
+        <span className="siftmark-activity-icon">
+          <ActivityIcon status={featured.status} />
         </span>
+        <span className="siftmark-trace-summary-copy">
+          <strong>{featured.label}</strong>
+          <small>
+            分析过程 · {traceState} · {completed} / {activities.length}
+          </small>
+        </span>
+        <span className="siftmark-trace-disclosure" aria-hidden="true">
+          <span>分析详情</span>
+          <ChevronDown />
+        </span>
+      </summary>
+      <div className="siftmark-trace-details" aria-live="off">
+        <ol aria-label="分析过程">
+          {activities.map((activity) => (
+            <li key={activity.id} data-status={activity.status}>
+              <span className="siftmark-activity-icon">
+                <ActivityIcon status={activity.status} />
+              </span>
+              <span className="siftmark-activity-copy">
+                <strong>{activity.label}</strong>
+                {activity.detail ? <small>{activity.detail}</small> : null}
+                {activity.facts?.length ? (
+                  <dl>
+                    {activity.facts.slice(0, 4).map((fact, index) => (
+                      <div key={`${fact.label}-${index}`}>
+                        <dt>{fact.label}</dt>
+                        <dd>{fact.value}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                ) : null}
+                {activity.durationMs !== undefined ? (
+                  <span className="siftmark-activity-duration">
+                    {formatDuration(activity.durationMs)}
+                  </span>
+                ) : null}
+              </span>
+            </li>
+          ))}
+        </ol>
       </div>
-      <ol aria-label="分析过程">
-        {activities.map((activity) => (
-          <li key={activity.id} data-status={activity.status}>
-            <span className="siftmark-activity-icon">
-              <ActivityIcon status={activity.status} />
-            </span>
-            <span className="siftmark-activity-copy">
-              <strong>{activity.label}</strong>
-              {activity.detail ? <small>{activity.detail}</small> : null}
-              {activity.facts?.length ? (
-                <dl>
-                  {activity.facts.slice(0, 4).map((fact, index) => (
-                    <div key={`${fact.label}-${index}`}>
-                      <dt>{fact.label}</dt>
-                      <dd>{fact.value}</dd>
-                    </div>
-                  ))}
-                </dl>
-              ) : null}
-              {activity.durationMs !== undefined ? (
-                <span className="siftmark-activity-duration">
-                  {formatDuration(activity.durationMs)}
-                </span>
-              ) : null}
-            </span>
-          </li>
-        ))}
-      </ol>
-    </div>
+    </details>
   );
 }
 
@@ -196,17 +238,10 @@ export function CaptureOverlay({
       {hasRoute ? (
         <div className="siftmark-overlay-field">
           <span className="siftmark-field-label">收藏到</span>
-          <FolderRoute path={view.destinationPath} />
-        </div>
-      ) : null}
-
-      {view.newFolderName ? (
-        <div className="siftmark-overlay-field">
-          <span className="siftmark-field-label">新建目录</span>
-          <span className="siftmark-route-node siftmark-route-new">
-            <FolderPlus aria-hidden="true" />
-            {view.newFolderName}
-          </span>
+          <FolderRoute
+            path={view.destinationPath}
+            newFolderName={view.newFolderName}
+          />
         </div>
       ) : null}
 

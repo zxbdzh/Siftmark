@@ -35,7 +35,7 @@ button {
   right: max(18px, env(safe-area-inset-right));
   z-index: 2147483647;
   width: min(408px, calc(100vw - 28px));
-  max-height: calc(100vh - 36px);
+  max-height: min(620px, calc(100vh - 36px));
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -72,7 +72,7 @@ button {
   grid-template-columns: 34px minmax(0, 1fr) 32px;
   gap: 10px;
   align-items: center;
-  padding: 14px 14px 12px;
+  padding: 12px 14px 10px;
   background: rgb(247 248 250 / 86%);
   box-shadow: 0 1px 0 rgb(217 222 231 / 72%);
   backdrop-filter: blur(16px) saturate(135%);
@@ -188,38 +188,93 @@ button {
 }
 
 .siftmark-processing-trace {
-  padding: 11px 14px 13px;
   border-bottom: 1px solid var(--siftmark-line);
   background: #fff;
 }
 
-.siftmark-trace-heading {
-  display: flex;
+.siftmark-processing-trace > summary {
+  display: grid;
+  grid-template-columns: 19px minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 8px;
-  color: var(--siftmark-muted);
-  font-size: 10px;
-  font-weight: 650;
-  line-height: 1.2;
+  gap: 9px;
+  min-height: 48px;
+  padding: 8px 14px;
+  cursor: pointer;
+  list-style: none;
+  touch-action: manipulation;
+  user-select: none;
+  transition: background-color var(--siftmark-motion-base) var(--siftmark-ease-out);
 }
 
-.siftmark-trace-heading span:last-child {
-  padding: 2px 6px;
-  border: 1px solid #dbe1ea;
-  border-radius: 999px;
-  background: var(--siftmark-paper);
-  color: #596171;
-  font-family: "Space Grotesk", "Noto Sans SC", system-ui, sans-serif;
+.siftmark-processing-trace > summary::-webkit-details-marker {
+  display: none;
+}
+
+.siftmark-processing-trace > summary::marker {
+  content: "";
+}
+
+.siftmark-trace-summary-copy {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+
+.siftmark-trace-summary-copy strong {
+  overflow: hidden;
+  color: #353b46;
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.siftmark-trace-summary-copy small {
+  color: var(--siftmark-muted);
+  font: 500 9px/1.35 "Space Grotesk", "Noto Sans SC", system-ui, sans-serif;
   font-variant-numeric: tabular-nums;
+}
+
+.siftmark-trace-disclosure {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: #667085;
+  font-size: 9px;
+  font-weight: 620;
+  line-height: 1.2;
+  transform: scale(1);
+  transition: transform var(--siftmark-motion-fast) var(--siftmark-ease-out);
+}
+
+.siftmark-trace-disclosure svg {
+  width: 14px;
+  height: 14px;
+  transition: transform var(--siftmark-motion-base) var(--siftmark-ease-out);
+}
+
+.siftmark-processing-trace[open] .siftmark-trace-disclosure svg {
+  transform: rotate(180deg);
+}
+
+.siftmark-trace-details {
+  max-height: min(300px, 38vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-top: 1px solid #e4e8ef;
+  background: #fbfcfe;
+  opacity: 1;
+  scrollbar-color: #c5ccd7 transparent;
+  scrollbar-width: thin;
+  transition: opacity 140ms var(--siftmark-ease-out);
 }
 
 .siftmark-processing-trace ol {
   display: grid;
   gap: 0;
   margin: 0;
-  padding: 0;
+  padding: 10px 14px 8px;
   list-style: none;
 }
 
@@ -349,8 +404,12 @@ button {
   gap: 10px;
   align-items: start;
   margin: 0 14px;
-  padding: 12px 0;
+  padding: 9px 0;
   border-top: 1px solid var(--siftmark-line);
+}
+
+.siftmark-processing-trace + .siftmark-overlay-field {
+  border-top: 0;
 }
 
 .siftmark-field-label {
@@ -412,6 +471,15 @@ button {
   color: #8d4d00;
 }
 
+.siftmark-route-new small {
+  padding-left: 4px;
+  border-left: 1px solid #e7bd82;
+  color: #a35c06;
+  font-size: 9px;
+  font-weight: 650;
+  line-height: 1.2;
+}
+
 .siftmark-route-new svg {
   color: var(--siftmark-risk);
 }
@@ -447,7 +515,7 @@ button {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 8px;
-  padding: 12px 14px 14px;
+  padding: 10px 14px 12px;
   border-top: 1px solid var(--siftmark-line);
   background: rgb(247 248 250 / 88%);
   box-shadow: 0 -8px 18px rgb(23 26 31 / 6%);
@@ -522,7 +590,16 @@ button {
   box-shadow: 0 0 0 4px rgb(62 99 221 / 13%);
 }
 
+.siftmark-processing-trace > summary:focus-visible {
+  outline: 2px solid var(--siftmark-blue);
+  outline-offset: -3px;
+}
+
 @media (hover: hover) and (pointer: fine) {
+  .siftmark-processing-trace > summary:hover {
+    background: #f7f9fc;
+  }
+
   .siftmark-icon-button:hover {
     background: #eceff4;
     color: var(--siftmark-ink);
@@ -544,7 +621,20 @@ button {
   transition-duration: 70ms;
 }
 
+.siftmark-processing-trace > summary:active {
+  background: #f2f5f9;
+}
+
+.siftmark-processing-trace > summary:active .siftmark-trace-disclosure {
+  transform: scale(.96);
+  transition-duration: 70ms;
+}
+
 @starting-style {
+  .siftmark-processing-trace[open] .siftmark-trace-details {
+    opacity: 0;
+  }
+
   .siftmark-overlay-actions {
     opacity: 0;
     transform: translateY(4px);
@@ -599,12 +689,16 @@ button {
   .siftmark-overlay-eyebrow,
   .siftmark-icon-button,
   .siftmark-activity-icon,
+  .siftmark-trace-details,
+  .siftmark-trace-disclosure,
+  .siftmark-trace-disclosure svg,
   .siftmark-overlay-actions,
   .siftmark-button {
     transition-duration: 1ms;
   }
 
   .siftmark-overlay-actions,
+  .siftmark-processing-trace > summary:active .siftmark-trace-disclosure,
   .siftmark-icon-button:active,
   .siftmark-button:active:not(:disabled),
   [data-status="running"] > .siftmark-activity-icon {
@@ -638,6 +732,10 @@ button {
     box-shadow: 0 12px 32px rgb(0 0 0 / 28%);
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
+  }
+
+  .siftmark-trace-details {
+    background: #fff;
   }
 
   .siftmark-overlay-header,

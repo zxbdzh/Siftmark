@@ -362,17 +362,23 @@ test('supports the bookmark tree, Agent proposal, and in-page approval shell', a
   });
   await expect(approval).toContainText('Agent 验收目录');
   await expect(approval).toContainText('研究');
-  await expect(approval).toContainText('分析过程');
+  await expect(approval).toContainText('分析详情');
   await expect(approval).toContainText('风险检查完成');
-  await expect(approval).toContainText('命中规则');
+  const analysisTrace = approval.locator('.siftmark-processing-trace');
+  const analysisList = approval.getByRole('list', { name: '分析过程' });
+  await expect(analysisTrace).not.toHaveAttribute('open', '');
+  await expect(analysisList).not.toBeVisible();
   await expect(
     approval.getByRole('button', { name: '与 Agent 调整' })
   ).toBeVisible();
+  await analysisTrace.locator('summary').click();
+  await expect(analysisList).toBeVisible();
+  await expect(approval.getByText('命中规则')).toBeVisible();
   expect(
     await approval
-      .getByRole('list', { name: '分析过程' })
+      .locator('.siftmark-trace-details')
       .evaluate((element) => getComputedStyle(element).overflowY)
-  ).toBe('visible');
+  ).toBe('auto');
   expect(
     await approval
       .locator('.siftmark-overlay-actions')

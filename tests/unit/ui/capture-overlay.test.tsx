@@ -37,7 +37,11 @@ describe('CaptureOverlay', () => {
 
     expect(screen.getByRole('status')).toHaveTextContent('原生书签已保存');
     expect(screen.getByRole('status')).toHaveTextContent('AI 正在生成归类方案');
-    expect(screen.getByText('1 / 2')).toBeInTheDocument();
+    expect(screen.getByText(/1 \/ 2/)).toBeInTheDocument();
+    expect(screen.getByRole('list', { name: '分析过程' })).not.toBeVisible();
+
+    fireEvent.click(screen.getByText('分析详情'));
+    expect(screen.getByRole('list', { name: '分析过程' })).toBeVisible();
   });
 
   it('keeps the bookmark-saved guarantee visible when enhancement steps are added', () => {
@@ -73,7 +77,7 @@ describe('CaptureOverlay', () => {
     expect(status).toHaveTextContent('正在识别页面截图');
     expect(status).toHaveTextContent('正在请求联网搜索');
     expect(status).toHaveTextContent('AI 正在生成归类方案');
-    expect(screen.getByText('5 / 6')).toBeInTheDocument();
+    expect(screen.getByText(/5 \/ 6/)).toBeInTheDocument();
   });
 
   it('shows a risky destination and asks for a simple decision', () => {
@@ -109,9 +113,14 @@ describe('CaptureOverlay', () => {
 
     expect(screen.getByRole('dialog')).toHaveTextContent('开发');
     expect(screen.getByText('Agent')).toBeInTheDocument();
+    expect(screen.getByText('新建')).toBeInTheDocument();
     expect(screen.getByText('浏览器收藏 Agent 设计')).toBeInTheDocument();
-    expect(screen.getByText('命中规则')).toBeInTheDocument();
-    expect(screen.getByText('风险方案，需要用户批准')).toBeInTheDocument();
+    expect(screen.getByText('命中规则')).not.toBeVisible();
+    expect(screen.getByText('风险方案，需要用户批准')).not.toBeVisible();
+
+    fireEvent.click(screen.getByText('分析详情'));
+    expect(screen.getByText('命中规则')).toBeVisible();
+    expect(screen.getByText('风险方案，需要用户批准')).toBeVisible();
 
     fireEvent.click(screen.getByRole('button', { name: '允许' }));
     fireEvent.click(screen.getByRole('button', { name: '拒绝' }));

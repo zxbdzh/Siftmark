@@ -97,6 +97,18 @@ test('saves first, requests approval for risk, applies locally, and supports und
   await expect(approval).toContainText('批准这次整理吗？');
   await expect(approval).toContainText('测试');
   await expect(approval).toContainText('本地模型建议标题');
+  const analysisList = approval.getByRole('list', { name: '分析过程' });
+  await expect(analysisList).not.toBeVisible();
+  expect(
+    await approval.evaluate((element) => element.getBoundingClientRect().height)
+  ).toBeLessThanOrEqual(360);
+
+  await approval.locator('summary').click();
+  await expect(analysisList).toBeVisible();
+  expect(
+    await approval.evaluate((element) => element.getBoundingClientRect().height)
+  ).toBeLessThanOrEqual(620);
+  await expect(approval.getByRole('button', { name: '允许' })).toBeInViewport();
   await approval.getByRole('button', { name: '允许' }).click();
 
   await expect
