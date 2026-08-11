@@ -70,7 +70,18 @@ describe('CaptureLearningSection', () => {
 
     expect(await screen.findByText('example.test')).toBeInTheDocument();
     expect(screen.getByText('连续批准归入开发 / AI')).toBeInTheDocument();
-    expect(screen.getByText(/使用你配置的 Agent 模型和额度/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/使用你配置的 Agent 模型和额度/)
+    ).toBeInTheDocument();
+
+    const toggle = screen.getByRole('checkbox', {
+      name: /空闲时自动回顾/
+    });
+    expect(toggle).toBeChecked();
+    await user.click(toggle);
+    expect(toggle).not.toBeChecked();
+    await user.click(toggle);
+    expect(toggle).toBeChecked();
 
     await user.click(screen.getByRole('button', { name: '现在回顾' }));
     await waitFor(() =>

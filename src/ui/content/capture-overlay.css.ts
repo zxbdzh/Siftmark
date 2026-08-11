@@ -8,7 +8,13 @@ export const captureOverlayStyles = `
   --siftmark-blue: #3e63dd;
   --siftmark-blue-pressed: #2f4fc0;
   --siftmark-risk: #d97706;
-  --siftmark-agent: #b7ff36;
+  --siftmark-danger: #c2413b;
+  --siftmark-success: #2f8f5b;
+  --siftmark-accent: var(--siftmark-blue);
+  --siftmark-motion-fast: 100ms;
+  --siftmark-motion-base: 160ms;
+  --siftmark-motion-slow: 220ms;
+  --siftmark-ease-out: cubic-bezier(.23, 1, .32, 1);
   font-family: "Noto Sans SC", "Microsoft YaHei UI", system-ui, sans-serif;
   font-synthesis: none;
   letter-spacing: 0;
@@ -32,18 +38,30 @@ button {
   max-height: calc(100vh - 36px);
   overflow-x: hidden;
   overflow-y: auto;
+  overscroll-behavior: contain;
   border: 1px solid var(--siftmark-line);
-  border-top: 3px solid var(--siftmark-blue);
+  border-top: 3px solid var(--siftmark-accent);
   border-radius: 8px;
   background: var(--siftmark-paper);
   color: var(--siftmark-ink);
   box-shadow: 0 18px 50px rgb(23 26 31 / 20%), 0 2px 8px rgb(23 26 31 / 8%);
-  animation: siftmark-enter 180ms cubic-bezier(.2, .7, .2, 1) both;
+  transition: border-color var(--siftmark-motion-base) var(--siftmark-ease-out);
 }
 
-.siftmark-capture-overlay[data-phase="approval"],
+.siftmark-capture-overlay[data-phase="approval"] {
+  --siftmark-accent: var(--siftmark-risk);
+}
+
+.siftmark-capture-overlay[data-phase="saved"] {
+  --siftmark-accent: var(--siftmark-success);
+}
+
+.siftmark-capture-overlay[data-phase="rejected"] {
+  --siftmark-accent: #667085;
+}
+
 .siftmark-capture-overlay[data-phase="error"] {
-  border-top-color: var(--siftmark-risk);
+  --siftmark-accent: var(--siftmark-danger);
 }
 
 .siftmark-overlay-header {
@@ -55,7 +73,10 @@ button {
   gap: 10px;
   align-items: center;
   padding: 14px 14px 12px;
-  background: var(--siftmark-paper);
+  background: rgb(247 248 250 / 86%);
+  box-shadow: 0 1px 0 rgb(217 222 231 / 72%);
+  backdrop-filter: blur(16px) saturate(135%);
+  -webkit-backdrop-filter: blur(16px) saturate(135%);
 }
 
 .siftmark-agent-mark {
@@ -67,6 +88,21 @@ button {
   border: 1px solid #cbd3df;
   border-radius: 6px;
   background: #fff;
+  color: var(--siftmark-accent);
+  transition:
+    color var(--siftmark-motion-base) var(--siftmark-ease-out),
+    border-color var(--siftmark-motion-base) var(--siftmark-ease-out);
+}
+
+[data-phase="processing"] .siftmark-agent-mark {
+  border-color: rgb(62 99 221 / 42%);
+  box-shadow: 0 0 0 3px rgb(62 99 221 / 8%);
+}
+
+[data-phase="approval"] .siftmark-agent-mark,
+[data-phase="error"] .siftmark-agent-mark {
+  border-color: color-mix(in srgb, var(--siftmark-accent) 42%, white);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--siftmark-accent) 8%, transparent);
 }
 
 .siftmark-agent-mark::after {
@@ -77,8 +113,11 @@ button {
   height: 8px;
   border: 2px solid var(--siftmark-paper);
   border-radius: 50%;
-  background: var(--siftmark-agent);
+  background: var(--siftmark-accent);
   content: "";
+  transition:
+    background-color var(--siftmark-motion-base) var(--siftmark-ease-out),
+    transform var(--siftmark-motion-base) var(--siftmark-ease-out);
 }
 
 .siftmark-agent-mark svg {
@@ -94,15 +133,11 @@ button {
 .siftmark-overlay-eyebrow {
   display: block;
   margin-bottom: 2px;
-  color: var(--siftmark-risk);
+  color: var(--siftmark-accent);
   font: 600 10px/1.2 "Space Grotesk", "Noto Sans SC", system-ui, sans-serif;
   letter-spacing: 0;
   text-transform: uppercase;
-}
-
-[data-phase="processing"] .siftmark-overlay-eyebrow,
-[data-phase="saved"] .siftmark-overlay-eyebrow {
-  color: var(--siftmark-blue);
+  transition: color var(--siftmark-motion-base) var(--siftmark-ease-out);
 }
 
 .siftmark-overlay-header h2 {
@@ -125,11 +160,11 @@ button {
   background: transparent;
   color: #707785;
   cursor: pointer;
-}
-
-.siftmark-icon-button:hover {
-  background: #eceff4;
-  color: var(--siftmark-ink);
+  touch-action: manipulation;
+  transition:
+    transform var(--siftmark-motion-fast) var(--siftmark-ease-out),
+    background-color var(--siftmark-motion-base) var(--siftmark-ease-out),
+    color var(--siftmark-motion-base) var(--siftmark-ease-out);
 }
 
 .siftmark-icon-button svg {
@@ -148,7 +183,8 @@ button {
   width: 42%;
   height: 100%;
   background: var(--siftmark-blue);
-  animation: siftmark-progress 1.2s ease-in-out infinite;
+  animation: siftmark-progress 1.25s var(--siftmark-ease-out) infinite;
+  will-change: transform;
 }
 
 .siftmark-processing-trace {
@@ -215,6 +251,9 @@ button {
   border-radius: 50%;
   background: #fff;
   color: #7c8798;
+  transition:
+    color var(--siftmark-motion-base) var(--siftmark-ease-out),
+    transform var(--siftmark-motion-base) var(--siftmark-ease-out);
 }
 
 .siftmark-activity-icon svg {
@@ -229,6 +268,7 @@ button {
 
 [data-status="running"] > .siftmark-activity-icon {
   color: var(--siftmark-blue);
+  transform: scale(1.04);
 }
 
 [data-status="failed"] > .siftmark-activity-icon {
@@ -409,8 +449,16 @@ button {
   gap: 8px;
   padding: 12px 14px 14px;
   border-top: 1px solid var(--siftmark-line);
-  background: var(--siftmark-paper);
+  background: rgb(247 248 250 / 88%);
   box-shadow: 0 -8px 18px rgb(23 26 31 / 6%);
+  backdrop-filter: blur(16px) saturate(135%);
+  -webkit-backdrop-filter: blur(16px) saturate(135%);
+  opacity: 1;
+  transform: translateY(0);
+  transition:
+    opacity var(--siftmark-motion-base) var(--siftmark-ease-out),
+    transform var(--siftmark-motion-slow) var(--siftmark-ease-out),
+    background-color var(--siftmark-motion-base) var(--siftmark-ease-out);
 }
 
 .siftmark-result-actions {
@@ -433,6 +481,12 @@ button {
   line-height: 1.2;
   white-space: nowrap;
   cursor: pointer;
+  touch-action: manipulation;
+  transition:
+    transform var(--siftmark-motion-fast) var(--siftmark-ease-out),
+    background-color var(--siftmark-motion-base) var(--siftmark-ease-out),
+    border-color var(--siftmark-motion-base) var(--siftmark-ease-out),
+    color var(--siftmark-motion-base) var(--siftmark-ease-out);
 }
 
 .siftmark-button svg {
@@ -443,7 +497,7 @@ button {
 
 .siftmark-button:disabled {
   opacity: .56;
-  cursor: wait;
+  cursor: progress;
 }
 
 .siftmark-button-primary {
@@ -451,19 +505,10 @@ button {
   color: #fff;
 }
 
-.siftmark-button-primary:hover:not(:disabled) {
-  background: var(--siftmark-blue-pressed);
-}
-
 .siftmark-button-secondary {
   border-color: #cbd2dc;
   background: #fff;
   color: #343942;
-}
-
-.siftmark-button-secondary:hover:not(:disabled) {
-  border-color: #aeb7c5;
-  background: #f0f2f6;
 }
 
 .siftmark-adjust-button {
@@ -474,11 +519,36 @@ button {
 .siftmark-button:focus-visible {
   outline: 2px solid var(--siftmark-blue);
   outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgb(62 99 221 / 13%);
 }
 
-@keyframes siftmark-enter {
-  from { opacity: 0; transform: translateY(-8px); }
-  to { opacity: 1; transform: translateY(0); }
+@media (hover: hover) and (pointer: fine) {
+  .siftmark-icon-button:hover {
+    background: #eceff4;
+    color: var(--siftmark-ink);
+  }
+
+  .siftmark-button-primary:hover:not(:disabled) {
+    background: var(--siftmark-blue-pressed);
+  }
+
+  .siftmark-button-secondary:hover:not(:disabled) {
+    border-color: #aeb7c5;
+    background: #f0f2f6;
+  }
+}
+
+.siftmark-icon-button:active,
+.siftmark-button:active:not(:disabled) {
+  transform: scale(.97);
+  transition-duration: 70ms;
+}
+
+@starting-style {
+  .siftmark-overlay-actions {
+    opacity: 0;
+    transform: translateY(4px);
+  }
 }
 
 @keyframes siftmark-progress {
@@ -513,10 +583,73 @@ button {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .siftmark-capture-overlay,
   .siftmark-processing-line span,
   .siftmark-activity-spinner {
     animation: none;
+  }
+
+  .siftmark-processing-line span {
+    width: 100%;
+    transform: none;
+  }
+
+  .siftmark-capture-overlay,
+  .siftmark-agent-mark,
+  .siftmark-agent-mark::after,
+  .siftmark-overlay-eyebrow,
+  .siftmark-icon-button,
+  .siftmark-activity-icon,
+  .siftmark-overlay-actions,
+  .siftmark-button {
+    transition-duration: 1ms;
+  }
+
+  .siftmark-overlay-actions,
+  .siftmark-icon-button:active,
+  .siftmark-button:active:not(:disabled),
+  [data-status="running"] > .siftmark-activity-icon {
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .siftmark-capture-overlay,
+  .siftmark-overlay-header,
+  .siftmark-overlay-actions {
+    background: var(--siftmark-paper);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
+@media (prefers-contrast: more) {
+  :host {
+    --siftmark-muted: #475467;
+    --siftmark-line: #8792a2;
+    --siftmark-blue: #234bc4;
+    --siftmark-blue-pressed: #16399f;
+    --siftmark-risk: #a54700;
+    --siftmark-danger: #9f2621;
+    --siftmark-success: #176b3d;
+  }
+
+  .siftmark-capture-overlay {
+    background: #fff;
+    box-shadow: 0 12px 32px rgb(0 0 0 / 28%);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  .siftmark-overlay-header,
+  .siftmark-overlay-actions {
+    background: #fff;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  .siftmark-button-secondary,
+  .siftmark-agent-mark {
+    border-color: #667085;
   }
 }
 `;

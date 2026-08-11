@@ -7,7 +7,7 @@ import {
   ShieldCheck,
   Trash2
 } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type CSSProperties } from 'react';
 import type {
   CaptureLearningMemory,
   CapturePreference,
@@ -69,9 +69,7 @@ export function CaptureLearningSection({
     try {
       await settingsRepository.setSleepReviewSettings(settings);
       setMessage(
-        settings.enabled
-          ? '睡眠回顾已启用，将在你空闲时运行'
-          : '睡眠回顾已关闭'
+        settings.enabled ? '睡眠回顾已启用，将在你空闲时运行' : '睡眠回顾已关闭'
       );
     } finally {
       setBusy('');
@@ -139,9 +137,7 @@ export function CaptureLearningSection({
           <strong>{statusTitle(reviewStatus)}</strong>
           <p>{statusDetail(reviewStatus)}</p>
         </div>
-        <span className="learning-memory-count">
-          {memories.length} 条记忆
-        </span>
+        <span className="learning-memory-count">{memories.length} 条记忆</span>
       </div>
 
       <div className="preference-list">
@@ -149,16 +145,20 @@ export function CaptureLearningSection({
           <span>
             <strong>空闲时自动回顾</strong>
             <small>
-              使用你配置的 Agent 模型和额度；只更新本地记忆，不会移动书签或创建目录。
+              使用你配置的 Agent
+              模型和额度；只更新本地记忆，不会移动书签或创建目录。
             </small>
           </span>
-          <input
-            type="checkbox"
-            checked={settings.enabled}
-            onChange={(event) =>
-              setSettings({ ...settings, enabled: event.target.checked })
-            }
-          />
+          <span className="learning-toggle">
+            <input
+              type="checkbox"
+              checked={settings.enabled}
+              onChange={(event) =>
+                setSettings({ ...settings, enabled: event.target.checked })
+              }
+            />
+            <span className="learning-toggle-track" aria-hidden="true" />
+          </span>
         </label>
         <label className="preference-row range-row">
           <span>
@@ -174,6 +174,10 @@ export function CaptureLearningSection({
               step="5"
               disabled={!settings.enabled}
               value={settings.idleMinutes}
+              style={rangeProgressStyle(
+                settings.idleMinutes,
+                sleepReviewBounds.idleMinutes
+              )}
               onChange={(event) =>
                 setSettings({
                   ...settings,
@@ -187,7 +191,9 @@ export function CaptureLearningSection({
         <label className="preference-row range-row">
           <span>
             <strong>单批最多结果</strong>
-            <small>至少积累 3 个新结果才运行，每 12 小时最多自动回顾一次。</small>
+            <small>
+              至少积累 3 个新结果才运行，每 12 小时最多自动回顾一次。
+            </small>
           </span>
           <span className="range-control">
             <input
@@ -198,6 +204,10 @@ export function CaptureLearningSection({
               step="1"
               disabled={!settings.enabled}
               value={settings.batchSize}
+              style={rangeProgressStyle(
+                settings.batchSize,
+                sleepReviewBounds.batchSize
+              )}
               onChange={(event) =>
                 setSettings({
                   ...settings,
@@ -267,7 +277,8 @@ export function CaptureLearningSection({
                 <small>
                   {memory.action === 'prefer-folder' ? '偏好' : '避开'}：
                   {memory.destinationPath.join(' / ') || '书签栏'} · 来自{' '}
-                  {memory.evidenceCount} 个结果 · {formatDate(memory.reviewedAt)}
+                  {memory.evidenceCount} 个结果 ·{' '}
+                  {formatDate(memory.reviewedAt)}
                 </small>
               </div>
               <button
@@ -291,12 +302,18 @@ export function CaptureLearningSection({
   );
 }
 
+function rangeProgressStyle(
+  value: number,
+  bounds: { min: number; max: number }
+): CSSProperties {
+  const progress = ((value - bounds.min) / (bounds.max - bounds.min)) * 100;
+  return { '--range-progress': `${progress}%` } as CSSProperties;
+}
+
 function isLearningMemory(
   preference: CapturePreference
 ): preference is CaptureLearningMemory {
-  return (
-    preference.kind === 'learned' && preference.source === 'sleep-review'
-  );
+  return preference.kind === 'learned' && preference.source === 'sleep-review';
 }
 
 function statusTitle(status: SleepReviewStatus): string {

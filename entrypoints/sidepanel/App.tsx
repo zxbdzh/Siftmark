@@ -68,12 +68,19 @@ const activityKindLabels: Record<CaptureActivity['kind'], string> = {
   execution: '本地执行'
 };
 
-function ActivityStatusIcon({ status }: { status: CaptureActivity['status'] }) {
-  if (status === 'completed') return <CheckCircle2 aria-hidden="true" />;
-  if (status === 'failed') return <XCircle aria-hidden="true" />;
-  if (status === 'running')
-    return <LoaderCircle className="trace-spinner" aria-hidden="true" />;
-  return <CircleDashed aria-hidden="true" />;
+function ActivityStatusIcon() {
+  return (
+    <>
+      <CheckCircle2 data-glyph="completed" aria-hidden="true" />
+      <XCircle data-glyph="failed" aria-hidden="true" />
+      <LoaderCircle
+        className="trace-spinner"
+        data-glyph="running"
+        aria-hidden="true"
+      />
+      <CircleDashed data-glyph="pending-skipped" aria-hidden="true" />
+    </>
+  );
 }
 
 function AnalysisTrace({ activities }: { activities: CaptureActivity[] }) {
@@ -87,7 +94,9 @@ function AnalysisTrace({ activities }: { activities: CaptureActivity[] }) {
           <Sparkles aria-hidden="true" />
           <h2 id="analysis-trace-title">分析过程</h2>
         </div>
-        <span>{completed} / {activities.length} 完成</span>
+        <span>
+          {completed} / {activities.length} 完成
+        </span>
       </header>
 
       {activities.length ? (
@@ -95,7 +104,7 @@ function AnalysisTrace({ activities }: { activities: CaptureActivity[] }) {
           {activities.map((activity) => (
             <li key={activity.id} data-status={activity.status}>
               <span className="trace-status-icon">
-                <ActivityStatusIcon status={activity.status} />
+                <ActivityStatusIcon />
               </span>
               <div className="trace-copy">
                 <div className="trace-step-meta">
@@ -267,7 +276,11 @@ export default function App() {
           </span>
           <div>
             <h1>Siftmark Agent</h1>
-            <span className="agent-state">
+            <span
+              className="agent-state"
+              data-state={session.state}
+              aria-live="polite"
+            >
               <i aria-hidden="true" />
               {stateLabel(session)}
             </span>
@@ -539,12 +552,16 @@ export default function App() {
                 <button
                   type="button"
                   className="send-button"
-                  title="发送"
-                  aria-label="发送"
+                  title={busy === 'message' ? '正在发送' : '发送'}
+                  aria-label={busy === 'message' ? '正在发送' : '发送'}
                   disabled={!message.trim() || Boolean(busy)}
                   onClick={() => void act('message')}
                 >
-                  <Send aria-hidden="true" />
+                  {busy === 'message' ? (
+                    <LoaderCircle className="send-spinner" aria-hidden="true" />
+                  ) : (
+                    <Send aria-hidden="true" />
+                  )}
                 </button>
               </div>
               <p className="composer-hint">

@@ -194,7 +194,7 @@ section button {
 }
 .agent-rule-main {
   display: grid;
-  grid-template-columns: minmax(120px, .7fr) minmax(0, 1.3fr);
+  grid-template-columns: minmax(120px, 0.7fr) minmax(0, 1.3fr);
   gap: 3px 14px;
   min-width: 0;
 }
@@ -234,6 +234,28 @@ section button {
 .capture-preferences-section output {
   margin-top: 8px;
 }
+.capture-learning-section {
+  --learning-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --learning-motion-press: 100ms;
+  --learning-motion-control: 160ms;
+  --learning-motion-state: 180ms;
+  letter-spacing: 0;
+}
+.capture-learning-section button {
+  transform: scale(1);
+  transition:
+    transform var(--learning-motion-control) var(--learning-ease-out),
+    border-color var(--learning-motion-control) var(--learning-ease-out),
+    background-color var(--learning-motion-control) var(--learning-ease-out),
+    color var(--learning-motion-control) var(--learning-ease-out);
+}
+.capture-learning-section button:active:not(:disabled) {
+  transform: scale(0.97);
+  transition-duration: var(--learning-motion-press);
+}
+.capture-learning-section .icon-button:active:not(:disabled) {
+  transform: scale(0.94);
+}
 .learning-status {
   display: grid;
   grid-template-columns: 34px minmax(0, 1fr) auto;
@@ -246,9 +268,17 @@ section button {
   border-left: 3px solid var(--settings-accent);
   border-radius: 6px;
   background: var(--surface-1);
+  transition:
+    border-color var(--learning-motion-state) var(--learning-ease-out),
+    background-color var(--learning-motion-state) var(--learning-ease-out);
 }
 .learning-status[data-state='failed'] {
   border-left-color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 5%, var(--surface-1));
+}
+.learning-status[data-state='learned'] {
+  border-left-color: #2f8f5b;
+  background: color-mix(in srgb, #2f8f5b 5%, var(--surface-1));
 }
 .learning-status-mark,
 .memory-icon {
@@ -259,6 +289,19 @@ section button {
   border-radius: 50%;
   background: color-mix(in srgb, var(--settings-accent) 12%, transparent);
   color: var(--settings-accent);
+}
+.learning-status-mark {
+  transition:
+    background-color var(--learning-motion-state) var(--learning-ease-out),
+    color var(--learning-motion-state) var(--learning-ease-out);
+}
+.learning-status[data-state='failed'] .learning-status-mark {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  color: var(--danger);
+}
+.learning-status[data-state='learned'] .learning-status-mark {
+  background: color-mix(in srgb, #2f8f5b 12%, transparent);
+  color: #2f8f5b;
 }
 .learning-status-mark svg,
 .memory-icon svg {
@@ -287,10 +330,14 @@ section button {
   font-variant-numeric: tabular-nums;
 }
 .learning-actions {
+  flex-wrap: wrap;
   align-items: center;
   margin-top: 16px;
 }
 .learning-actions output {
+  flex: 1 1 180px;
+  min-width: 0;
+  min-height: 18px;
   color: var(--text-2);
   font-size: 12px;
 }
@@ -372,6 +419,143 @@ section button {
 }
 .danger-text-button {
   color: var(--danger);
+}
+.capture-learning-section .learning-toggle {
+  position: relative;
+  display: block;
+  flex: 0 0 auto;
+  width: 36px;
+  height: 22px;
+  gap: 0;
+}
+.capture-learning-section .learning-toggle input[type='checkbox'] {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.capture-learning-section .learning-toggle-track {
+  position: absolute;
+  inset: 0;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background-color: var(--surface-2);
+  transform: scale(1);
+  transition:
+    transform var(--learning-motion-press) var(--learning-ease-out),
+    background-color var(--learning-motion-control) var(--learning-ease-out),
+    border-color var(--learning-motion-control) var(--learning-ease-out);
+}
+.capture-learning-section .learning-toggle-track::after {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border: 1px solid color-mix(in srgb, var(--border) 74%, transparent);
+  border-radius: 50%;
+  background: var(--surface-0);
+  content: '';
+  transform: translateX(0);
+  transition: transform var(--learning-motion-control) var(--learning-ease-out);
+}
+.capture-learning-section
+  .learning-toggle
+  input[type='checkbox']:checked
+  + .learning-toggle-track {
+  border-color: var(--settings-accent);
+  background-color: var(--settings-accent);
+}
+.capture-learning-section
+  .learning-toggle
+  input[type='checkbox']:checked
+  + .learning-toggle-track::after {
+  transform: translateX(14px);
+}
+.capture-learning-section
+  .learning-toggle
+  input[type='checkbox']:active:not(:disabled)
+  + .learning-toggle-track {
+  transform: scale(0.94);
+}
+.capture-learning-section
+  .learning-toggle
+  input[type='checkbox']:focus-visible
+  + .learning-toggle-track {
+  outline: 2px solid var(--settings-accent);
+  outline-offset: 2px;
+}
+.capture-learning-section .learning-toggle input[type='checkbox']:disabled {
+  cursor: default;
+}
+.capture-learning-section
+  .learning-toggle
+  input[type='checkbox']:disabled
+  + .learning-toggle-track {
+  opacity: 0.5;
+}
+.capture-learning-section .range-control input[type='range'] {
+  appearance: none;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  background: linear-gradient(
+      to right,
+      var(--settings-accent) 0 var(--range-progress),
+      var(--surface-2) var(--range-progress) 100%
+    )
+    0 center / 100% 4px no-repeat;
+  cursor: pointer;
+  transition: opacity var(--learning-motion-control) var(--learning-ease-out);
+}
+.capture-learning-section
+  .range-control
+  input[type='range']::-webkit-slider-thumb {
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--surface-0);
+  border-radius: 50%;
+  background: var(--settings-accent);
+  box-shadow: 0 0 0 1px var(--settings-accent);
+  transform: scale(1);
+  transition: transform var(--learning-motion-press) var(--learning-ease-out);
+}
+.capture-learning-section .range-control input[type='range']::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--surface-0);
+  border-radius: 50%;
+  background: var(--settings-accent);
+  box-shadow: 0 0 0 1px var(--settings-accent);
+  transform: scale(1);
+  transition: transform var(--learning-motion-press) var(--learning-ease-out);
+}
+.capture-learning-section
+  .range-control
+  input[type='range']:active:not(:disabled)::-webkit-slider-thumb,
+.capture-learning-section
+  .range-control
+  input[type='range']:active:not(:disabled)::-moz-range-thumb {
+  transform: scale(0.88);
+}
+.capture-learning-section .range-control input[type='range']:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+.capture-learning-section .range-control output {
+  min-width: 44px;
+  margin: 0;
+  padding: 3px 5px;
+  border-radius: 4px;
+  background: var(--surface-1);
+  text-align: center;
 }
 .stacked-field {
   display: grid;
@@ -1282,5 +1466,118 @@ input[type='range'] {
   .history-main span,
   .history-main small {
     grid-column: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .capture-learning-section button,
+  .capture-learning-section .learning-status,
+  .capture-learning-section .learning-status-mark,
+  .capture-learning-section .learning-toggle-track,
+  .capture-learning-section .learning-toggle-track::after,
+  .capture-learning-section .range-control input[type='range'],
+  .capture-learning-section
+    .range-control
+    input[type='range']::-webkit-slider-thumb,
+  .capture-learning-section
+    .range-control
+    input[type='range']::-moz-range-thumb {
+    transition-duration: 1ms;
+  }
+
+  .capture-learning-section button:active:not(:disabled),
+  .capture-learning-section .icon-button:active:not(:disabled),
+  .capture-learning-section
+    .learning-toggle
+    input[type='checkbox']:active:not(:disabled)
+    + .learning-toggle-track,
+  .capture-learning-section
+    .range-control
+    input[type='range']:active:not(:disabled)::-webkit-slider-thumb,
+  .capture-learning-section
+    .range-control
+    input[type='range']:active:not(:disabled)::-moz-range-thumb {
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .settings-topbar {
+    background: var(--surface-0);
+    backdrop-filter: none;
+  }
+
+  .capture-learning-section .learning-status-mark,
+  .capture-learning-section .memory-icon,
+  .capture-learning-section
+    .learning-status[data-state='failed']
+    .learning-status-mark,
+  .capture-learning-section
+    .learning-status[data-state='learned']
+    .learning-status-mark {
+    background: var(--surface-2);
+  }
+}
+
+@media (prefers-contrast: more) {
+  .capture-learning-section .preference-list,
+  .capture-learning-section .preference-row,
+  .capture-learning-section .learning-memory-heading,
+  .capture-learning-section .learning-memory-list,
+  .capture-learning-section .learning-memory-list li {
+    border-color: var(--text-1);
+  }
+
+  .capture-learning-section .learning-status {
+    border-color: var(--text-1);
+    border-left-color: var(--settings-accent);
+  }
+
+  .capture-learning-section .learning-status[data-state='failed'] {
+    border-left-color: var(--danger);
+  }
+
+  .capture-learning-section .learning-status[data-state='learned'] {
+    border-left-color: #2f8f5b;
+  }
+
+  .capture-learning-section button,
+  .capture-learning-section .learning-memory-count,
+  .capture-learning-section .memory-main > div span,
+  .capture-learning-section .range-control output,
+  .capture-learning-section .learning-toggle-track {
+    border-color: var(--text-1);
+  }
+
+  .capture-learning-section
+    .learning-toggle
+    input[type='checkbox']:checked
+    + .learning-toggle-track {
+    border-color: var(--settings-accent);
+  }
+}
+
+@media (forced-colors: active) {
+  .capture-learning-section .learning-toggle {
+    width: 20px;
+    height: 20px;
+  }
+
+  .capture-learning-section .learning-toggle input[type='checkbox'] {
+    position: static;
+    appearance: auto;
+    width: 20px;
+    height: 20px;
+    opacity: 1;
+    background: Canvas;
+  }
+
+  .capture-learning-section .learning-toggle-track {
+    display: none;
+  }
+
+  .capture-learning-section .range-control input[type='range'] {
+    appearance: auto;
+    background: Canvas;
   }
 }

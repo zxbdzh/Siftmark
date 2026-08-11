@@ -152,6 +152,20 @@ describe('Side panel Agent workspace', () => {
     ).toBeInTheDocument();
   });
 
+  it('keeps every activity status glyph mounted for stable transitions', async () => {
+    const { container } = render(<App />);
+
+    await waitFor(() =>
+      expect(container.querySelectorAll('.analysis-trace li')).toHaveLength(3)
+    );
+    for (const item of container.querySelectorAll('.analysis-trace li')) {
+      expect(item.querySelectorAll('[data-glyph]')).toHaveLength(4);
+      expect(
+        item.querySelector('[data-glyph="pending-skipped"]')
+      ).toBeInTheDocument();
+    }
+  });
+
   function actionRequests() {
     return sendMessage.mock.calls
       .map(([request]) => request as { type?: string; input?: unknown })
