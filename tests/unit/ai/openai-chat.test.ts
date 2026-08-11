@@ -171,6 +171,32 @@ describe('OpenAiChatAdapter', () => {
     });
   });
 
+  it('falls back when an enhanced Chat request returns no text', async () => {
+    const post = vi
+      .fn()
+      .mockResolvedValueOnce({ choices: [{ message: { content: '' } }] })
+      .mockResolvedValueOnce(fixture);
+
+    const result = await new OpenAiChatAdapter(post).analyze(
+      profile,
+      {
+        title: 'A',
+        url: 'https://a.test',
+        currentFolderPath: [],
+        webSearch: true
+      },
+      new AbortController().signal
+    );
+
+    expect(result).toMatchObject({
+      title: '示例',
+      toolUsage: { webSearch: 'not-used' }
+    });
+    expect(post).toHaveBeenCalledTimes(2);
+    const fallbackBody = post.mock.calls[1]![0].body as Record<string, unknown>;
+    expect(fallbackBody.web_search_options).toBeUndefined();
+  });
+
   it('keeps working when a compatible provider ignores response_format', async () => {
     const post = async <T>(request: { body: unknown }): Promise<T> => {
       const body = request.body as { messages?: Array<{ content?: string }> };

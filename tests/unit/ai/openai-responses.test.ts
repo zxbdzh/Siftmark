@@ -71,6 +71,26 @@ describe('OpenAiResponsesAdapter', () => {
     expect(result.title).toBe('示例');
   });
 
+  it('uses nested output text when the relay returns a blank top-level field', async () => {
+    const post = vi.fn().mockResolvedValue({
+      output_text: '',
+      output: [
+        {
+          type: 'message',
+          content: [{ type: 'output_text', text: fixture.output_text }]
+        }
+      ]
+    });
+
+    await expect(
+      new OpenAiResponsesAdapter(post).analyze(
+        profile,
+        { title: 'A', url: 'https://a.test', currentFolderPath: [] },
+        new AbortController().signal
+      )
+    ).resolves.toMatchObject({ title: '示例' });
+  });
+
   it('sends optional web search and vision inputs in Responses format', async () => {
     const post = vi.fn().mockResolvedValue({
       ...fixture,
@@ -142,6 +162,33 @@ describe('OpenAiResponsesAdapter', () => {
       vision: false,
       webSearch: 'not-used'
     });
+  });
+
+  it('falls back when an enhanced Responses request returns no text', async () => {
+    const post = vi
+      .fn()
+      .mockResolvedValueOnce({ output: [{ type: 'web_search_call' }] })
+      .mockResolvedValueOnce(fixture);
+
+    const result = await new OpenAiResponsesAdapter(post).analyze(
+      profile,
+      {
+        title: 'A',
+        url: 'https://a.test',
+        currentFolderPath: [],
+        webSearch: true
+      },
+      new AbortController().signal
+    );
+
+    expect(result).toMatchObject({
+      title: '示例',
+      toolUsage: { webSearch: 'not-used' }
+    });
+    expect(post).toHaveBeenCalledTimes(2);
+    const fallbackBody = post.mock.calls[1]![0].body as Record<string, unknown>;
+    expect(fallbackBody.tools).toBeUndefined();
+    expect(fallbackBody.input).toEqual(expect.any(String));
   });
 
   it('keeps working when a compatible provider ignores text.format', async () => {

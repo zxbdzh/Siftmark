@@ -141,7 +141,12 @@ export class OpenAiChatAdapter implements AiAdapter {
       enhancementsAccepted = false;
       response = await request(false);
     }
-    const text = response.choices?.[0]?.message?.content;
+    let text = response.choices?.[0]?.message?.content;
+    if (!text && hasEnhancements && enhancementsAccepted) {
+      enhancementsAccepted = false;
+      response = await request(false);
+      text = response.choices?.[0]?.message?.content;
+    }
     if (!text)
       throw new ProviderError(
         'unknown-result',

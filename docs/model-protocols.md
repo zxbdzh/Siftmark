@@ -21,7 +21,7 @@ Endpoint 填写协议根地址。适配器会去掉末尾 `/` 并追加下表路
 - Embedding：`POST {endpoint}/embeddings`
 - 认证：`Authorization: Bearer <API Key>`
 - 分析请求：`model`、system/user `messages`、`response_format.type=json_schema` 与 strict Schema。
-- 文本响应：`choices[0].message.content`，内容再经本地 JSON/Zod 校验。
+- 文本响应：`choices[0].message.content`，内容再经本地 JSON/Zod 校验；增强请求成功但无文本时，会移除联网与图片参数降级重试一次。
 - Embedding 请求：`model`、`input[]`、`encoding_format=float`。
 
 适用于 OpenAI Chat 兼容服务。DeepSeek、通义千问、智谱、豆包、MiniMax 和 Ollama 预置均复用此适配器；预置只是可编辑默认值，不保证服务商账号、模型可用性或长期兼容性。
@@ -34,7 +34,7 @@ Endpoint 填写协议根地址。适配器会去掉末尾 `/` 并追加下表路
 - Embedding：`POST {endpoint}/embeddings`
 - 认证：`Authorization: Bearer <API Key>`
 - 分析请求：`model`、`instructions`、`input`、`text.format.type=json_schema`。
-- 文本响应：优先 `output_text`，否则查找 `output[].content[]` 的 `output_text`。
+- 文本响应：优先使用非空 `output_text`，否则查找 `output[].content[]` 的非空 `output_text`；增强请求成功但无文本时，会移除联网与图片参数降级重试一次。
 
 OpenAI 预置默认使用此协议。Embedding 与 Chat 协议共享 OpenAI 兼容形状。
 

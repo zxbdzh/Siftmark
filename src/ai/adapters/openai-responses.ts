@@ -69,11 +69,7 @@ export class OpenAiResponsesAdapter implements AiAdapter {
         timeoutMs: profile.timeoutMs
       });
       usageTokens = response.usage?.total_tokens;
-      const text =
-        response.output_text ??
-        response.output
-          ?.flatMap((item) => item.content ?? [])
-          .find((item) => item.type === 'output_text')?.text;
+      const text = readResponseText(response);
       if (!text)
         throw new ProviderError(
           'unknown-result',
@@ -147,11 +143,12 @@ export class OpenAiResponsesAdapter implements AiAdapter {
       enhancementsAccepted = false;
       response = await request(false);
     }
-    const text =
-      response.output_text ??
-      response.output
-        ?.flatMap((item) => item.content ?? [])
-        .find((item) => item.type === 'output_text')?.text;
+    let text = readResponseText(response);
+    if (!text && hasEnhancements && enhancementsAccepted) {
+      enhancementsAccepted = false;
+      response = await request(false);
+      text = readResponseText(response);
+    }
     if (!text)
       throw new ProviderError(
         'unknown-result',
@@ -216,4 +213,11 @@ function isEnhancementCompatibilityError(error: unknown): boolean {
     error.kind === 'validation' &&
     (error.status === 400 || error.status === 422)
   );
+}
+
+function readResponseText(response: ResponsesResponse): string | undefined {
+  if (response.output_text?.trim()) return response.output_text;
+  return response.output
+    ?.flatMap((item) => item.content ?? [])
+    .find((item) => item.type === 'output_text' && item.text?.trim())?.text;
 }
