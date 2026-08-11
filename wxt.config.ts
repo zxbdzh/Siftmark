@@ -2,6 +2,12 @@ import { defineConfig } from 'wxt';
 
 export default defineConfig({
   modules: ['@wxt-dev/module-react'],
+  vite: () => ({
+    build: {
+      // Chrome treats extension-page module preloads as a different execution world.
+      modulePreload: false
+    }
+  }),
   manifest: {
     name: '__MSG_extensionName__',
     description: '__MSG_extensionDescription__',

@@ -45,6 +45,23 @@ test('loads the current popup, manager, options, side panel, and worker', async 
   await expect(sidePanel.getByText('没有进行中的收藏')).toBeVisible();
 });
 
+test('loads the side panel without extension module-preload warnings', async ({
+  context,
+  extensionId
+}) => {
+  const sidePanel = await context.newPage();
+  const preloadWarnings: string[] = [];
+  sidePanel.on('console', (message) => {
+    if (/preload|cross-world extension resource mismatch/i.test(message.text()))
+      preloadWarnings.push(message.text());
+  });
+
+  await sidePanel.goto(`chrome-extension://${extensionId}/sidepanel.html`);
+  await expect(sidePanel).toHaveTitle('Siftmark Agent');
+  await expect(sidePanel.getByText('没有进行中的收藏')).toBeVisible();
+  expect(preloadWarnings).toEqual([]);
+});
+
 test('supports the bookmark tree, Agent proposal, and in-page approval shell', async ({
   context,
   extensionId
