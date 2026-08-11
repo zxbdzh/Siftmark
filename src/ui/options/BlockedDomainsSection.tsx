@@ -41,8 +41,8 @@ export function BlockedDomainsSection() {
 
   return (
     <section>
-      <h2>网页按钮屏蔽列表</h2>
-      <p>列表中的网站不会显示悬浮智能收藏按钮，刷新网页后生效。</p>
+      <h2>页面内容读取屏蔽列表</h2>
+      <p>收藏这些网站时只使用标题、网址和描述，不读取页面正文。</p>
       <form
         className="blocked-domain-form"
         onSubmit={(event) => {

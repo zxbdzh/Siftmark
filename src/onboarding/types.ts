@@ -1,7 +1,6 @@
 export const ONBOARDING_STEPS = [
   'permissions-privacy',
   'special-folders',
-  'floating-button',
   'model',
   'migration',
   'read-only-scan'

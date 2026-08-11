@@ -104,6 +104,20 @@ export class UndoService {
       const before = operation.before.metadata as BookmarkMetadata | undefined;
       if (before) await this.metadata.put(before);
       else await this.metadata.softDelete(operation.bookmarkId, this.now());
+    } else if (operation.type === 'remove') {
+      const current = await this.bookmarks.get(operation.bookmarkId);
+      if (current) return conflict(operation, current);
+      await this.bookmarks.create({
+        parentId: String(operation.before.parentId),
+        index: Number(operation.before.index),
+        title: String(operation.before.title),
+        ...(typeof operation.before.url === 'string'
+          ? { url: operation.before.url }
+          : {}),
+        ...(typeof operation.before.dateAdded === 'number'
+          ? { dateAdded: operation.before.dateAdded }
+          : {})
+      });
     } else {
       return err({ code: 'unsupported', type: operation.type });
     }

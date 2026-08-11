@@ -1,6 +1,9 @@
 import { Bot, CheckCircle2, PlugZap, Save } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import type { ModelProfileService } from '../../ai/profiles/profile-service';
+import type {
+  ModelProfileService,
+  ProfileAssignmentKey
+} from '../../ai/profiles/profile-service';
 import { providerPresets } from '../../ai/profiles/presets';
 import type { ProfileRepository } from '../../ai/profiles/profile-repository';
 import type { AiCapability, AiProtocol, ModelProfile } from '../../ai/types';
@@ -11,6 +14,18 @@ const capabilities: Array<{ id: AiCapability; label: string }> = [
   { id: 'rename', label: '重命名' },
   { id: 'summarize', label: '摘要' },
   { id: 'embed', label: '语义检索' }
+];
+
+const assignmentTasks: Array<{
+  id: ProfileAssignmentKey;
+  label: string;
+  capability: AiCapability;
+}> = [
+  { id: 'agent', label: '收藏 Agent', capability: 'classify' },
+  ...capabilities.map((capability) => ({
+    ...capability,
+    capability: capability.id
+  }))
 ];
 
 const blank: ModelProfile = {
@@ -54,7 +69,7 @@ export function ModelProfilesSection({
     [profiles]
   );
   const assignedKeys = new Set(
-    capabilities.flatMap(({ id }) => {
+    assignmentTasks.flatMap(({ id }) => {
       const value = validAssignmentValue(id, assignments, profiles);
       return value ? [value] : [];
     })
@@ -111,7 +126,7 @@ export function ModelProfilesSection({
   };
 
   const updateAssignment = async (
-    capability: AiCapability,
+    capability: ProfileAssignmentKey,
     profileKey: string
   ) => {
     if (!service) return;
@@ -125,8 +140,8 @@ export function ModelProfilesSection({
       }
       const next = await service.getAssignments();
       setAssignments(next);
-      const label = capabilities.find((item) => item.id === capability)?.label;
-      setStatus(profileKey ? `${label}模型已更新` : `${label}已停用`);
+      const label = assignmentTasks.find((item) => item.id === capability)?.label;
+      setStatus(profileKey ? `${label} 模型已更新` : `${label}已停用`);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : '任务模型更新失败');
     }
@@ -351,24 +366,24 @@ export function ModelProfilesSection({
           <p>每项能力可以使用不同的已验证模型，修改后立即生效。</p>
         </div>
         <div className="ai-assignment-grid">
-          {capabilities.map((capability) => (
-            <label key={capability.id}>
-              <span>{capability.label}</span>
+          {assignmentTasks.map((task) => (
+            <label key={task.id}>
+              <span>{task.label}</span>
               <select
                 value={validAssignmentValue(
-                  capability.id,
+                  task.id,
                   assignments,
                   profiles
                 )}
                 disabled={!service}
                 onChange={(event) =>
-                  void updateAssignment(capability.id, event.target.value)
+                  void updateAssignment(task.id, event.target.value)
                 }
               >
                 <option value="">未启用</option>
                 {verifiedProfiles
                   .filter((profile) =>
-                    profile.capabilities.includes(capability.id)
+                    profile.capabilities.includes(task.capability)
                   )
                   .map((profile) => (
                     <option key={keyOf(profile)} value={keyOf(profile)}>
@@ -399,15 +414,16 @@ function replaceProfile(
 }
 
 function validAssignmentValue(
-  capability: AiCapability,
+  capability: ProfileAssignmentKey,
   assignments: ProfileAssignments,
   profiles: ModelProfile[]
 ): string {
   const assigned = assignments[capability];
   if (!assigned) return '';
   const profile = profiles.find((item) => keyOf(item) === assigned);
+  const requiredCapability = capability === 'agent' ? 'classify' : capability;
   return profile?.state === 'verified' &&
-    profile.capabilities.includes(capability)
+    profile.capabilities.includes(requiredCapability)
     ? assigned
     : '';
 }

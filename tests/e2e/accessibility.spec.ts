@@ -2,11 +2,7 @@ import path from 'node:path';
 import AxeBuilder from '@axe-core/playwright';
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures/extension';
-import {
-  completeOnboarding,
-  createRootFolder,
-  putDatabaseRecord
-} from './fixtures/chrome-state';
+import { createRootFolder, putDatabaseRecord } from './fixtures/chrome-state';
 import { openExtensionPage } from './helpers/extension-pages';
 
 test('keeps the primary extension surfaces accessible and keyboard ordered', async ({
@@ -18,79 +14,100 @@ test('keeps the primary extension surfaces accessible and keyboard ordered', asy
   await expectNoSeriousViolations(popup, 'popup');
 
   const manager = await openExtensionPage(context, extensionId, 'manager.html');
-  await expect(manager.getByRole('tab', { name: '书签' })).toBeVisible();
+  await expect(manager.getByPlaceholder('搜索书签…')).toBeVisible();
   await expectNoSeriousViolations(manager, 'manager');
   await manager.locator('body').click({ position: { x: 2, y: 2 } });
   await manager.keyboard.press('Tab');
-  await expect(manager.getByRole('tab', { name: '书签' })).toBeFocused();
+  await expect(manager.getByRole('button', { name: '设置' })).toBeFocused();
   await manager.keyboard.press('Tab');
-  await expect(manager.getByRole('tab', { name: '审核' })).toBeFocused();
+  await expect(manager.getByPlaceholder('搜索书签…')).toBeFocused();
 
-  const onboarding = await openExtensionPage(
+  const options = await openExtensionPage(context, extensionId, 'options.html');
+  await expect(
+    options.getByRole('heading', { name: '设置', exact: true })
+  ).toBeVisible();
+  await expectNoSeriousViolations(options, 'options');
+  await options.locator('body').click({ position: { x: 2, y: 2 } });
+  await options.keyboard.press('Tab');
+  await expect(options.getByRole('link', { name: '设置' })).toBeFocused();
+
+  const sidePanel = await openExtensionPage(
     context,
     extensionId,
-    'options.html'
+    'sidepanel.html'
   );
-  await expect(
-    onboarding.getByRole('heading', { name: '权限与隐私' })
-  ).toBeVisible();
-  await expectNoSeriousViolations(onboarding, 'onboarding');
-  await onboarding.locator('body').click({ position: { x: 2, y: 2 } });
-  await onboarding.keyboard.press('Tab');
-  await expect(
-    onboarding.getByRole('button', { name: '授权任务通知' })
-  ).toBeFocused();
-  await onboarding.keyboard.press('Tab');
-  await expect(
-    onboarding.getByRole('button', { name: '跳过此步' })
-  ).toBeFocused();
-
-  await completeOnboarding(onboarding);
-  await expect(onboarding.getByRole('heading', { name: '设置' })).toBeVisible();
-  await expectNoSeriousViolations(onboarding, 'options');
+  await expect(sidePanel.getByText('没有进行中的收藏')).toBeVisible();
+  await expectNoSeriousViolations(sidePanel, 'empty side panel');
 });
 
-test('keeps review, import preview, and reset confirmation accessible', async ({
+test('keeps Agent approval, import preview, and reset confirmation accessible', async ({
   context,
   extensionId
 }) => {
   const manager = await openExtensionPage(context, extensionId, 'manager.html');
-  const folderId = await createRootFolder(manager, '无障碍审核');
+  const folderId = await createRootFolder(manager, '无障碍审批');
   const bookmark = await manager.evaluate(
     async (parentId) =>
       chrome.bookmarks.create({
         parentId,
-        title: '原始审核标题',
+        title: '原始审批标题',
         url: 'https://a11y.siftmark.test/'
       }),
     folderId
   );
-  await putDatabaseRecord(manager, 'analysisProposals', {
-    id: 'a11y-proposal',
+  const timestamp = Date.now();
+  await putDatabaseRecord(manager, 'captureSessions', {
+    id: 'a11y-capture-session',
     bookmarkId: bookmark.id,
-    sourceSnapshot: bookmark,
-    result: {
-      folderPath: ['无障碍审核'],
-      title: '可访问的建议标题',
-      tags: ['无障碍'],
-      summary: '用于验证审核工作区语义。',
-      confidence: 'low',
-      reason: '需要用户确认'
-    },
     state: 'pending',
-    category: 'analysis',
-    createdAt: Date.now()
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    expiresAt: timestamp + 60_000,
+    payload: {
+      id: 'a11y-capture-session',
+      bookmarkId: bookmark.id,
+      trigger: 'native-bookmark',
+      sourceSnapshot: bookmark,
+      state: 'pending',
+      plan: {
+        destination: {
+          folderId,
+          path: [{ id: folderId, title: '无障碍审批' }],
+          newFolders: []
+        },
+        title: '可访问的建议标题',
+        tags: ['无障碍'],
+        summary: '用于验证审批界面语义。',
+        confidence: 'low',
+        reason: '需要用户确认',
+        relatedBookmarks: [],
+        generatedAt: timestamp
+      },
+      risk: {
+        decision: 'approval',
+        reasons: ['low-confidence'],
+        canExecute: true
+      },
+      messages: [],
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      expiresAt: timestamp + 60_000
+    }
   });
-  await manager.reload();
-  await manager.getByRole('tab', { name: '审核' }).click();
-  await expect(
-    manager.getByRole('heading', { name: '可访问的建议标题' })
-  ).toBeVisible();
-  await expectNoSeriousViolations(manager, 'review workspace');
+  const sidePanel = await openExtensionPage(
+    context,
+    extensionId,
+    'sidepanel.html?session=a11y-capture-session'
+  );
+  await expect(sidePanel.getByText('可访问的建议标题')).toBeVisible();
+  await expectNoSeriousViolations(sidePanel, 'Agent approval');
 
-  const options = await openExtensionPage(context, extensionId, 'options.html');
-  await completeOnboarding(options);
-  const fileInput = options.locator('input[type="file"]');
+  const backup = await openExtensionPage(
+    context,
+    extensionId,
+    'options.html#backup'
+  );
+  const fileInput = backup.locator('input[type="file"]');
   await fileInput.setInputFiles(
     path.join(
       process.cwd(),
@@ -100,10 +117,11 @@ test('keeps review, import preview, and reset confirmation accessible', async ({
       'markai-backup.json'
     )
   );
-  await options.getByRole('button', { name: '本地解析' }).click();
-  await expect(options.getByText('MarkAI · 版本 1')).toBeVisible();
-  await expectNoSeriousViolations(options, 'import preview');
+  await backup.getByRole('button', { name: '本地解析' }).click();
+  await expect(backup.getByText('MarkAI · 版本 1')).toBeVisible();
+  await expectNoSeriousViolations(backup, 'import preview');
 
+  const options = await openExtensionPage(context, extensionId, 'options.html');
   const reset = options.locator('.reset-section');
   await reset.getByLabel('重置范围').selectOption('all-siftmark-data');
   await reset.getByRole('button', { name: '预览影响' }).click();

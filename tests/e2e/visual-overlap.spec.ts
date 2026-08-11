@@ -1,7 +1,7 @@
 import path from 'node:path';
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures/extension';
-import { completeOnboarding, createRootFolder } from './fixtures/chrome-state';
+import { createRootFolder } from './fixtures/chrome-state';
 import { openExtensionPage } from './helpers/extension-pages';
 
 test('keeps controls reachable, text fitted, and pages free of overlap', async ({
@@ -30,31 +30,32 @@ test('keeps controls reachable, text fitted, and pages free of overlap', async (
   await manager.setViewportSize({ width: 800, height: 700 });
   await manager.reload();
   await manager
-    .getByRole('treeitem', {
-      name: '用于验证窄屏文本适配的超长文件夹名称'
-    })
-    .click();
+    .getByPlaceholder('搜索书签…')
+    .fill('用于验证标题不会挤压相邻控件的超长书签名称');
   await expect(
     manager.getByText('用于验证标题不会挤压相邻控件的超长书签名称')
   ).toBeVisible();
   await expectVisualIntegrity(manager, 'manager 800x700');
-  await manager.getByRole('button', { name: '打开详情' }).click();
-  await expect(manager.getByRole('dialog', { name: '书签详情' })).toBeVisible();
-  await expectVisualIntegrity(manager, 'manager detail drawer');
+  await manager.setViewportSize({ width: 390, height: 844 });
+  await expectVisualIntegrity(manager, 'manager 390x844');
 
   const options = await openExtensionPage(context, extensionId, 'options.html');
   await options.setViewportSize({ width: 360, height: 760 });
   await expect(
-    options.getByRole('heading', { name: '权限与隐私' })
+    options.getByRole('heading', { name: '设置', exact: true })
   ).toBeVisible();
-  await expectVisualIntegrity(options, 'onboarding 360x760');
+  await expectVisualIntegrity(options, 'options 360x760');
 
-  await completeOnboarding(options);
   await options.setViewportSize({ width: 800, height: 700 });
-  await expect(options.getByRole('heading', { name: '设置' })).toBeVisible();
   await expectVisualIntegrity(options, 'options 800x700');
 
-  await options
+  const backup = await openExtensionPage(
+    context,
+    extensionId,
+    'options.html#backup'
+  );
+  await backup.setViewportSize({ width: 800, height: 700 });
+  await backup
     .locator('input[type="file"]')
     .setInputFiles(
       path.join(
@@ -65,13 +66,15 @@ test('keeps controls reachable, text fitted, and pages free of overlap', async (
         'markai-backup.json'
       )
     );
-  await options.getByRole('button', { name: '本地解析' }).click();
-  await expect(options.getByText('MarkAI · 版本 1')).toBeVisible();
+  await backup.getByRole('button', { name: '本地解析' }).click();
+  await expect(backup.getByText('MarkAI · 版本 1')).toBeVisible();
+  await expectVisualIntegrity(backup, 'import preview');
+
   const reset = options.locator('.reset-section');
   await reset.getByLabel('重置范围').selectOption('all-siftmark-data');
   await reset.getByRole('button', { name: '预览影响' }).click();
   await expect(reset.getByLabel('确认短语')).toBeVisible();
-  await expectVisualIntegrity(options, 'import and reset states');
+  await expectVisualIntegrity(options, 'reset confirmation');
 });
 
 async function expectVisualIntegrity(page: Page, surface: string) {
@@ -147,10 +150,16 @@ async function expectVisualIntegrity(page: Page, surface: string) {
       let parent = control.element.parentElement;
       while (parent && !visible(parent)) parent = parent.parentElement;
       if (parent) {
+        const parentStyle = getComputedStyle(parent);
+        const horizontallyScrollable =
+          parent.scrollWidth > parent.clientWidth + 1 &&
+          (parentStyle.overflowX === 'auto' ||
+            parentStyle.overflowX === 'scroll');
         const parentBox = parent.getBoundingClientRect();
         if (
-          control.box.left < parentBox.left - 1 ||
-          control.box.right > parentBox.right + 1
+          !horizontallyScrollable &&
+          (control.box.left < parentBox.left - 1 ||
+            control.box.right > parentBox.right + 1)
         ) {
           findings.push(`outside-parent:${control.name}`);
         }

@@ -1,131 +1,129 @@
+import type { CaptureSession } from '../../src/capture-agent';
 import { expect, test } from './fixtures/extension';
 import { createRootFolder, readDatabaseStore } from './fixtures/chrome-state';
 import { openExtensionPage } from './helpers/extension-pages';
 
-const fixtureOrigin = 'http://siftmark.test:4173';
+const fixtureOrigin = 'http://siftmark.test:43173';
 
-test('saves before AI responds, captures a thumbnail, reviews selected fields, and supports undo', async ({
+test('saves first, requests approval for risk, applies locally, and supports undo', async ({
   context,
   extensionId
 }) => {
   test.setTimeout(60_000);
   const manager = await openExtensionPage(context, extensionId, 'manager.html');
-  const folderId = await createRootFolder(manager, '端到端收件箱');
-  const undoUrl = `${fixtureOrigin}/article?flow=undo`;
-  const undoArticle = await context.newPage();
-  await undoArticle.goto(undoUrl);
-  const undoTabId = await findTabId(manager, undoUrl);
-  await mockActiveTab(context, undoTabId, undoUrl);
-  const undoPopup = await openExtensionPage(context, extensionId, 'popup.html');
-  await undoPopup.getByLabel('保存到').selectOption(folderId);
-  await undoPopup.getByRole('button', { name: '保存书签' }).click();
-  await expect(undoPopup.getByRole('status')).toContainText('已保存');
-  await expect.poll(() => findBookmarkId(manager, undoUrl)).not.toBe('');
-  await undoPopup.getByRole('button', { name: '撤销最近保存' }).click();
-  await expect.poll(() => findBookmarkId(manager, undoUrl)).toBe('');
-
+  const destinationId = await createRootFolder(manager, '测试');
+  const inboxId = await createRootFolder(manager, '端到端收件箱');
+  await configureCaptureAgent(manager, inboxId);
   await resetProvider();
-  await setProviderBehavior({ delayAnalysisMs: 4_000 });
-  await configureClassifier(manager);
+  await setProviderBehavior({ delayAnalysisMs: 2_000 });
 
-  const reviewUrl = `${fixtureOrigin}/article?flow=review`;
+  const url = `${fixtureOrigin}/article?flow=capture-agent`;
   const article = await context.newPage();
-  await article.goto(reviewUrl);
-  const articleTabId = await findTabId(manager, reviewUrl);
-  await mockActiveTab(context, articleTabId, reviewUrl);
-  const popup = await openExtensionPage(context, extensionId, 'popup.html');
-  await expect(
-    popup.getByRole('heading', { name: 'Siftmark 本地文章' })
-  ).toBeVisible();
-  await popup.getByLabel('保存到').selectOption(folderId);
-  await manager.evaluate(
-    (tabId) => chrome.tabs.update(tabId, { active: true }),
-    articleTabId
+  await article.goto(url);
+  await article.bringToFront();
+  const worker =
+    context.serviceWorkers()[0] ??
+    (await context.waitForEvent('serviceworker'));
+
+  const savedAt = Date.now();
+  const bookmark = await worker.evaluate(
+    async ({ parentId, targetUrl }) =>
+      chrome.bookmarks.create({
+        parentId,
+        index: 0,
+        title: 'Siftmark 本地文章',
+        url: targetUrl
+      }),
+    { parentId: destinationId, targetUrl: url }
   );
-  await popup.getByRole('button', { name: '保存书签' }).click();
-  await expect(popup.getByRole('status')).toContainText('已保存，正在后台分析');
-  const reviewBookmarkId = await expect
-    .poll(() => findBookmarkId(manager, reviewUrl))
-    .not.toBe('')
-    .then(() => findBookmarkId(manager, reviewUrl));
-  await expect.poll(providerAnalysisRequestCount).toBe(1);
-  expect(
-    (
-      await readDatabaseStore<{ bookmarkId: string }>(
-        manager,
-        'analysisProposals'
-      )
-    ).some((proposal) => proposal.bookmarkId === reviewBookmarkId)
-  ).toBe(false);
+  expect(Date.now() - savedAt).toBeLessThan(2_000);
+  await expect.poll(() => findBookmarkId(manager, url)).toBe(bookmark.id);
 
   await expect
-    .poll(async () => {
-      const rows = await readDatabaseStore<{
-        bookmarkId: string;
-        state: string;
-        result: { title: string; tags: string[]; summary: string };
-      }>(manager, 'analysisProposals');
-      return rows.find((proposal) => proposal.bookmarkId === reviewBookmarkId);
-    })
+    .poll(async () => (await findCaptureSession(manager, bookmark.id))?.state)
+    .toBe('pending');
+  const pending = await findCaptureSession(manager, bookmark.id);
+  expect(pending).toMatchObject({
+    state: 'pending',
+    plan: {
+      title: '本地模型建议标题',
+      destination: { folderId: destinationId }
+    },
+    risk: {
+      decision: 'approval',
+      canExecute: true
+    }
+  });
+  await expect.poll(() => bookmarkParent(manager, bookmark.id)).toBe(inboxId);
+
+  const approval = article.getByRole('dialog');
+  await expect(approval).toContainText('批准这次整理吗？');
+  await expect(approval).toContainText('测试');
+  await expect(approval).toContainText('本地模型建议标题');
+  await approval.getByRole('button', { name: '允许' }).click();
+
+  await expect
+    .poll(() => bookmarkState(manager, bookmark.id))
     .toMatchObject({
-      state: 'pending',
-      result: {
-        title: '本地模型建议标题',
-        tags: ['端到端'],
-        summary: '本地夹具摘要'
-      }
+      parentId: destinationId,
+      title: '本地模型建议标题'
     });
-  await expect
-    .poll(async () => {
-      const thumbnails = await readDatabaseStore<{
-        bookmarkId: string;
-        state: string;
-        width?: number;
-        height?: number;
-      }>(manager, 'thumbnails');
-      return thumbnails.find(
-        (thumbnail) => thumbnail.bookmarkId === reviewBookmarkId
-      );
-    })
-    .toMatchObject({ state: 'ready' });
+  await expect(article.getByRole('status')).toContainText('收藏已放好');
 
-  await manager.reload();
-  await manager.getByRole('tab', { name: '审核' }).click();
-  await expect(
-    manager.getByRole('heading', { name: '本地模型建议标题' })
-  ).toBeVisible();
-  await manager.getByLabel('folder').uncheck();
-  await manager.getByLabel('tags').uncheck();
-  await manager.getByLabel('summary').uncheck();
-  await manager.getByRole('button', { name: '应用所选字段' }).click();
+  const popup = await openExtensionPage(context, extensionId, 'popup.html');
+  await expect(popup.getByRole('heading', { name: '最近结果' })).toBeVisible();
+  await expect(popup.getByText('本地模型建议标题')).toBeVisible();
+  await popup.getByRole('button', { name: '撤销 本地模型建议标题' }).click();
+
   await expect
-    .poll(() =>
-      manager.evaluate(
-        async (id) => (await chrome.bookmarks.get(id))[0]?.title,
-        reviewBookmarkId
-      )
-    )
-    .toBe('本地模型建议标题');
-  const metadata = await readDatabaseStore<{ bookmarkId: string }>(
-    manager,
-    'bookmarkMetadata'
-  );
-  expect(metadata.some((row) => row.bookmarkId === reviewBookmarkId)).toBe(
-    false
-  );
+    .poll(() => bookmarkState(manager, bookmark.id))
+    .toMatchObject({ parentId: inboxId, title: 'Siftmark 本地文章' });
+  await expect(popup.getByText('已撤销')).toBeVisible();
 });
 
-async function findTabId(
+async function configureCaptureAgent(
   page: import('@playwright/test').Page,
-  url: string
-): Promise<number> {
-  return page.evaluate(
-    (targetUrl) =>
-      new Promise<number>((resolve) =>
-        chrome.tabs.query({ url: targetUrl }, (tabs) => resolve(tabs[0]!.id!))
-      ),
-    url
+  inboxId: string
+): Promise<void> {
+  await page.evaluate(async (configuredInboxId) => {
+    await chrome.storage.local.set({
+      'siftmark.ai.profiles.v1': [
+        {
+          id: 'e2e-classifier',
+          version: 'v1',
+          name: '端到端收藏模型',
+          protocol: 'openai-chat',
+          endpoint: 'http://127.0.0.1:43173/v1',
+          model: 'fixture-model',
+          apiKey: 'e2e-secret-key',
+          timeoutMs: 10_000,
+          capabilities: ['classify', 'rename', 'summarize'],
+          state: 'verified',
+          verifiedAt: Date.now()
+        }
+      ],
+      'siftmark.settings.profile-assignments.v1': {
+        classify: 'e2e-classifier@v1',
+        agent: 'e2e-classifier@v1'
+      },
+      'siftmark.settings.special-folders.v1': {
+        inboxId: configuredInboxId
+      }
+    });
+  }, inboxId);
+}
+
+async function findCaptureSession(
+  page: import('@playwright/test').Page,
+  bookmarkId: string
+): Promise<CaptureSession | undefined> {
+  const records = await readDatabaseStore<{ payload: CaptureSession }>(
+    page,
+    'captureSessions'
   );
+  return records
+    .map((record) => record.payload)
+    .find((session) => session.bookmarkId === bookmarkId);
 }
 
 async function findBookmarkId(
@@ -139,68 +137,28 @@ async function findBookmarkId(
   );
 }
 
-async function mockActiveTab(
-  context: import('@playwright/test').BrowserContext,
-  tabId: number,
-  url: string
-): Promise<void> {
-  await context.addInitScript(
-    ({ id, targetUrl }) => {
-      if (!globalThis.chrome?.tabs) return;
-      const original = chrome.tabs.query.bind(chrome.tabs);
-      Object.defineProperty(chrome.tabs, 'query', {
-        configurable: true,
-        value: (
-          queryInfo: chrome.tabs.QueryInfo,
-          callback?: (tabs: chrome.tabs.Tab[]) => void
-        ) => {
-          if (queryInfo.active && queryInfo.currentWindow) {
-            const tabs = [
-              { id, url: targetUrl, title: 'Siftmark 本地文章' }
-            ] as chrome.tabs.Tab[];
-            if (callback) {
-              callback(tabs);
-              return;
-            }
-            return Promise.resolve(tabs);
-          }
-          return original(queryInfo, callback!);
-        }
-      });
-    },
-    { id: tabId, targetUrl: url }
+async function bookmarkParent(
+  page: import('@playwright/test').Page,
+  bookmarkId: string
+): Promise<string | undefined> {
+  return page.evaluate(
+    async (id) => (await chrome.bookmarks.get(id))[0]?.parentId,
+    bookmarkId
   );
 }
 
-async function configureClassifier(
-  page: import('@playwright/test').Page
-): Promise<void> {
-  await page.evaluate(async () => {
-    await chrome.storage.local.set({
-      'siftmark.ai.profiles.v1': [
-        {
-          id: 'e2e-classifier',
-          version: 'v1',
-          name: '端到端分类模型',
-          protocol: 'openai-chat',
-          endpoint: 'http://127.0.0.1:4173/v1',
-          model: 'fixture-model',
-          apiKey: 'e2e-secret-key',
-          timeoutMs: 10_000,
-          capabilities: ['classify', 'rename', 'summarize'],
-          state: 'verified',
-          verifiedAt: Date.now()
-        }
-      ],
-      'siftmark.settings.profile-assignments.v1': {
-        classify: 'e2e-classifier@v1'
-      }
-    });
-  });
+async function bookmarkState(
+  page: import('@playwright/test').Page,
+  bookmarkId: string
+): Promise<{ parentId?: string; title?: string }> {
+  return page.evaluate(async (id) => {
+    const bookmark = (await chrome.bookmarks.get(id))[0];
+    return { parentId: bookmark?.parentId, title: bookmark?.title };
+  }, bookmarkId);
 }
 
 async function resetProvider(): Promise<void> {
-  const response = await fetch('http://127.0.0.1:4173/__e2e/reset', {
+  const response = await fetch('http://127.0.0.1:43173/__e2e/reset', {
     method: 'POST'
   });
   expect(response.ok).toBe(true);
@@ -209,19 +167,10 @@ async function resetProvider(): Promise<void> {
 async function setProviderBehavior(behavior: {
   delayAnalysisMs: number;
 }): Promise<void> {
-  const response = await fetch('http://127.0.0.1:4173/__e2e/behavior', {
+  const response = await fetch('http://127.0.0.1:43173/__e2e/behavior', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(behavior)
   });
   expect(response.ok).toBe(true);
-}
-
-async function providerAnalysisRequestCount(): Promise<number> {
-  const response = await fetch('http://127.0.0.1:4173/__e2e/requests');
-  expect(response.ok).toBe(true);
-  const requests = (await response.json()) as Array<{ body: unknown }>;
-  return requests.filter(
-    (request) => !JSON.stringify(request.body).includes('siftmark_probe')
-  ).length;
 }

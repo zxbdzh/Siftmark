@@ -1,6 +1,5 @@
 import {
   ArrowDownAZ,
-  Bot,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
@@ -49,12 +48,17 @@ export default function App() {
 
   useEffect(() => {
     void refresh();
-    const listener = () => void refresh();
+    let refreshTimer: ReturnType<typeof globalThis.setTimeout> | undefined;
+    const listener = () => {
+      if (refreshTimer !== undefined) globalThis.clearTimeout(refreshTimer);
+      refreshTimer = globalThis.setTimeout(() => void refresh(), 100);
+    };
     browser.bookmarks.onCreated.addListener(listener);
     browser.bookmarks.onChanged.addListener(listener);
     browser.bookmarks.onMoved.addListener(listener);
     browser.bookmarks.onRemoved.addListener(listener);
     return () => {
+      if (refreshTimer !== undefined) globalThis.clearTimeout(refreshTimer);
       browser.bookmarks.onCreated.removeListener(listener);
       browser.bookmarks.onChanged.removeListener(listener);
       browser.bookmarks.onMoved.removeListener(listener);
@@ -94,7 +98,10 @@ export default function App() {
     setSelected((current) => {
       const next = new Set(current);
       const shouldSelect = ids.some((id) => !next.has(id));
-      for (const id of ids) shouldSelect ? next.add(id) : next.delete(id);
+      for (const id of ids) {
+        if (shouldSelect) next.add(id);
+        else next.delete(id);
+      }
       return next;
     });
   };
@@ -199,7 +206,7 @@ export default function App() {
           }}
         >
           <button type="button" className="tree-disclosure" aria-label={folder ? (open ? '折叠文件夹' : '展开文件夹') : '书签'} disabled={!folder} onClick={() => folder && toggleFolder(node.id)}>{folder ? open ? <ChevronDown/> : <ChevronRight/> : <span/>}</button>
-          <label><input type="checkbox" checked={selected.has(node.id)} onChange={() => toggleSelection(node)}/></label>
+          <label><input type="checkbox" aria-label={`${folder ? '选择文件夹' : '选择书签'} ${node.title}`} checked={selected.has(node.id)} onChange={() => toggleSelection(node)}/></label>
           {folder ? <Folder size={17}/> : <span className="bookmark-favicon">{domainInitial(node.url)}</span>}
           <button type="button" className="tree-title" onDoubleClick={() => void editNode(node)} onClick={() => { if (isBookmark(node)) void browser.tabs.create({ url: node.url }); else toggleFolder(node.id); }}><span>{node.title || (folder ? '未命名文件夹' : node.url)}</span>{node.url ? <small>{safeDomain(node.url)}</small> : <small>{childRows.length} 项</small>}</button>
         </div>

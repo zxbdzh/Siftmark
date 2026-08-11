@@ -23,7 +23,7 @@ body { overflow: hidden; background: #fff; color: #202124; }
 .bookmark-favicon { width: 18px; height: 18px; display: grid; place-items: center; border-radius: 4px; background: #e9edff; color: #405ee6; font-size: 10px; font-weight: 700; }
 .tree-title { min-width: 0; min-height: 36px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(100px, 28%); align-items: center; gap: 12px; padding: 0 8px; border: 0; background: transparent; color: inherit; text-align: left; }
 .tree-title span, .tree-title small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tree-title small { color: #858c96; }
+.tree-title small { color: #626a75; }
 .bulk-toolbar { display: flex; flex-direction: column; gap: 7px; padding: 155px 18px 18px; border-left: 1px solid #e1e4e8; background: #fafbfc; }
 .selection-count { margin-bottom: 2px; padding: 8px 10px; border: 1px solid #4f6ef7; border-radius: 999px; color: #3155ee; text-align: center; font-size: 12px; }
 .bulk-toolbar > button { min-height: 35px; display: flex; align-items: center; justify-content: flex-start; gap: 8px; padding: 0 10px; border: 1px solid #d7dce3; border-radius: 4px; background: #fff; color: #3155ee; }

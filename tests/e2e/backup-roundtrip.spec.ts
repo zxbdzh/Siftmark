@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { readFile } from 'node:fs/promises';
 import { expect, test } from './fixtures/extension';
-import { completeOnboarding, createRootFolder } from './fixtures/chrome-state';
+import { createRootFolder } from './fixtures/chrome-state';
 import { openExtensionPage } from './helpers/extension-pages';
 
 test('exports, previews, and safely reimports native and MarkAI backups', async ({
@@ -9,8 +9,14 @@ test('exports, previews, and safely reimports native and MarkAI backups', async 
   extensionId
 }) => {
   test.setTimeout(60_000);
-  const options = await openExtensionPage(context, extensionId, 'options.html');
-  await completeOnboarding(options);
+  const options = await openExtensionPage(
+    context,
+    extensionId,
+    'options.html#backup'
+  );
+  await expect(
+    options.getByRole('heading', { name: '书签备份', exact: true })
+  ).toBeVisible();
   const folderId = await createRootFolder(options, '备份往返');
   const bookmarkId = await options.evaluate(async (parentId) => {
     return (
@@ -65,7 +71,7 @@ test('exports, previews, and safely reimports native and MarkAI backups', async 
           version: 'v1',
           name: '备份模型',
           protocol: 'openai-chat',
-          endpoint: 'http://127.0.0.1:4173/v1',
+          endpoint: 'http://127.0.0.1:43173/v1',
           model: 'fixture-model',
           apiKey: 'backup-secret-key',
           timeoutMs: 10_000,

@@ -62,10 +62,22 @@ import { createPurgeRecycleBinHandler } from '../src/tasks/handlers/purge-recycl
 import { ChromeSmartBookmarkHistoryRepository } from '../src/bookmarks/history-repository';
 import { SmartBookmarkService } from '../src/bookmarks/smart-bookmark-service';
 import { UsageRepository } from '../src/ai/network/usage-repository';
+import {
+  CaptureAgent,
+  DexieCapturePreferenceRepository,
+  DexieCaptureSessionRepository,
+  LocalCaptureExecutor,
+  SmartCapturePlanner,
+  type CaptureAgentAction,
+  type CaptureSession,
+  type CaptureTrigger
+} from '../src/capture-agent';
+import { UndoService } from '../src/operations/undo-service';
 
 const TASK_WAKE_ALARM = 'siftmark-task-wake';
 const RECYCLE_PURGE_ALARM = 'siftmark-recycle-purge';
 const VISIT_TRACKING_KEY = 'siftmark.visits.enabled.v1';
+const ACTIVE_CAPTURE_SESSION_KEY = 'siftmark.capture-agent.active-session.v1';
 
 interface AnalyzeTaskInput {
   bookmarkId: string;
@@ -74,11 +86,14 @@ interface AnalyzeTaskInput {
 }
 
 interface RuntimeMessageInput {
+  action?: 'allow' | 'reject' | 'adjust' | 'undo' | 'retry' | 'message';
   bookmarkId?: string;
   bookmarkIds?: string[];
   folderId?: string;
   tabId?: number;
   taskId?: string;
+  sessionId?: string;
+  message?: string;
   title?: string;
   url?: string;
   windowId?: number;
@@ -105,9 +120,47 @@ export default defineBackground(() => {
   const specialFolderPlacements = new DexieSpecialFolderPlacementRepository(
     database
   );
+  const undo = new UndoService(
+    bookmarks,
+    operations,
+    metadata,
+    Date.now,
+    specialFolderPlacements
+  );
   const importRecoveryPoints = new DexieImportRecoveryRepository(database);
   const usage = new UsageRepository(database);
   const adapters = createDefaultAiAdapterRegistry(usage);
+  const captureSessions = new DexieCaptureSessionRepository(database);
+  const capturePreferences = new DexieCapturePreferenceRepository(database);
+  const capturePlanner = new SmartCapturePlanner({
+    bookmarks,
+    profiles,
+    settings,
+    adapters,
+    metadata
+  });
+  const captureExecutor = new LocalCaptureExecutor({
+    bookmarks,
+    commands: bookmarkCommands,
+    metadata,
+    specialFolders,
+    undo
+  });
+  const captureAgent = new CaptureAgent({
+    bookmarks,
+    sessions: captureSessions,
+    preferences: capturePreferences,
+    planner: capturePlanner,
+    executor: captureExecutor,
+    getSpecialFolderIds: async () => {
+      const configured = await settings.getSpecialFolders();
+      return [
+        configured.inboxId,
+        configured.archiveId,
+        configured.recycleBinId
+      ].filter((id): id is string => Boolean(id));
+    }
+  });
   const smartHistory = new ChromeSmartBookmarkHistoryRepository(
     browser.storage.local
   );
@@ -119,7 +172,7 @@ export default defineBackground(() => {
     smartHistory,
     metadata
   );
-  const smartProcessingUrls = new Set<string>();
+  const captureOwnedUrls = new Set<string>();
   const noteDrafts = new ChromeNoteDraftRepository(browser.storage.local);
   const thumbnailRepository = new DexieThumbnailRepository(database);
   const thumbnailService = new ThumbnailService(
@@ -244,13 +297,13 @@ export default defineBackground(() => {
     void runner.runUntilIdle();
     return { taskId };
   };
-  const runSmartBookmark = async (input: {
+  const runLegacySmartBookmark = async (input: {
     tabId?: number;
     url: string;
     title: string;
     bookmarkId?: string;
   }) => {
-    smartProcessingUrls.add(input.url);
+    captureOwnedUrls.add(input.url);
     try {
       const capture = input.tabId
         ? ((await browser.tabs
@@ -272,26 +325,8 @@ export default defineBackground(() => {
         error: error instanceof Error ? error.message : '智能收藏失败'
       };
     } finally {
-      globalThis.setTimeout(() => smartProcessingUrls.delete(input.url), 10_000);
+      globalThis.setTimeout(() => captureOwnedUrls.delete(input.url), 10_000);
     }
-  };
-  const saveActiveTab = async () => {
-    const [tab] = await browser.tabs.query({
-      active: true,
-      currentWindow: true
-    });
-    if (!tab?.url) return { success: false, error: '无法读取当前页面' };
-    await notificationService.showBrowserMessage(
-      '正在智能收藏',
-      '正在分析当前页面并整理书签…'
-    );
-    const result = await runSmartBookmark({
-      tabId: tab.id,
-      url: tab.url,
-      title: tab.title || tab.url
-    });
-    await showSmartBookmarkResult(result);
-    return result;
   };
   const findActiveTabForUrl = async (url: string) => {
     const tabs = await browser.tabs.query({
@@ -306,38 +341,218 @@ export default defineBackground(() => {
         normalizeUrlConservatively(tab.url) === target
     );
   };
-  const notifyNativeBookmarkStatus = async (
-    tabId: number | undefined,
-    status: 'processing' | 'success' | 'error',
-    detail?: string
+  const publishCaptureSession = async (
+    session: CaptureSession,
+    tabId?: number
   ) => {
-    if (tabId === undefined) return;
-    await browser.tabs
-      .sendMessage(tabId, {
-        type: 'native-smart-bookmark-status',
-        status,
-        detail
+    if (session.state === 'pending' || session.state === 'adjusting')
+      await browser.storage.local.set({
+        [ACTIVE_CAPTURE_SESSION_KEY]: session.id
+      });
+    if (session.state === 'applied' && session.plan) {
+      const current = await bookmarks.get(session.bookmarkId);
+      await smartHistory.add({
+        id: session.id,
+        bookmarkId: session.bookmarkId,
+        title: session.plan.title,
+        url: current?.url ?? session.sourceSnapshot.url ?? '',
+        category: [
+          ...session.plan.destination.path.map((folder) => folder.title),
+          ...session.plan.destination.newFolders
+        ].join('/'),
+        timestamp: session.resolvedAt ?? session.updatedAt
+      });
+    }
+    if (tabId !== undefined)
+      await browser.tabs
+        .sendMessage(tabId, {
+          type: 'capture-agent-session-changed',
+          session
+        })
+        .catch(() => undefined);
+    void browser.runtime
+      .sendMessage({
+        type: 'capture-agent-sessions-changed',
+        sessionId: session.id
       })
       .catch(() => undefined);
   };
-  const showSmartBookmarkResult = async (result: {
-    success: boolean;
-    category?: string;
-    error?: string;
+  const pageCaptureForTab = async (tabId?: number) => {
+    if (tabId === undefined) return undefined;
+    const stored = await browser.storage.local.get(null);
+    const blockedDomains = Object.entries(stored)
+      .filter(
+        ([key, value]) =>
+          key.startsWith('siftmark.content.hidden.') && value === true
+      )
+      .map(([key]) => key.slice('siftmark.content.hidden.'.length));
+    return (await browser.tabs
+      .sendMessage(tabId, { type: 'capture-page', blockedDomains })
+      .catch(() => undefined)) as PageCapture | undefined;
+  };
+  const processCapturedBookmark = async (input: {
+    bookmarkId: string;
+    tabId?: number;
+    trigger: CaptureTrigger;
+    page?: PageCapture;
   }) => {
-    if (result.success) {
-      const path = result.category
-        ? `书签栏 / ${result.category.split('/').join(' / ')}`
-        : '书签栏';
-      await notificationService.showBrowserMessage(
-        '收藏成功',
-        `已保存到：${path}`
+    if (input.tabId !== undefined)
+      await browser.tabs
+        .sendMessage(input.tabId, {
+          type: 'capture-agent-overlay',
+          view: { phase: 'processing' }
+        })
+        .catch(() => undefined);
+    try {
+      const page = input.page ?? (await pageCaptureForTab(input.tabId));
+      const session = await captureAgent.begin({
+        bookmarkId: input.bookmarkId,
+        trigger: input.trigger,
+        ...(page
+          ? {
+              page: {
+                description: page.description,
+                text: page.text
+              }
+            }
+          : {})
+      });
+      await publishCaptureSession(session, input.tabId);
+      return { success: session.state !== 'failed', session };
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : '收藏 Agent 处理失败';
+      if (input.tabId !== undefined)
+        await browser.tabs
+          .sendMessage(input.tabId, {
+            type: 'capture-agent-overlay',
+            view: { phase: 'error', message }
+          })
+          .catch(() => undefined);
+      return { success: false, error: message };
+    }
+  };
+  const initialCaptureFolderId = async () => {
+    const inbox = await specialFolders.check('inbox');
+    if (inbox.ok) return inbox.folder.id;
+    const nodes = await bookmarks.getTree();
+    const roots = nodes.filter((node) => node.parentId === '0' && !node.url);
+    const preferred = roots.find((node) =>
+      /书签栏|收藏夹栏|bookmarks bar|favorites bar/i.test(node.title)
+    );
+    const root = preferred ?? roots[0];
+    if (!root) throw new Error('未找到浏览器书签栏');
+    return root.id;
+  };
+  const saveUrlWithAgent = async (input: {
+    url: string;
+    title: string;
+    trigger: CaptureTrigger;
+    tabId?: number;
+  }) => {
+    if (!isSupportedCaptureUrl(input.url))
+      return { success: false, error: '当前页面不支持收藏' };
+    captureOwnedUrls.add(input.url);
+    try {
+      const bookmark = await bookmarks.create({
+        parentId: await initialCaptureFolderId(),
+        index: 0,
+        title: input.title,
+        url: input.url
+      });
+      return processCapturedBookmark({
+        bookmarkId: bookmark.id,
+        tabId: input.tabId,
+        trigger: input.trigger
+      });
+    } finally {
+      globalThis.setTimeout(() => captureOwnedUrls.delete(input.url), 10_000);
+    }
+  };
+  const saveActiveTab = async (
+    trigger: CaptureTrigger = 'keyboard-command'
+  ) => {
+    const [tab] = await browser.tabs.query({
+      active: true,
+      currentWindow: true
+    });
+    if (!tab?.url) return { success: false, error: '无法读取当前页面' };
+    return saveUrlWithAgent({
+      tabId: tab.id,
+      url: tab.url,
+      title: tab.title || tab.url,
+      trigger
+    });
+  };
+  const openCaptureAgent = async (sessionId: string, tabId?: number) => {
+    await browser.storage.local.set({
+      [ACTIVE_CAPTURE_SESSION_KEY]: sessionId
+    });
+    const targetTabId =
+      tabId ??
+      (
+        await browser.tabs.query({ active: true, lastFocusedWindow: true })
+      )[0]?.id;
+    const sidePanel = (
+      browser as unknown as {
+        sidePanel?: {
+          setOptions(options: {
+            tabId?: number;
+            path: string;
+            enabled: boolean;
+          }): Promise<void>;
+          open(options: { tabId?: number; windowId?: number }): Promise<void>;
+        };
+      }
+    ).sidePanel;
+    try {
+      if (!sidePanel) throw new Error('Side Panel unavailable');
+      if (targetTabId !== undefined)
+        await sidePanel.setOptions({
+          tabId: targetTabId,
+          path: 'sidepanel.html',
+          enabled: true
+        });
+      await sidePanel.open(
+        targetTabId !== undefined ? { tabId: targetTabId } : {}
       );
-    } else {
-      await notificationService.showBrowserMessage(
-        '智能收藏失败',
-        result.error || '请打开 Siftmark 查看详情'
-      );
+      return { success: true };
+    } catch {
+      await browser.tabs.create({
+        url: `${browser.runtime.getURL('/sidepanel.html')}?session=${encodeURIComponent(sessionId)}`
+      });
+      return { success: true, fallback: true };
+    }
+  };
+  const respondToCapture = async (
+    input: RuntimeMessageInput,
+    tabId?: number
+  ) => {
+    if (!input.sessionId || !input.action)
+      return { success: false, error: '收藏任务参数不完整' };
+    if (input.action === 'adjust')
+      return openCaptureAgent(input.sessionId, tabId);
+    let action: CaptureAgentAction;
+    if (input.action === 'message')
+      action = { type: 'message', message: input.message ?? '' };
+    else if (input.action === 'retry') {
+      const page = await pageCaptureForTab(tabId);
+      action = {
+        type: 'retry',
+        ...(page
+          ? { page: { description: page.description, text: page.text } }
+          : {})
+      };
+    } else action = { type: input.action };
+    try {
+      const session = await captureAgent.respond(input.sessionId, action);
+      await publishCaptureSession(session, tabId);
+      return { success: true, session };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : '操作未完成'
+      };
     }
   };
 
@@ -516,6 +731,7 @@ export default defineBackground(() => {
 
   const processTasks = async () => {
     await recoverInterruptedTasks(tasks, Date.now());
+    await captureSessions.expirePending(Date.now());
     await runner.runUntilIdle();
   };
   void processTasks();
@@ -531,11 +747,29 @@ export default defineBackground(() => {
     void registerContextMenus(browser.contextMenus);
   });
   registerBrowserCommands(browser.commands, () => void saveActiveTab());
-  browser.runtime.onMessage.addListener((message: unknown) => {
+  browser.runtime.onMessage.addListener(
+    (message: unknown, sender: { tab?: { id?: number } }) => {
     const value = message as {
       type?: string;
       input?: RuntimeMessageInput;
     };
+    if (value.type === 'capture-agent-list')
+      return captureSessions.list(30);
+    if (value.type === 'capture-agent-list-pending')
+      return captureSessions.listPending(100);
+    if (value.type === 'capture-agent-get' && value.input?.sessionId)
+      return captureSessions.get(value.input.sessionId);
+    if (value.type === 'capture-agent-get-active')
+      return browser.storage.local
+        .get(ACTIVE_CAPTURE_SESSION_KEY)
+        .then(async (stored) => {
+          const sessionId = stored[ACTIVE_CAPTURE_SESSION_KEY];
+          return typeof sessionId === 'string'
+            ? captureSessions.get(sessionId)
+            : null;
+        });
+    if (value.type === 'capture-agent-action' && value.input)
+      return respondToCapture(value.input, sender.tab?.id);
     if (value.type === 'queue-analysis' && value.input?.bookmarkId)
       return enqueueAnalysis({
         bookmarkId: value.input.bookmarkId,
@@ -563,26 +797,30 @@ export default defineBackground(() => {
       );
     if (value.type === 'save-current-page') return saveActiveTab();
     if (value.type === 'smart-bookmark' && value.input?.url)
-      return runSmartBookmark({
+      return saveUrlWithAgent({
         tabId: value.input.tabId,
         url: value.input.url,
-        title: value.input.title || value.input.url
+        title: value.input.title || value.input.url,
+        trigger: 'popup'
       });
-    if (value.type === 'bulk-classify')
-      return Promise.all(
-        (value.input?.bookmarkIds ?? []).map(
-          async (bookmarkId) => {
-            const bookmark = await bookmarks.get(bookmarkId);
-            return bookmark?.url
-              ? runSmartBookmark({
+    if (value.type === 'bulk-classify') {
+      return (async () => {
+        const results = [];
+        for (const bookmarkId of value.input?.bookmarkIds ?? []) {
+          const bookmark = await bookmarks.get(bookmarkId);
+          results.push(
+            bookmark?.url
+              ? await runLegacySmartBookmark({
                   bookmarkId,
                   url: bookmark.url,
                   title: bookmark.title
                 })
-              : { success: false, error: '书签不存在' };
-          }
-        )
-      );
+              : { success: false, error: '书签不存在' }
+          );
+        }
+        return results;
+      })();
+    }
     if (value.type === 'bulk-rename')
       return Promise.all(
         (value.input?.bookmarkIds ?? []).map(
@@ -630,44 +868,18 @@ export default defineBackground(() => {
           status: results[index]?.status ?? 'unchecked'
         }));
       })();
-  });
+    }
+  );
   browser.bookmarks.onCreated.addListener((id, bookmark) => {
-    if (!bookmark.url || smartProcessingUrls.has(bookmark.url)) return;
+    if (!bookmark.url || captureOwnedUrls.has(bookmark.url)) return;
     void settings.getSmartBookmarkSettings().then(async (preference) => {
       if (!preference.captureNativeBookmarks) return;
       const tab = await findActiveTabForUrl(bookmark.url!);
-      await notificationService.showBrowserMessage(
-        '正在智能收藏',
-        '正在分析当前页面并整理书签…'
-      );
-      await notifyNativeBookmarkStatus(
-        tab?.id,
-        'processing',
-        '正在分析页面并整理书签…'
-      );
-      const result = await runSmartBookmark({
+      await processCapturedBookmark({
         bookmarkId: id,
         tabId: tab?.id,
-        url: bookmark.url!,
-        title: bookmark.title
+        trigger: 'native-bookmark'
       });
-      await showSmartBookmarkResult(result);
-      if (result.success && 'category' in result) {
-        const bookmarkPath = result.category
-          ? `书签栏 / ${result.category.split('/').join(' / ')}`
-          : '书签栏';
-        await notifyNativeBookmarkStatus(
-          tab?.id,
-          'success',
-          `收藏成功，保存到：${bookmarkPath}`
-        );
-      } else {
-        await notifyNativeBookmarkStatus(
-          tab?.id,
-          'error',
-          'error' in result ? result.error : '智能收藏失败'
-        );
-      }
     });
   });
   browser.contextMenus.onClicked.addListener((info, tab) => {
@@ -686,11 +898,14 @@ export default defineBackground(() => {
         createdAt: Date.now(),
         truncated: info.selectionText.length > text.length
       });
-    } else if (info.menuItemId === contextMenuIds[0]) void saveActiveTab();
+    } else if (info.menuItemId === contextMenuIds[0])
+      void saveActiveTab('context-menu');
     else if (info.menuItemId === contextMenuIds[1] && info.linkUrl)
-      void runSmartBookmark({
+      void saveUrlWithAgent({
         url: info.linkUrl,
-        title: info.linkUrl
+        title: info.linkUrl,
+        tabId: tab?.id,
+        trigger: 'context-menu'
       });
   });
   browser.tabs.onUpdated.addListener((_tabId, changeInfo, tab) => {
@@ -725,3 +940,11 @@ export default defineBackground(() => {
       });
   });
 });
+
+function isSupportedCaptureUrl(value: string): boolean {
+  try {
+    return ['http:', 'https:'].includes(new URL(value).protocol);
+  } catch {
+    return false;
+  }
+}

@@ -50,7 +50,7 @@ pnpm exec vitest run tests/unit/search/search-service.test.ts
 pnpm exec playwright test tests/e2e/save-and-review.spec.ts --reporter=line
 ```
 
-Playwright 配置先执行 `pnpm build`，再启动本地 `127.0.0.1:4173` 页面/模型夹具。每个测试使用独立临时 Chromium profile，并从 `.output/chrome-mv3` 加载扩展。`siftmark.test` 映射到环回地址；测试不得依赖真实供应商、API Key 或外网。
+Playwright 配置先执行 `pnpm build`，再启动本地 `127.0.0.1:43173` 页面/模型夹具。每个测试使用独立临时 Chromium profile，并从 `.output/chrome-mv3` 加载扩展。`siftmark.test` 映射到环回地址；测试不得依赖真实供应商、API Key 或外网。
 
 ## 数据库与迁移
 

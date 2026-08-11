@@ -23,7 +23,7 @@ describe('onboarding', () => {
 
     expect(await reopened.load()).toMatchObject({
       status: 'in-progress',
-      currentStep: 'floating-button',
+      currentStep: 'model',
       skippedSteps: ['permissions-privacy', 'special-folders']
     });
     expect(
@@ -40,7 +40,6 @@ describe('onboarding', () => {
     for (const title of [
       '权限与隐私',
       '特殊文件夹',
-      '网页悬浮按钮',
       '可选模型',
       '迁移数据',
       '只读扫描'
@@ -56,6 +55,26 @@ describe('onboarding', () => {
       status: 'completed',
       currentStep: null,
       skippedSteps: ONBOARDING_STEPS
+    });
+  });
+
+  it('moves legacy floating-button progress to model setup', async () => {
+    const storage = new MemoryStorage();
+    await storage.set({
+      [ONBOARDING_STORAGE_KEY]: {
+        version: 1,
+        status: 'in-progress',
+        currentStep: 'floating-button',
+        completedSteps: ['permissions-privacy', 'special-folders'],
+        skippedSteps: [],
+        updatedAt: 1
+      }
+    });
+
+    await expect(new ChromeOnboardingStore(storage, () => 40).load()).resolves.toMatchObject({
+      currentStep: 'model',
+      completedSteps: ['permissions-privacy', 'special-folders'],
+      updatedAt: 40
     });
   });
 

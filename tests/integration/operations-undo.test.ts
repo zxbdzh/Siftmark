@@ -32,6 +32,36 @@ describe('operation undo', () => {
     expect(bookmarks.move).not.toHaveBeenCalled();
   });
 
+  it('recreates a removed bookmark from its recorded snapshot', async () => {
+    const operation: OperationRecord = {
+      id: 'remove',
+      type: 'remove',
+      bookmarkId: 'old-id',
+      before: {
+        parentId: 'inbox',
+        index: 1,
+        title: 'A',
+        url: 'https://a.test'
+      },
+      after: {},
+      idempotencyKey: 'key',
+      createdAt: 1
+    };
+    const bookmarks = {
+      get: vi.fn().mockResolvedValue(null),
+      create: vi.fn().mockResolvedValue({ id: 'restored-id' })
+    } as unknown as BookmarkRepository;
+    const operations = {
+      get: vi.fn().mockResolvedValue(operation),
+      markUndone: vi.fn()
+    } as unknown as OperationRepository;
+
+    const result = await new UndoService(bookmarks, operations).undo('remove');
+
+    expect(result.ok).toBe(true);
+    expect(bookmarks.create).toHaveBeenCalledWith(operation.before);
+  });
+
   it('undoes a batch in reverse operation order and reports conflicts', async () => {
     const first: OperationRecord = {
       id: 'first',

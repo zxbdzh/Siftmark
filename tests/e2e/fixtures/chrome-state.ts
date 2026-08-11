@@ -8,7 +8,6 @@ export const COMPLETED_ONBOARDING_STATE = {
   completedSteps: [
     'permissions-privacy',
     'special-folders',
-    'floating-button',
     'model',
     'migration',
     'read-only-scan'

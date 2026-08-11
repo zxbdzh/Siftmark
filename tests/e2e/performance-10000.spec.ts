@@ -7,13 +7,14 @@ import {
   seedLargeBookmarkLibrary
 } from '../performance/bookmark-fixture';
 
-test('keeps a 10,000-bookmark library virtualized, searchable, and responsive', async ({
+test('keeps a 10,000-bookmark tree searchable and responsive', async ({
   context,
   extensionId
 }, testInfo) => {
   test.setTimeout(120_000);
   const manager = await openExtensionPage(context, extensionId, 'manager.html');
-  await expect(manager.locator('.manager-shell')).toBeVisible();
+  await expect(manager.locator('.manager-page')).toBeVisible();
+  await setNativeCapture(manager, false);
   const seededAt = Date.now();
   const fixture = await seedLargeBookmarkLibrary(manager);
   const seedMs = Date.now() - seededAt;
@@ -22,38 +23,20 @@ test('keeps a 10,000-bookmark library virtualized, searchable, and responsive', 
 
   const loadedAt = Date.now();
   await manager.reload();
-  await expect(manager.locator('.bookmark-row').first()).toBeVisible({
+  await expect(manager.locator('.bookmark-tree-row').first()).toBeVisible({
     timeout: 20_000
   });
   const managerLoadMs = Date.now() - loadedAt;
   expect(managerLoadMs).toBeLessThan(20_000);
   await expect
-    .poll(() => manager.locator('.bookmark-row').count())
-    .toBeLessThan(50);
-
-  const bookmarkRegionBefore = await manager
-    .locator('.bookmark-list-region')
-    .boundingBox();
-  await manager.locator('.bookmark-scroll').evaluate((element) => {
-    element.scrollTop = element.scrollHeight;
-  });
-  await expect(manager.getByText(fixture.targetTitle)).toBeVisible();
-  await manager.getByText(fixture.targetTitle).click();
-  expect(await manager.locator('.bookmark-list-region').boundingBox()).toEqual(
-    bookmarkRegionBefore
-  );
+    .poll(() => manager.locator('.bookmark-tree-row').count())
+    .toBeLessThan(300);
 
   const searchStartedAt = Date.now();
-  await manager
-    .getByPlaceholder('搜索标题、网址、标签、摘要和笔记')
-    .fill('性能终点书签 9999');
-  const searchResults = manager.getByRole('group', {
-    name: '当前文件夹书签'
-  });
-  await expect(searchResults.getByText(fixture.targetTitle)).toBeVisible({
+  await manager.getByPlaceholder('搜索书签…').fill('性能终点书签 9999');
+  await expect(manager.getByText(fixture.targetTitle)).toBeVisible({
     timeout: 15_000
   });
-  await expect(manager.getByText(/^本地搜索 · \d+ 项$/)).toBeVisible();
   const searchMs = Date.now() - searchStartedAt;
   expect(searchMs).toBeLessThan(15_000);
 
@@ -78,24 +61,38 @@ test('keeps a 10,000-bookmark library virtualized, searchable, and responsive', 
     })
     .toBe('running');
 
-  const articleUrl = 'http://siftmark.test:4173/article?performance=10000';
+  await setNativeCapture(manager, true);
+
+  const articleUrl = 'http://siftmark.test:43173/article?performance=10000';
   const article = await context.newPage();
   await article.goto(articleUrl);
-  const tabId = await manager.evaluate(
-    (url) =>
-      new Promise<number>((resolve) =>
-        chrome.tabs.query({ url }, (tabs) => resolve(tabs[0]!.id!))
-      ),
-    articleUrl
-  );
-  await mockActiveTab(context, tabId, articleUrl);
-  const popup = await openExtensionPage(context, extensionId, 'popup.html');
-  await popup.getByLabel('保存到').selectOption(fixture.folderIds[0]!);
+  await article.bringToFront();
+  const worker =
+    context.serviceWorkers()[0] ??
+    (await context.waitForEvent('serviceworker'));
   const saveStartedAt = Date.now();
-  await popup.getByRole('button', { name: '保存书签' }).click();
-  await expect(popup.getByRole('status')).toContainText('已保存');
-  const popupSaveMs = Date.now() - saveStartedAt;
-  expect(popupSaveMs).toBeLessThan(2_000);
+  await worker.evaluate(
+    async ({ parentId, url }) =>
+      chrome.bookmarks.create({
+        parentId,
+        index: 0,
+        title: '万级书签保存验证',
+        url
+      }),
+    { parentId: fixture.folderIds[0]!, url: articleUrl }
+  );
+  const nativeSaveMs = Date.now() - saveStartedAt;
+  expect(nativeSaveMs).toBeLessThan(2_000);
+  await expect
+    .poll(() =>
+      manager.evaluate(
+        async (url) => (await chrome.bookmarks.search({ url })).length,
+        articleUrl
+      )
+    )
+    .toBe(1);
+  const popup = await openExtensionPage(context, extensionId, 'popup.html');
+  await expect(popup.getByText('万级书签保存验证')).toBeVisible();
 
   const cdp = await context.newCDPSession(manager);
   await cdp.send('Performance.enable');
@@ -116,8 +113,8 @@ test('keeps a 10,000-bookmark library virtualized, searchable, and responsive', 
           seedMs,
           managerLoadMs,
           searchMs,
-          popupSaveMs,
-          renderedRows: await manager.locator('.bookmark-row').count(),
+          nativeSaveMs,
+          renderedRows: await manager.locator('.bookmark-tree-row').count(),
           heapBytes
         },
         null,
@@ -129,14 +126,14 @@ test('keeps a 10,000-bookmark library virtualized, searchable, and responsive', 
 });
 
 async function resetProvider() {
-  const response = await fetch('http://127.0.0.1:4173/__e2e/reset', {
+  const response = await fetch('http://127.0.0.1:43173/__e2e/reset', {
     method: 'POST'
   });
   expect(response.ok).toBe(true);
 }
 
 async function setProviderBehavior(delayAnalysisMs: number) {
-  const response = await fetch('http://127.0.0.1:4173/__e2e/behavior', {
+  const response = await fetch('http://127.0.0.1:43173/__e2e/behavior', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ delayAnalysisMs })
@@ -153,7 +150,7 @@ async function configureClassifier(page: import('@playwright/test').Page) {
           version: 'v1',
           name: '性能夹具模型',
           protocol: 'openai-chat',
-          endpoint: 'http://127.0.0.1:4173/v1',
+          endpoint: 'http://127.0.0.1:43173/v1',
           model: 'fixture-model',
           apiKey: 'fixture-secret',
           timeoutMs: 10_000,
@@ -163,41 +160,28 @@ async function configureClassifier(page: import('@playwright/test').Page) {
         }
       ],
       'siftmark.settings.profile-assignments.v1': {
-        classify: 'performance-classifier@v1'
+        classify: 'performance-classifier@v1',
+        agent: 'performance-classifier@v1'
       }
     })
   );
 }
 
-async function mockActiveTab(
-  context: import('@playwright/test').BrowserContext,
-  tabId: number,
-  url: string
+async function setNativeCapture(
+  page: import('@playwright/test').Page,
+  captureNativeBookmarks: boolean
 ) {
-  await context.addInitScript(
-    ({ id, targetUrl }) => {
-      if (!globalThis.chrome?.tabs) return;
-      const original = chrome.tabs.query.bind(chrome.tabs);
-      Object.defineProperty(chrome.tabs, 'query', {
-        configurable: true,
-        value: (
-          queryInfo: chrome.tabs.QueryInfo,
-          callback?: (tabs: chrome.tabs.Tab[]) => void
-        ) => {
-          if (queryInfo.active && queryInfo.currentWindow) {
-            const tabs = [
-              { id, url: targetUrl, title: '万级书签保存验证' }
-            ] as chrome.tabs.Tab[];
-            if (callback) {
-              callback(tabs);
-              return;
-            }
-            return Promise.resolve(tabs);
-          }
-          return original(queryInfo, callback!);
+  await page.evaluate(
+    (enabled) =>
+      chrome.storage.local.set({
+        'siftmark.settings.smart-bookmark.v1': {
+          allowNewFolders: true,
+          folderCreationLevel: 'weak',
+          smartRename: true,
+          renameMaxLength: 12,
+          captureNativeBookmarks: enabled
         }
-      });
-    },
-    { id: tabId, targetUrl: url }
+      }),
+    captureNativeBookmarks
   );
 }

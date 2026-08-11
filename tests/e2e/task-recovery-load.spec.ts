@@ -17,7 +17,7 @@ test('recovers 1,000 claimed local tasks without duplicate keys or lost terminal
 }, testInfo) => {
   test.setTimeout(60_000);
   const page = await openExtensionPage(context, extensionId, 'manager.html');
-  await expect(page.locator('.manager-shell')).toBeVisible();
+  await expect(page.locator('.manager-page')).toBeVisible();
 
   const queuedAt = Date.now();
   const taskIds = await page.evaluate(async (count) => {

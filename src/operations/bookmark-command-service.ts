@@ -10,6 +10,7 @@ export interface MoveCommand {
   parentId: string;
   index?: number;
   batchId?: string;
+  batchIndex?: number;
   expected?: { parentId: string; index: number };
   specialFolderPlacement?: {
     before: object | null;
@@ -21,18 +22,28 @@ export interface RenameCommand {
   bookmarkId: string;
   title: string;
   batchId?: string;
+  batchIndex?: number;
   expectedTitle?: string;
 }
 
 export interface CreateCommand extends Omit<BookmarkNode, 'id'> {
   batchId?: string;
+  batchIndex?: number;
   idempotencyKey?: string;
 }
 
 export interface AdoptCreatedCommand {
   bookmarkId: string;
   batchId?: string;
+  batchIndex?: number;
   idempotencyKey: string;
+}
+
+export interface RemoveCommand {
+  bookmarkId: string;
+  batchId?: string;
+  batchIndex?: number;
+  expected?: BookmarkNode;
 }
 
 export class BookmarkCommandService {
@@ -65,6 +76,7 @@ export class BookmarkCommandService {
         type: 'create',
         bookmarkId: created.id,
         batchId: command.batchId,
+        batchIndex: command.batchIndex,
         before: {},
         after: {
           parentId: created.parentId,
@@ -91,6 +103,7 @@ export class BookmarkCommandService {
         type: 'create',
         bookmarkId: created.id,
         batchId: command.batchId,
+        batchIndex: command.batchIndex,
         before: {},
         after: {
           parentId: created.parentId,
@@ -129,6 +142,7 @@ export class BookmarkCommandService {
       type: 'move',
       bookmarkId: command.bookmarkId,
       batchId: command.batchId,
+      batchIndex: command.batchIndex,
       before: {
         parentId: current.parentId,
         index: current.index,
@@ -169,14 +183,40 @@ export class BookmarkCommandService {
       type: 'rename',
       bookmarkId: command.bookmarkId,
       batchId: command.batchId,
+      batchIndex: command.batchIndex,
       before: { title: current.title },
       after: { title: updated.title }
     });
   }
 
+  async remove(
+    command: RemoveCommand
+  ): Promise<Result<OperationRecord, OperationError>> {
+    const current = await this.bookmarks.get(command.bookmarkId);
+    if (!current) return err({ code: 'not_found', id: command.bookmarkId });
+    if (command.expected && !sameBookmark(current, command.expected)) {
+      return err({
+        code: 'conflict',
+        bookmarkId: command.bookmarkId,
+        expected: snapshot(command.expected),
+        actual: snapshot(current)
+      });
+    }
+    await this.bookmarks.remove(command.bookmarkId);
+    return this.record({
+      type: 'remove',
+      bookmarkId: command.bookmarkId,
+      batchId: command.batchId,
+      batchIndex: command.batchIndex,
+      before: snapshot(current),
+      after: {}
+    });
+  }
+
   async updateMetadata(
     next: BookmarkMetadata,
-    batchId?: string
+    batchId?: string,
+    batchIndex?: number
   ): Promise<Result<OperationRecord, OperationError>> {
     if (!this.metadata) return err({ code: 'unsupported', type: 'metadata' });
     const before = await this.metadata.get(next.bookmarkId);
@@ -185,6 +225,7 @@ export class BookmarkCommandService {
       type: 'metadata',
       bookmarkId: next.bookmarkId,
       batchId,
+      batchIndex,
       before: before ? { metadata: before } : {},
       after: { metadata: next }
     });
@@ -205,4 +246,24 @@ export class BookmarkCommandService {
     await this.operations.put(operation);
     return ok(operation);
   }
+}
+
+function snapshot(bookmark: BookmarkNode): Record<string, unknown> {
+  return {
+    parentId: bookmark.parentId,
+    index: bookmark.index,
+    title: bookmark.title,
+    ...(bookmark.url ? { url: bookmark.url } : {}),
+    ...(bookmark.dateAdded ? { dateAdded: bookmark.dateAdded } : {})
+  };
+}
+
+function sameBookmark(left: BookmarkNode, right: BookmarkNode): boolean {
+  return (
+    left.id === right.id &&
+    left.parentId === right.parentId &&
+    left.index === right.index &&
+    left.title === right.title &&
+    left.url === right.url
+  );
 }

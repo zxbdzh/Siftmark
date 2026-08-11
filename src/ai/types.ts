@@ -33,7 +33,14 @@ export interface AiRequestContext {
   pageText?: string;
   additionalRules?: string;
   availableFolderPaths?: string[];
+  relatedBookmarks?: Array<{
+    title: string;
+    url: string;
+    summary?: string;
+  }>;
   folderCreationPolicy?: 'off' | 'weak' | 'medium' | 'strong';
+  maxNewFolderLevels?: number;
+  preferredFolderDepth?: number;
   maxTitleLength?: number;
   taskType?: 'classify' | 'rename' | 'summarize' | 'analysis';
 }

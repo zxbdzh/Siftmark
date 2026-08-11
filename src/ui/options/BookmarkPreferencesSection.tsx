@@ -2,11 +2,10 @@ import { Save, Sparkles } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import {
   defaultSmartBookmarkSettings,
+  smartBookmarkFolderLevelBounds,
   type ChromeSettingsRepository,
   type SmartBookmarkSettings
 } from '../../settings/settings-repository';
-
-const FLOATING_BUTTON_KEY = 'siftmark.content.floating';
 
 export function BookmarkPreferencesSection({
   repository
@@ -16,24 +15,16 @@ export function BookmarkPreferencesSection({
   const [settings, setSettings] = useState<SmartBookmarkSettings>(
     defaultSmartBookmarkSettings
   );
-  const [floatingButton, setFloatingButton] = useState(false);
   const [status, setStatus] = useState('');
 
   useEffect(() => {
-    void Promise.all([
-      repository.getSmartBookmarkSettings(),
-      browser.storage.local.get(FLOATING_BUTTON_KEY)
-    ]).then(([storedSettings, storedFloating]) => {
+    void repository.getSmartBookmarkSettings().then((storedSettings) => {
       setSettings(storedSettings);
-      setFloatingButton(storedFloating[FLOATING_BUTTON_KEY] === true);
     });
   }, [repository]);
 
   const save = async () => {
-    await Promise.all([
-      repository.setSmartBookmarkSettings(settings),
-      browser.storage.local.set({ [FLOATING_BUTTON_KEY]: floatingButton })
-    ]);
+    await repository.setSmartBookmarkSettings(settings);
     setStatus('智能收藏偏好已保存');
   };
 
@@ -50,7 +41,7 @@ export function BookmarkPreferencesSection({
         <label className="preference-row">
           <span>
             <strong>允许创建新文件夹</strong>
-            <small>现有目录不合适时，允许 AI 创建最多三级目录。</small>
+            <small>AI 可按下方上限补建目录；任何新建操作都需要批准。</small>
           </span>
           <input
             type="checkbox"
@@ -85,21 +76,57 @@ export function BookmarkPreferencesSection({
             ))}
           </div>
         </div>
-        <label className="preference-row">
+        <label className="preference-row range-row">
           <span>
-            <strong>网页悬浮收藏按钮</strong>
-            <small>刷新网页后显示可拖动的一键收藏按钮。</small>
+            <strong>单次最多新建层级</strong>
+            <small>相对最深的已有目录，一次最多连续补建几级。</small>
           </span>
-          <input
-            type="checkbox"
-            checked={floatingButton}
-            onChange={(event) => setFloatingButton(event.target.checked)}
-          />
+          <span className="range-control">
+            <input
+              type="range"
+              aria-label="单次最多新建层级"
+              min={smartBookmarkFolderLevelBounds.min}
+              max={smartBookmarkFolderLevelBounds.max}
+              step="1"
+              disabled={!settings.allowNewFolders}
+              value={settings.maxNewFolderLevels}
+              onChange={(event) =>
+                setSettings({
+                  ...settings,
+                  maxNewFolderLevels: Number(event.target.value)
+                })
+              }
+            />
+            <output>{settings.maxNewFolderLevels} 级</output>
+          </span>
+        </label>
+        <label className="preference-row range-row">
+          <span>
+            <strong>推荐目录深度</strong>
+            <small>优先整理到第几级目录，不计算书签栏根目录。</small>
+          </span>
+          <span className="range-control">
+            <input
+              type="range"
+              aria-label="推荐目录深度"
+              min={smartBookmarkFolderLevelBounds.min}
+              max={smartBookmarkFolderLevelBounds.max}
+              step="1"
+              value={settings.preferredFolderDepth}
+              onChange={(event) =>
+                setSettings({
+                  ...settings,
+                  preferredFolderDepth: Number(event.target.value)
+                })
+              }
+            />
+            <output>{settings.preferredFolderDepth} 级</output>
+          </span>
         </label>
         <label className="preference-row">
           <span>
             <strong>接管浏览器原生收藏</strong>
-            <small>使用浏览器收藏按钮创建书签后自动执行 AI 整理。</small>
+            <small>使用浏览器收藏按钮后自动整理，风险操作会请求批准。</small>
           </span>
           <input
             type="checkbox"
@@ -130,20 +157,24 @@ export function BookmarkPreferencesSection({
             <strong>标题长度</strong>
             <small>建议标题长度：{settings.renameMaxLength} 个字符。</small>
           </span>
-          <input
-            type="range"
-            min="6"
-            max="30"
-            step="1"
-            disabled={!settings.smartRename}
-            value={settings.renameMaxLength}
-            onChange={(event) =>
-              setSettings({
-                ...settings,
-                renameMaxLength: Number(event.target.value)
-              })
-            }
-          />
+          <span className="range-control">
+            <input
+              type="range"
+              aria-label="标题长度"
+              min="6"
+              max="30"
+              step="1"
+              disabled={!settings.smartRename}
+              value={settings.renameMaxLength}
+              onChange={(event) =>
+                setSettings({
+                  ...settings,
+                  renameMaxLength: Number(event.target.value)
+                })
+              }
+            />
+            <output>{settings.renameMaxLength}</output>
+          </span>
         </label>
       </div>
       <div className="section-actions">

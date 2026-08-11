@@ -6,6 +6,8 @@ import type {
 } from '../../settings/settings-repository';
 import type { ProfileRepository } from './profile-repository';
 
+export type ProfileAssignmentKey = AiCapability | 'agent';
+
 export class ModelProfileService {
   constructor(
     private readonly profiles: ProfileRepository,
@@ -40,13 +42,15 @@ export class ModelProfileService {
 
   async assign(
     profile: ModelProfile,
-    capabilities: AiCapability[]
+    capabilities: ProfileAssignmentKey[]
   ): Promise<void> {
     if (profile.state !== 'verified')
       throw new Error('只能启用已验证的模型档案');
     const assignments = await this.settings.getProfileAssignments();
     for (const capability of capabilities) {
-      if (!profile.capabilities.includes(capability))
+      const requiredCapability =
+        capability === 'agent' ? 'classify' : capability;
+      if (!profile.capabilities.includes(requiredCapability))
         throw new Error(`模型不支持 ${capability}`);
       assignments[capability] = `${profile.id}@${profile.version}`;
     }
@@ -57,7 +61,7 @@ export class ModelProfileService {
     return this.settings.getProfileAssignments();
   }
 
-  async unassign(capabilities: AiCapability[]): Promise<void> {
+  async unassign(capabilities: ProfileAssignmentKey[]): Promise<void> {
     const assignments = await this.settings.getProfileAssignments();
     for (const capability of capabilities) delete assignments[capability];
     await this.settings.setProfileAssignments(assignments);

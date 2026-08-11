@@ -16,6 +16,7 @@ import type { RequestMetric } from '../../src/ai/network/request-metrics';
 import { UsageRepository } from '../../src/ai/network/usage-repository';
 import { ChromeProfileRepository } from '../../src/ai/profiles/profile-repository';
 import { ModelProfileService } from '../../src/ai/profiles/profile-service';
+import { DexieCapturePreferenceRepository } from '../../src/capture-agent';
 import { ChromeSmartBookmarkHistoryRepository } from '../../src/bookmarks/history-repository';
 import { ChromeBookmarkRepository } from '../../src/platform/chrome/bookmarks-adapter';
 import type { ChromeBookmarkApi } from '../../src/platform/chrome/chrome-types';
@@ -27,6 +28,7 @@ import { AiUsageSection } from '../../src/ui/options/AiUsageSection';
 import { AppearanceSection } from '../../src/ui/options/AppearanceSection';
 import { BlockedDomainsSection } from '../../src/ui/options/BlockedDomainsSection';
 import { BookmarkPreferencesSection } from '../../src/ui/options/BookmarkPreferencesSection';
+import { CapturePreferencesSection } from '../../src/ui/options/CapturePreferencesSection';
 import { HealthAutomationSection } from '../../src/ui/options/HealthAutomationSection';
 import { IncognitoSection } from '../../src/ui/options/IncognitoSection';
 import { ModelProfilesSection } from '../../src/ui/options/ModelProfilesSection';
@@ -67,6 +69,10 @@ export default function App() {
     []
   );
   const usage = useMemo(() => new UsageRepository(database), [database]);
+  const capturePreferences = useMemo(
+    () => new DexieCapturePreferenceRepository(database),
+    [database]
+  );
   const history = useMemo(
     () => new ChromeSmartBookmarkHistoryRepository(browser.storage.local),
     []
@@ -158,6 +164,7 @@ export default function App() {
             <>
               <ModelProfilesSection repository={profiles} service={profileService} />
               <BookmarkPreferencesSection repository={settings} />
+              <CapturePreferencesSection repository={capturePreferences} />
               <AppearanceSection repository={settings} />
               <PermissionsSection />
               <SpecialFoldersSection settings={settings} bookmarks={bookmarks} />

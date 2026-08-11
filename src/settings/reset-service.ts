@@ -70,7 +70,9 @@ const tableLabels: Record<string, string> = {
   visitAggregates: '访问统计',
   analysisProposals: 'AI 审核提案',
   importRecoveryPoints: '导入恢复点',
-  specialFolderPlacements: '归档与回收位置'
+  specialFolderPlacements: '归档与回收位置',
+  captureSessions: '收藏 Agent 会话',
+  capturePreferences: 'Agent 收藏偏好'
 };
 
 export class ResetService {

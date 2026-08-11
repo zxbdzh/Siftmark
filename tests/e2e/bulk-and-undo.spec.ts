@@ -6,7 +6,7 @@ import {
 } from './fixtures/chrome-state';
 import { openExtensionPage } from './helpers/extension-pages';
 
-test('requires secondary confirmation for more than twenty tabs and recovers durable work', async ({
+test('classifies a 21-bookmark selection and recovers durable work', async ({
   context,
   extensionId
 }) => {
@@ -15,111 +15,85 @@ test('requires secondary confirmation for more than twenty tabs and recovers dur
   await setProviderBehavior({ failAnalysisCount: 1 });
   const manager = await openExtensionPage(context, extensionId, 'manager.html');
   await configureClassifier(manager);
-  const folderId = await createRootFolder(manager, '批量保存目标');
-  for (let index = 0; index < 21; index += 1) {
-    const page = await context.newPage();
-    await page.goto(`http://127.0.0.1:4173/article?batch=${index}`);
-  }
-  const popup = await openExtensionPage(context, extensionId, 'popup.html');
-  await popup.getByLabel('保存到').selectOption(folderId);
-  await popup.getByText('批量保存标签页').click();
-  await popup.getByRole('button', { name: '全选 21 项' }).click();
-  await popup.getByRole('button', { name: '保存所选 21 项' }).click();
-  const confirmation = popup.getByRole('alert');
-  await expect(confirmation).toContainText('将创建最多 21 个书签');
-  await confirmation.getByRole('button', { name: '取消' }).click();
-  await expect(confirmation).toHaveCount(0);
-  await popup.getByRole('button', { name: '保存所选 21 项' }).click();
-  await popup
-    .getByRole('alert')
-    .getByRole('button', { name: '确认保存 21 项' })
-    .click();
-  await expect(popup.getByRole('status')).toHaveText('已处理 21 个标签页');
-  await expect
-    .poll(() =>
-      manager.evaluate(
-        async (parentId) =>
-          (await chrome.bookmarks.getChildren(parentId)).filter((bookmark) =>
-            bookmark.url?.includes('?batch=')
-          ).length,
-        folderId
-      )
-    )
-    .toBe(21);
-  await expect
-    .poll(
-      async () => {
-        const proposals = await readDatabaseStore<{ state: string }>(
-          manager,
-          'analysisProposals'
-        );
-        const tasks = await readDatabaseStore<{ type: string; state: string }>(
-          manager,
-          'tasks'
-        );
-        return {
-          pending: proposals.filter((proposal) => proposal.state === 'pending')
-            .length,
-          failed: proposals.filter((proposal) => proposal.state === 'failed')
-            .length,
-          tasks: tasks
-            .filter((task) => task.type === 'analyze-bookmark')
-            .reduce<Record<string, number>>((counts, task) => {
-              counts[task.state] = (counts[task.state] ?? 0) + 1;
-              return counts;
-            }, {})
-        };
-      },
-      { timeout: 20_000 }
-    )
-    .toEqual({ pending: 20, failed: 1, tasks: { succeeded: 21 } });
+  const folderId = await createRootFolder(manager, '批量归类目标');
+  const bookmarkIds = await manager.evaluate(async (parentId) => {
+    const ids: string[] = [];
+    for (let index = 0; index < 21; index += 1) {
+      const bookmark = await chrome.bookmarks.create({
+        parentId,
+        title: `批量书签 ${index + 1}`,
+        url: `http://127.0.0.1:43173/article?batch=${index}`
+      });
+      ids.push(bookmark.id);
+    }
+    return ids;
+  }, folderId);
 
   await manager.reload();
-  await manager.getByRole('tab', { name: '审核' }).click();
-  await manager.getByRole('button', { name: '失败' }).click();
-  await manager.getByRole('button', { name: '重新运行当前 1 项' }).click();
-  await expect(manager.locator('.review-workspace output')).toHaveText(
-    '已重新排队 1 个项目'
+  await manager.getByPlaceholder('搜索书签…').fill('批量归类目标');
+  const folderRow = manager
+    .locator('.bookmark-tree-row')
+    .filter({ hasText: '批量归类目标' });
+  await folderRow.locator('input[type="checkbox"]').check();
+  await expect(manager.locator('.selection-count')).toContainText('21');
+  await manager.getByRole('button', { name: '批量归类', exact: true }).click();
+  await expect(manager.locator('.bulk-toolbar output')).toContainText(
+    'AI 归类完成：20 成功，1 失败'
   );
+
   await expect
     .poll(
       async () => {
-        const proposals = await readDatabaseStore<{ state: string }>(
+        const metadata = await readDatabaseStore<{ bookmarkId: string }>(
           manager,
-          'analysisProposals'
+          'bookmarkMetadata'
         );
-        return proposals.filter((proposal) => proposal.state === 'pending')
+        return metadata.filter((row) => bookmarkIds.includes(row.bookmarkId))
           .length;
       },
       { timeout: 20_000 }
     )
+    .toBe(20);
+
+  const metadata = await readDatabaseStore<{ bookmarkId: string }>(
+    manager,
+    'bookmarkMetadata'
+  );
+  const completedIds = new Set(metadata.map((row) => row.bookmarkId));
+  const failedBookmarkId = bookmarkIds.find((id) => !completedIds.has(id));
+  expect(failedBookmarkId).toBeDefined();
+  const retryResults = await manager.evaluate(
+    (bookmarkId) =>
+      chrome.runtime.sendMessage({
+        type: 'bulk-classify',
+        input: { bookmarkIds: [bookmarkId] }
+      }),
+    failedBookmarkId!
+  );
+  expect(retryResults).toEqual([
+    expect.objectContaining({ success: true, bookmarkId: failedBookmarkId })
+  ]);
+  await expect
+    .poll(
+      async () => {
+        const rows = await readDatabaseStore<{ bookmarkId: string }>(
+          manager,
+          'bookmarkMetadata'
+        );
+        return rows.filter((row) => bookmarkIds.includes(row.bookmarkId)).length;
+      },
+      { timeout: 20_000 }
+    )
     .toBe(21);
-  const operations = await readDatabaseStore<{
-    batchId?: string;
-    type: string;
-  }>(manager, 'operationLog');
-  const batchIds = new Set(
-    operations
-      .filter((operation) => operation.type === 'create')
-      .map((operation) => operation.batchId)
-  );
-  expect(batchIds.size).toBe(1);
-  expect([...batchIds][0]).toBeTruthy();
-  await popup.getByRole('button', { name: '撤销本次批量保存' }).click();
-  await expect(popup.getByRole('status')).toHaveText(
-    '已撤销 21 个，0 个未撤销'
-  );
   await expect
     .poll(() =>
-      manager.evaluate(
-        async (parentId) =>
-          (await chrome.bookmarks.getChildren(parentId)).filter((bookmark) =>
-            bookmark.url?.includes('?batch=')
-          ).length,
-        folderId
-      )
+      manager.evaluate(async () => {
+        const key = 'siftmark.smart-bookmark.history.v1';
+        const value = (await chrome.storage.local.get(key))[key];
+        return Array.isArray(value) ? value.length : 0;
+      })
     )
-    .toBe(0);
+    .toBe(21);
 
   const now = Date.now();
   await putDatabaseRecord(manager, 'tasks', {
@@ -165,7 +139,7 @@ async function configureClassifier(
           version: 'v1',
           name: '批量分类夹具',
           protocol: 'openai-chat',
-          endpoint: 'http://127.0.0.1:4173/v1',
+          endpoint: 'http://127.0.0.1:43173/v1',
           model: 'fixture-model',
           apiKey: 'e2e-secret-key',
           timeoutMs: 10_000,
@@ -176,13 +150,20 @@ async function configureClassifier(
       ],
       'siftmark.settings.profile-assignments.v1': {
         classify: 'e2e-batch-classifier@v1'
+      },
+      'siftmark.settings.smart-bookmark.v1': {
+        allowNewFolders: true,
+        folderCreationLevel: 'weak',
+        smartRename: true,
+        renameMaxLength: 12,
+        captureNativeBookmarks: false
       }
     });
   });
 }
 
 async function resetProvider(): Promise<void> {
-  const response = await fetch('http://127.0.0.1:4173/__e2e/reset', {
+  const response = await fetch('http://127.0.0.1:43173/__e2e/reset', {
     method: 'POST'
   });
   expect(response.ok).toBe(true);
@@ -191,7 +172,7 @@ async function resetProvider(): Promise<void> {
 async function setProviderBehavior(behavior: {
   failAnalysisCount: number;
 }): Promise<void> {
-  const response = await fetch('http://127.0.0.1:4173/__e2e/behavior', {
+  const response = await fetch('http://127.0.0.1:43173/__e2e/behavior', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(behavior)

@@ -1,429 +1,205 @@
-import {
-  expect,
-  test,
-  chromium,
-  type BrowserContext,
-  type Page
-} from '@playwright/test';
-import { mkdir, mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import path from 'node:path';
-import { completeOnboarding } from './fixtures/chrome-state';
+import { expect, test } from './fixtures/extension';
+import { putDatabaseRecord } from './fixtures/chrome-state';
+import { openExtensionPage } from './helpers/extension-pages';
 
-interface ExtensionSession {
-  context: BrowserContext;
-  extensionId: string;
-  profilePath: string;
-}
+test('loads the current popup, manager, options, side panel, and worker', async ({
+  context,
+  extensionId
+}) => {
+  const [worker] = context.serviceWorkers();
+  expect(worker?.url()).toContain(`chrome-extension://${extensionId}/`);
 
-async function launchExtension(): Promise<ExtensionSession> {
-  const extensionPath = path.join(process.cwd(), '.output', 'chrome-mv3');
-  const profilePath = await mkdtemp(
-    path.join(tmpdir(), 'siftmark-playwright-')
+  const popup = await openExtensionPage(context, extensionId, 'popup.html');
+  await expect(popup.locator('.brand-type')).toHaveText('Siftmark');
+  await expect(popup.getByRole('heading', { name: '待处理' })).toBeVisible();
+  await expect(popup.getByRole('heading', { name: '最近结果' })).toBeVisible();
+  await expect(popup.getByText('没有待确认的收藏')).toBeVisible();
+
+  const manager = await openExtensionPage(context, extensionId, 'manager.html');
+  await expect(manager.getByText('Siftmark · 书签树')).toBeVisible();
+  await expect(manager.getByPlaceholder('搜索书签…')).toBeVisible();
+  await expect(manager.getByRole('button', { name: '批量排序' })).toBeVisible();
+
+  const options = await openExtensionPage(context, extensionId, 'options.html');
+  await expect(
+    options.getByRole('heading', { name: '设置', exact: true })
+  ).toBeVisible();
+  await expect(
+    options.getByRole('heading', { name: '智能收藏' })
+  ).toBeVisible();
+  await expect(
+    options.getByRole('slider', { name: '单次最多新建层级' })
+  ).toBeVisible();
+  await expect(
+    options.getByRole('slider', { name: '推荐目录深度' })
+  ).toBeVisible();
+  await expect(
+    options.getByRole('heading', { name: 'Agent 固定规则' })
+  ).toBeVisible();
+
+  const sidePanel = await openExtensionPage(
+    context,
+    extensionId,
+    'sidepanel.html'
   );
-  const context = await chromium.launchPersistentContext(profilePath, {
-    channel: 'chromium',
-    headless: true,
-    args: [
-      `--disable-extensions-except=${extensionPath}`,
-      `--load-extension=${extensionPath}`
-    ]
-  });
-  let [worker] = context.serviceWorkers();
-  worker ??= await context.waitForEvent('serviceworker');
-  return { context, extensionId: new URL(worker.url()).host, profilePath };
-}
-
-async function closeExtension(
-  session: ExtensionSession | undefined
-): Promise<void> {
-  await session?.context.close();
-  if (session) await rm(session.profilePath, { recursive: true, force: true });
-}
-
-async function openExtensionPage(
-  context: BrowserContext,
-  extensionId: string,
-  pageName: string
-): Promise<Page> {
-  const page = await context.newPage();
-  await page.goto(`chrome-extension://${extensionId}/${pageName}.html`);
-  return page;
-}
-
-test('loads popup, manager, options, and the background worker', async () => {
-  let session: ExtensionSession | undefined;
-  try {
-    session = await launchExtension();
-    const { context, extensionId } = session;
-    const popup = await openExtensionPage(context, extensionId, 'popup');
-    await expect(popup.locator('.brand-type')).toHaveText('Siftmark');
-    await expect(popup.getByRole('button', { name: '保存书签' })).toBeVisible();
-    const manager = await openExtensionPage(context, extensionId, 'manager');
-    await expect(
-      manager.getByRole('complementary', { name: '文件夹', exact: true })
-    ).toBeVisible();
-    await expect(manager.getByRole('main', { name: '书签列表' })).toBeVisible();
-    await expect(manager.getByLabel('搜索书签')).toBeVisible();
-    await manager.getByRole('tab', { name: '通知' }).click();
-    await expect(manager.getByRole('main', { name: '通知中心' })).toBeVisible();
-    await manager.getByRole('tab', { name: '统计' }).click();
-    await expect(manager.getByRole('main', { name: '访问统计' })).toBeVisible();
-    await manager.getByRole('tab', { name: '书签' }).click();
-    await manager.setViewportSize({ width: 390, height: 844 });
-    await expect(
-      manager.getByRole('button', { name: '打开文件夹' })
-    ).toBeVisible();
-    await completeOnboarding(manager);
-    const options = await openExtensionPage(context, extensionId, 'options');
-    await expect(
-      options.getByRole('heading', { name: '设置', exact: true })
-    ).toBeVisible();
-  } finally {
-    await closeExtension(session);
-  }
+  await expect(sidePanel.getByText('没有进行中的收藏')).toBeVisible();
 });
 
-test('passes Gate 3 save, edit, keyboard, move, review, theme, and responsive workflows', async () => {
-  test.setTimeout(90_000);
-  let session: ExtensionSession | undefined;
-  try {
-    session = await launchExtension();
-    const { context, extensionId } = session;
-    const manager = await openExtensionPage(context, extensionId, 'manager');
-    const fixture = await manager.evaluate(async () => {
-      const tree = await chrome.bookmarks.getTree();
-      const root = tree[0]?.children?.find((node) => !node.url) ?? tree[0];
-      if (!root) throw new Error('Missing bookmark root');
-      const source = await chrome.bookmarks.create({
-        parentId: root.id,
-        title: 'Gate 3 来源'
-      });
-      const destination = await chrome.bookmarks.create({
-        parentId: root.id,
-        title: 'Gate 3 目标'
-      });
-      const bookmarks = [];
-      for (let index = 1; index <= 3; index++)
-        bookmarks.push(
-          await chrome.bookmarks.create({
-            parentId: source.id,
-            title: `规格书签 ${index}`,
-            url: `https://siftmark.test/${index}`
-          })
-        );
-      return {
-        sourceId: source.id,
-        destinationId: destination.id,
-        bookmark1Id: bookmarks[0]!.id,
-        bookmark2Id: bookmarks[1]!.id,
-        bookmark3Id: bookmarks[2]!.id
-      };
+test('supports the bookmark tree, Agent proposal, and in-page approval shell', async ({
+  context,
+  extensionId
+}) => {
+  const manager = await openExtensionPage(context, extensionId, 'manager.html');
+  const fixture = await manager.evaluate(async () => {
+    const tree = await chrome.bookmarks.getTree();
+    const root = tree[0]?.children?.find((node) => !node.url) ?? tree[0];
+    if (!root) throw new Error('Missing bookmark root');
+    const folder = await chrome.bookmarks.create({
+      parentId: root.id,
+      title: 'Agent 验收目录'
     });
-    await manager.reload();
-    await manager
-      .getByRole('treeitem', { name: 'Gate 3 来源' })
-      .click({ button: 'right' });
-    await expect(
-      manager.getByRole('button', { name: '健康检查' })
-    ).toBeEnabled();
-    manager.once('dialog', (dialog) => void dialog.accept('Gate 3 子文件夹'));
-    await manager.getByRole('button', { name: '新建子文件夹' }).click();
-    await expect(
-      manager.getByRole('treeitem', { name: 'Gate 3 子文件夹' })
-    ).toBeVisible();
-    await manager.getByRole('treeitem', { name: 'Gate 3 来源' }).click();
-    await manager.getByLabel('排序字段').selectOption('title');
-    await manager.getByRole('button', { name: '当前升序，切换为降序' }).click();
-    await manager.reload();
-    await manager.getByRole('treeitem', { name: 'Gate 3 来源' }).click();
-    await expect(manager.getByLabel('排序字段')).toHaveValue('title');
-    await expect(
-      manager.getByRole('button', { name: '当前降序，切换为升序' })
-    ).toBeVisible();
-    await manager.getByRole('button', { name: /规格书签 1/ }).click();
-    await manager.getByLabel('标题').fill('规格书签 已更新');
-    await manager.getByRole('button', { name: '保存详情' }).click();
-    await expect(manager.getByRole('status')).toHaveText('详情已保存');
-    await expect
-      .poll(() =>
-        manager.evaluate(
-          async (id) =>
-            new Promise<string | undefined>((resolve) =>
-              chrome.bookmarks.get(id, (nodes) => resolve(nodes[0]?.title))
-            ),
-          fixture.bookmark1Id
-        )
-      )
-      .toBe('规格书签 已更新');
-
-    const bookmarkGroup = manager.getByRole('group', {
-      name: '当前文件夹书签'
+    const bookmark = await chrome.bookmarks.create({
+      parentId: folder.id,
+      title: '可搜索的 Agent 收藏',
+      url: 'https://shell.siftmark.test/article'
     });
-    await bookmarkGroup.focus();
-    await bookmarkGroup.press('End');
-    await expect(
-      manager.locator('.bookmark-row[aria-pressed="true"]')
-    ).toHaveCount(1);
-    await bookmarkGroup.press('Shift+Home');
-    await expect(
-      manager.locator('.bookmark-row[aria-pressed="true"]')
-    ).toHaveCount(3);
+    return { folder, bookmark };
+  });
 
-    await manager.reload();
-    await manager.getByRole('treeitem', { name: 'Gate 3 来源' }).click();
-    await manager
-      .getByRole('button', { name: /规格书签 已更新/ })
-      .click({ button: 'right' });
-    await manager.getByRole('button', { name: '移动到…' }).click();
-    await manager
-      .getByRole('listbox', { name: '目标文件夹' })
-      .getByRole('option', { name: 'Gate 3 目标' })
-      .click();
-    await expect
-      .poll(() =>
-        manager.evaluate(
-          async (id) =>
-            new Promise<string | undefined>((resolve) =>
-              chrome.bookmarks.get(id, (nodes) => resolve(nodes[0]?.parentId))
-            ),
-          fixture.bookmark1Id
-        )
-      )
-      .toBe(fixture.destinationId);
+  await manager.reload();
+  await manager.getByPlaceholder('搜索书签…').fill('可搜索的 Agent 收藏');
+  const bookmarkRow = manager
+    .locator('.bookmark-tree-row')
+    .filter({ hasText: '可搜索的 Agent 收藏' });
+  await expect(bookmarkRow).toBeVisible();
+  await bookmarkRow.locator('input[type="checkbox"]').check();
+  await expect(manager.locator('.selection-count')).toContainText('1');
 
-    await manager.evaluate(
-      async ({ id, parentId }) => {
-        const request = indexedDB.open('siftmark');
-        const database = await new Promise<IDBDatabase>((resolve, reject) => {
-          request.onsuccess = () => resolve(request.result);
-          request.onerror = () => reject(request.error);
-        });
-        const transaction = database.transaction(
-          'analysisProposals',
-          'readwrite'
-        );
-        transaction
-          .objectStore('analysisProposals')
-          .put({
-            id: 'gate3-proposal',
-            bookmarkId: id,
-            sourceSnapshot: {
-              id,
-              parentId,
-              index: 1,
-              title: '规格书签 2',
-              url: 'https://siftmark.test/2'
-            },
-            result: {
-              folderPath: [],
-              title: 'AI 审核标题',
-              tags: ['测试'],
-              summary: '审核摘要',
-              confidence: 'medium',
-              reason: '字段级审核验证'
-            },
-            state: 'pending',
-            createdAt: Date.now()
-          });
-        await new Promise<void>((resolve, reject) => {
-          transaction.oncomplete = () => resolve();
-          transaction.onerror = () => reject(transaction.error);
-        });
-        database.close();
+  const timestamp = Date.now();
+  await putDatabaseRecord(manager, 'captureSessions', {
+    id: 'shell-agent-session',
+    bookmarkId: fixture.bookmark.id,
+    state: 'pending',
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    expiresAt: timestamp + 60_000,
+    payload: {
+      id: 'shell-agent-session',
+      bookmarkId: fixture.bookmark.id,
+      trigger: 'native-bookmark',
+      sourceSnapshot: {
+        id: fixture.bookmark.id,
+        parentId: fixture.folder.id,
+        index: 0,
+        title: '可搜索的 Agent 收藏',
+        url: 'https://shell.siftmark.test/article'
       },
-      { id: fixture.bookmark2Id, parentId: fixture.sourceId }
-    );
-    await manager.reload();
-    await manager.getByRole('tab', { name: '审核' }).click();
-    await expect(
-      manager.getByRole('heading', { name: 'AI 审核标题' })
-    ).toBeVisible();
-    await manager.getByLabel('folder').uncheck();
-    await manager.getByLabel('tags').uncheck();
-    await manager.getByLabel('summary').uncheck();
-    await manager.getByRole('button', { name: '应用所选字段' }).click();
-    await expect
-      .poll(() =>
-        manager.evaluate(
-          async (id) =>
-            new Promise<string | undefined>((resolve) =>
-              chrome.bookmarks.get(id, (nodes) => resolve(nodes[0]?.title))
-            ),
-          fixture.bookmark2Id
-        )
-      )
-      .toBe('AI 审核标题');
-
-    const draftId = 'gate3-note-draft';
-    await manager.evaluate(
-      async (id) =>
-        chrome.storage.local.set({
-          [`siftmark.note-draft.${id}`]: {
-            id,
-            text: 'Gate 3 选中文本草稿',
-            title: '草稿来源页面',
-            url: 'https://siftmark.test/draft',
-            createdAt: Date.now(),
-            truncated: false
-          }
-        }),
-      draftId
-    );
-    await manager.reload();
-    await manager.getByRole('tab', { name: '草稿' }).click();
-    await expect(
-      manager.getByRole('heading', { name: '笔记草稿' })
-    ).toBeVisible();
-    await expect(manager.getByText('Gate 3 选中文本草稿')).toBeVisible();
-    await manager.getByRole('button', { name: '删除' }).click();
-    await expect(manager.getByText('暂无选中文本草稿')).toBeVisible();
-    await expect
-      .poll(() =>
-        manager.evaluate(
-          async (id) =>
-            (await chrome.storage.local.get(`siftmark.note-draft.${id}`))[
-              `siftmark.note-draft.${id}`
-            ],
-          draftId
-        )
-      )
-      .toBeUndefined();
-
-    const content = await context.newPage();
-    await content.route('http://127.0.0.1:4173/article', (route) =>
-      route.fulfill({
-        contentType: 'text/html',
-        body: '<title>Popup 保存验证</title><h1>Popup 保存验证</h1>'
-      })
-    );
-    await content.goto('http://127.0.0.1:4173/article');
-    await manager.evaluate(async () =>
-      chrome.storage.local.set({
-        'siftmark.content.floating': false,
-        'siftmark.content.hidden.127.0.0.1': false
-      })
-    );
-    await content.reload();
-    await expect(content.locator('#siftmark-root')).toHaveCount(0);
-    await manager.evaluate(async () =>
-      chrome.storage.local.set({ 'siftmark.content.floating': true })
-    );
-    await content.reload();
-    await expect(
-      content.getByRole('button', { name: '保存到 Siftmark' })
-    ).toBeVisible();
-    await content.getByRole('button', { name: '在此网站隐藏' }).click();
-    await expect(content.locator('#siftmark-root')).toHaveCount(0);
-    await content.reload();
-    await expect(content.locator('#siftmark-root')).toHaveCount(0);
-    const contentTabId = await manager.evaluate(
-      () =>
-        new Promise<number>((resolve) =>
-          chrome.tabs.query({ url: 'http://127.0.0.1:4173/article' }, (tabs) =>
-            resolve(tabs[0]!.id!)
-          )
-        )
-    );
-    await context.addInitScript(
-      ({ id, url, title }) => {
-        if (!globalThis.chrome?.tabs) return;
-        const original = chrome.tabs.query.bind(chrome.tabs);
-        Object.defineProperty(chrome.tabs, 'query', {
-          configurable: true,
-          value: (
-            queryInfo: chrome.tabs.QueryInfo,
-            callback?: (tabs: chrome.tabs.Tab[]) => void
-          ) => {
-            if (queryInfo.active && queryInfo.currentWindow) {
-              const tabs = [{ id, url, title }] as chrome.tabs.Tab[];
-              if (callback) {
-                callback(tabs);
-                return;
-              }
-              return Promise.resolve(tabs);
-            }
-            return original(queryInfo, callback!);
-          }
-        });
+      state: 'pending',
+      plan: {
+        destination: {
+          folderId: fixture.folder.id,
+          path: [{ id: fixture.folder.id, title: 'Agent 验收目录' }],
+          newFolders: ['研究']
+        },
+        title: 'Agent 建议标题',
+        tags: ['验收'],
+        summary: '用于验证 Side Panel。',
+        confidence: 'medium',
+        reason: '需要创建一级目录。',
+        relatedBookmarks: [],
+        generatedAt: timestamp
       },
-      {
-        id: contentTabId,
-        url: 'http://127.0.0.1:4173/article',
-        title: 'Popup 保存验证'
-      }
-    );
-    const popup = await context.newPage();
-    await content.bringToFront();
-    await popup.goto(`chrome-extension://${extensionId}/popup.html`);
-    await expect(
-      popup.getByRole('heading', { name: 'Popup 保存验证' })
-    ).toBeVisible();
-    await popup.getByLabel('保存到').selectOption(fixture.sourceId);
-    await popup.getByRole('button', { name: '保存书签' }).click();
-    await expect(popup.getByRole('status')).toContainText('已保存');
-    await expect
-      .poll(() =>
-        manager.evaluate(
-          async () =>
-            (
-              await chrome.bookmarks.search({
-                url: 'http://127.0.0.1:4173/article'
-              })
-            ).length
+      risk: {
+        decision: 'approval',
+        reasons: ['new-folder'],
+        canExecute: true
+      },
+      messages: [],
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      expiresAt: timestamp + 60_000
+    }
+  });
+
+  const sidePanel = await openExtensionPage(
+    context,
+    extensionId,
+    'sidepanel.html?session=shell-agent-session'
+  );
+  await expect(sidePanel.getByText('Siftmark Agent')).toBeVisible();
+  await expect(sidePanel.getByText('Agent 建议标题')).toBeVisible();
+  await expect(sidePanel.getByRole('list', { name: '收藏位置' })).toContainText(
+    '研究'
+  );
+  await expect(sidePanel.getByText('将新建目录')).toBeVisible();
+  await expect(sidePanel.getByText('当前网页')).toBeVisible();
+  await expect(sidePanel.getByText('查看 AI 分析')).toBeVisible();
+  await expect(
+    sidePanel.getByRole('button', { name: '不要新建目录' })
+  ).toBeVisible();
+  await expect(
+    sidePanel.getByRole('textbox', { name: '调整收藏方案' })
+  ).toBeVisible();
+  await expect(sidePanel.getByRole('button', { name: '允许' })).toBeVisible();
+  await expect(sidePanel.getByRole('button', { name: '拒绝' })).toBeVisible();
+
+  await sidePanel.setViewportSize({ width: 300, height: 600 });
+  await expect(
+    sidePanel.getByRole('textbox', { name: '调整收藏方案' })
+  ).toBeInViewport();
+  await expect(
+    sidePanel.getByRole('button', { name: '允许' })
+  ).toBeInViewport();
+  await expect(
+    sidePanel.getByRole('button', { name: '拒绝' })
+  ).toBeInViewport();
+  expect(
+    await sidePanel.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth + 1
+    )
+  ).toBe(true);
+
+  const article = await context.newPage();
+  await article.route('http://127.0.0.1:43173/shell', (route) =>
+    route.fulfill({
+      contentType: 'text/html',
+      body: '<title>网页审批浮层</title><h1>网页审批浮层</h1>'
+    })
+  );
+  await article.goto('http://127.0.0.1:43173/shell');
+  await expect(article.locator('#siftmark-root')).toHaveCount(1);
+  await expect(article.getByRole('button')).toHaveCount(0);
+  const tabId = await manager.evaluate(
+    () =>
+      new Promise<number>((resolve) =>
+        chrome.tabs.query({ url: 'http://127.0.0.1:43173/shell' }, (tabs) =>
+          resolve(tabs[0]!.id!)
         )
       )
-      .toBe(1);
-    await popup.setViewportSize({ width: 360, height: 640 });
-    await mkdir(path.join(process.cwd(), 'tests', 'visual'), {
-      recursive: true
-    });
-    await popup.screenshot({
-      path: path.join(process.cwd(), 'tests', 'visual', 'gate3-popup.png'),
-      fullPage: true
-    });
-
-    await completeOnboarding(manager);
-    const options = await openExtensionPage(context, extensionId, 'options');
-    await options.getByLabel('主题').selectOption('dark');
-    await expect(options.locator('html')).toHaveAttribute('data-theme', 'dark');
-    await options.screenshot({
-      path: path.join(
-        process.cwd(),
-        'tests',
-        'visual',
-        'gate3-options-dark.png'
-      ),
-      fullPage: true
-    });
-    await manager.setViewportSize({ width: 1440, height: 900 });
-    await manager.reload();
-    await expect(manager.locator('html')).toHaveAttribute('data-theme', 'dark');
-    await manager.screenshot({
-      path: path.join(
-        process.cwd(),
-        'tests',
-        'visual',
-        'gate3-manager-wide.png'
-      ),
-      fullPage: true
-    });
-    await manager.setViewportSize({ width: 390, height: 844 });
-    await expect(
-      manager.getByRole('button', { name: '打开文件夹' })
-    ).toBeVisible();
-    await manager.getByRole('button', { name: '打开文件夹' }).click();
-    await expect(manager.getByRole('dialog', { name: '文件夹' })).toBeVisible();
-    await manager.screenshot({
-      path: path.join(
-        process.cwd(),
-        'tests',
-        'visual',
-        'gate3-manager-narrow.png'
-      ),
-      fullPage: true
-    });
-  } finally {
-    await closeExtension(session);
-  }
+  );
+  await manager.evaluate(
+    (targetTabId) =>
+      chrome.tabs.sendMessage(targetTabId, {
+        type: 'capture-agent-overlay',
+        view: {
+          sessionId: 'shell-agent-session',
+          phase: 'approval',
+          destinationPath: ['书签栏', 'Agent 验收目录'],
+          newFolderName: '研究',
+          title: 'Agent 建议标题'
+        }
+      }),
+    tabId
+  );
+  const approval = article.getByRole('dialog', {
+    name: '批准这次整理吗？'
+  });
+  await expect(approval).toContainText('Agent 验收目录');
+  await expect(approval).toContainText('研究');
+  await expect(
+    approval.getByRole('button', { name: '与 Agent 调整' })
+  ).toBeVisible();
+  await article.keyboard.press('Escape');
+  await expect(approval).toHaveCount(0);
+  await expect(article.getByRole('button')).toHaveCount(0);
 });

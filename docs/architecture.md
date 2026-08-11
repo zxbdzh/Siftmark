@@ -5,14 +5,17 @@
 Siftmark 是单个 Manifest V3 扩展，没有账号、云数据库或 Siftmark 服务端。外部系统只有 Chromium API 与用户主动配置的模型 Endpoint。
 
 ```text
-Popup / Manager / Options / Content
-                |
-          domain services
-                |
-  browser ports + persistence ports
-          |                 |
- chrome.bookmarks      IndexedDB / storage.local
-          |
+Native bookmark / Command / Context menu
+                  |
+             CaptureAgent
+      plan -> assess -> route -> execute
+        |                         |
+ user model endpoint       local executor
+        |                         |
+  Web overlay / Side Panel / Popup queue
+                  |
+ chrome.bookmarks + IndexedDB / storage.local
+                  |
  Chromium native bookmark tree (source of truth)
 ```
 
@@ -23,10 +26,11 @@ UI 不直接跨模块修改 Chrome API 或数据库表。入口负责组装，�
 | 入口                        | 职责                                                                     |
 | --------------------------- | ------------------------------------------------------------------------ |
 | `entrypoints/background.ts` | 持久任务、恢复、书签事件、模型调用、截图、健康调度、通知、右键和快捷命令 |
-| `entrypoints/popup`         | 当前页/标签页保存、重复处理、进度、撤销和管理器入口                      |
+| `entrypoints/popup`         | 待处理收藏、最近结果、允许/拒绝、撤销和管理器入口                       |
 | `entrypoints/manager`       | 原生树、虚拟列表、详情、搜索、审核、草稿、通知与统计                     |
-| `entrypoints/options`       | 引导、模型、规则、权限、外观、特殊文件夹、备份、无痕状态和重置           |
-| `entrypoints/content.ts`    | 当前页提取、采集策略、悬浮按钮和选中页交互                               |
+| `entrypoints/options`       | 引导、模型/Agent 分配、固定规则、权限、特殊文件夹、备份和重置            |
+| `entrypoints/content.ts`    | 当前页按需提取与事件触发的审批/结果浮层                                  |
+| `entrypoints/sidepanel`     | 当前方案、风险原因、持久对话、允许/拒绝、重试和撤销                      |
 
 ## 领域模块
 
@@ -36,6 +40,7 @@ UI 不直接跨模块修改 Chrome API 或数据库表。入口负责组装，�
 - `ai`：模型档案、协议适配、提示词、Schema、脱敏、网络错误和审核提案。
 - `rules`：本地优先匹配与终止动作。
 - `capture`：页面政策、12,000 字符截断、可见区域截图和本地缩略图。
+- `capture-agent`：收藏会话、结构化方案、严格风险策略、偏好学习、本地执行和生命周期。
 - `search`：可重建关键词索引、筛选、语义向量与融合排序。
 - `health`：URL 规范化、重复、链接状态和本地访问聚合。
 - `backup`：原生/HTML/MarkAI 解析、冲突计划、恢复点、校验和与加密容器。
@@ -45,9 +50,9 @@ UI 不直接跨模块修改 Chrome API 或数据库表。入口负责组装，�
 
 `chrome.bookmarks` 唯一拥有书签标题、URL、父子关系、同级索引和文件夹树。任何业务动作都重新读取目标书签并进行冲突检查。
 
-`chrome.storage.local` 保存模型档案（含 API Key）、能力分配、主题/密度、规则、特殊文件夹 ID、引导状态、悬浮按钮、通知/统计偏好和小型运行设置。项目不使用 `chrome.storage.sync`。
+`chrome.storage.local` 保存模型档案（含 API Key）、能力分配、主题/密度、规则、特殊文件夹 ID、引导状态、通知/统计偏好和小型运行设置。项目不使用 `chrome.storage.sync`。
 
-IndexedDB 数据库 `siftmark`（Schema v4）包含：
+IndexedDB 数据库 `siftmark`（Schema v5）包含：
 
 | Store                     | 所有内容                                 | 可重建/保留说明                     |
 | ------------------------- | ---------------------------------------- | ----------------------------------- |
@@ -63,15 +68,20 @@ IndexedDB 数据库 `siftmark`（Schema v4）包含：
 | `analysisProposals`       | 来源快照、结构化建议和审核状态           | 不保存原始正文                      |
 | `importRecoveryPoints`    | 导入前原生节点与元数据快照               | 失败恢复                            |
 | `specialFolderPlacements` | 归档/回收原位置                          | 恢复原位置                          |
+| `captureSessions`         | 收藏快照、方案、风险、会话状态和操作批次 | 最长 7 天；解决后清空完整对话       |
+| `capturePreferences`      | 普通偏好与用户明确设置的固定规则         | 本地结构化信号，不含完整对话        |
 
-## 保存与分析序列
+## 收藏 Agent 序列
 
-1. Popup 读取当前标签页和原生书签树，进行 URL 重复预览。
-2. `SaveService` 先调用 `chrome.bookmarks.create`。
-3. 写入操作日志并立即向 UI 返回已保存状态。
-4. 后台分别排队 `analyze-bookmark` 与 `capture-thumbnail`；任何失败都不撤销书签。
-5. 分析协调器读取最新书签、执行本地规则、选择已验证档案并发送受控提示。
-6. 响应经严格 Schema 校验，形成审核提案；字段应用前再次做冲突检查。
+1. `Ctrl+D`、`Ctrl+Shift+S` 或右键入口先创建原生书签；模型或网络失败不删除它。
+2. `CaptureAgent.begin` 保存来源快照，裁剪页面上下文并调用已分配的 Agent/分类模型。
+3. `SmartCapturePlanner` 把模型响应解析为目录、标题、标签、摘要、置信度和相关项；模型没有写入接口。
+4. 风险策略根据新目录、置信度、重复、标题变化、特殊目录、页面信息和陈旧状态确定自动执行或审批。
+5. 安全方案由 `LocalCaptureExecutor` 自动写入。风险方案先移动到已配置的待整理箱，再通过网页浮层、Popup 或 Side Panel 等待允许/拒绝。
+6. 执行前重新读取书签与目录；移动、改名、目录创建、元数据和精确重复合并写入同一操作批次，可确定性撤销。
+7. 用户在 Side Panel 调整时只替换当前方案。明确表达“以后都……”才生成可见固定规则；普通允许/拒绝只形成较弱的本地偏好。
+
+状态和安全不变量详见 [收藏 Agent 设计](design/2026-08-11-capture-agent.md)。
 
 ## 任务恢复
 
@@ -94,9 +104,10 @@ Worker 启动时扫描 `running`：
 ## 安全边界
 
 - Endpoint 只允许 HTTPS，环回地址例外。
-- 页面正文最多 12,000 字符，只存在于当前请求内存；密码/支付/黑名单策略可完全阻止采集。
+- 收藏 Agent 最多发送 6,000 字符正文；密码/支付/黑名单策略可完全阻止采集。
+- URL 在发送前移除用户名、密码、查询参数与片段；不会发送完整书签库、私密备注或完整对话历史。
 - 邮箱、手机号、常见密钥、JWT、Bearer Token 和密码字段在发出前本地脱敏。
-- 模型只能返回固定 Schema，不能修改 URL、执行代码或扩展权限。
+- 模型只能返回固定 Schema，不能修改 URL、执行代码、调用 Chrome API 或扩展权限。
 - 普通备份剔除 API Key；完整配置只能进入带认证加密的容器。
 - 无远程字体、动画、Favicon、遥测或分析 SDK。
 

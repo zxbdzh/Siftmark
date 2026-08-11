@@ -102,3 +102,21 @@ export interface ImportRecoveryPointRecord {
   nodes: BookmarkNode[];
   metadata: BookmarkMetadata[];
 }
+
+export interface CaptureSessionRecord {
+  id: string;
+  bookmarkId: string;
+  state: string;
+  createdAt: number;
+  updatedAt: number;
+  expiresAt: number;
+  payload: Record<string, unknown>;
+}
+
+export interface CapturePreferenceRecord {
+  id: string;
+  kind: string;
+  domain: string;
+  updatedAt: number;
+  payload: Record<string, unknown>;
+}

@@ -6,13 +6,15 @@ import {
 
 describe('storage schema', () => {
   it('declares the initial version and all durable stores', () => {
-    expect(CURRENT_SCHEMA_VERSION).toBe(4);
+    expect(CURRENT_SCHEMA_VERSION).toBe(5);
     expect(Object.keys(schemaStores)).toEqual(
       expect.arrayContaining([
         'bookmarkMetadata',
         'tasks',
         'softDeletedMetadata',
-        'specialFolderPlacements'
+        'specialFolderPlacements',
+        'captureSessions',
+        'capturePreferences'
       ])
     );
   });

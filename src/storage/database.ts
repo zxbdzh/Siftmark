@@ -4,6 +4,8 @@ import type { BookmarkMetadata } from './types';
 import type {
   AnalysisProposalRecord,
   AiUsageLogRecord,
+  CapturePreferenceRecord,
+  CaptureSessionRecord,
   ImportRecoveryPointRecord,
   NotificationRecord,
   OperationLogRecord,
@@ -32,6 +34,8 @@ export class SiftmarkDatabase extends Dexie {
   analysisProposals!: Table<AnalysisProposalRecord, string>;
   importRecoveryPoints!: Table<ImportRecoveryPointRecord, string>;
   specialFolderPlacements!: Table<SpecialFolderPlacement, string>;
+  captureSessions!: Table<CaptureSessionRecord, string>;
+  capturePreferences!: Table<CapturePreferenceRecord, string>;
 
   constructor(name = 'siftmark') {
     super(name);

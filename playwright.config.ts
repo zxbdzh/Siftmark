@@ -8,7 +8,7 @@ export default defineConfig({
   webServer: {
     command:
       'node --experimental-strip-types tests/e2e/fixtures/provider-server.ts',
-    url: 'http://127.0.0.1:4173/health',
+    url: 'http://127.0.0.1:43173/health',
     reuseExistingServer: false,
     timeout: 30_000
   },

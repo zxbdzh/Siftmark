@@ -8,7 +8,7 @@ Siftmark 直接调用用户配置的 Endpoint，不经过 Siftmark 服务端。�
 - 超时解析后限制在 5,000–120,000 ms。
 - 档案先保存为草稿，连接探测成功后变为 `verified`，才可绑定能力。
 - 能力为 `classify`、`rename`、`summarize`、`embed`；任务锁定档案版本。
-- 文本输出必须是固定 JSON Schema：`folderPath`（最多 3 层）、`title`、`tags`、`summary`、`confidence` 和 `reason`，拒绝额外字段。
+- 文本输出必须是固定 JSON Schema：`folderPath`（最多 5 层）、`title`、`tags`、`summary`、`confidence` 和 `reason`，拒绝额外字段。
 - HTTP `401/403/429/5xx`、`Retry-After`、超时、中止、无效 JSON 和无效 Schema 被映射为统一错误。
 
 Endpoint 填写协议根地址。适配器会去掉末尾 `/` 并追加下表路径，不要把 `chat/completions` 等操作路径重复填入 Endpoint。
@@ -63,7 +63,7 @@ Anthropic 原生 Messages 没有使用 OpenAI 的 `response_format`。Siftmark �
 
 ## 连接测试
 
-文本能力探测要求模型严格返回 `{"ok":true}` 且不能有额外字段。声明 `embed` 时还会发送单项 `siftmark` 向量探测，并检查数量、维度非空和所有数值有限。只有声明的能力全部通过，档案才可启用。
+文本能力探测会发送代表性的收藏分析请求，并要求模型返回完整六字段结果。声明 `embed` 时还会发送单项 `siftmark` 向量探测，并检查数量、维度非空和所有数值有限。只有声明的能力全部通过，档案才可启用。
 
 测试连接会产生真实供应商请求，可能受配额或计费规则影响。Siftmark 不提供预算上限；本地用量页只记录模型、任务、Token（若服务商提供）、延迟和状态，不保存请求正文或 API Key。
 

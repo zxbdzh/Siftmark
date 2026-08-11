@@ -23,7 +23,13 @@ export class ChromeOnboardingStore {
     const value = (await this.storage.get(ONBOARDING_STORAGE_KEY))[
       ONBOARDING_STORAGE_KEY
     ];
-    return isOnboardingState(value) ? value : initialState(this.now());
+    if (isOnboardingState(value)) return value;
+    const migrated = migrateLegacyState(value, this.now());
+    if (migrated) {
+      await this.storage.set({ [ONBOARDING_STORAGE_KEY]: migrated });
+      return migrated;
+    }
+    return initialState(this.now());
   }
 
   completeStep(step: OnboardingStepId): Promise<OnboardingStateV1> {
@@ -93,6 +99,34 @@ function isOnboardingState(value: unknown): value is OnboardingStateV1 {
 
 function isStep(value: unknown): value is OnboardingStepId {
   return ONBOARDING_STEPS.includes(value as OnboardingStepId);
+}
+
+function migrateLegacyState(
+  value: unknown,
+  now: number
+): OnboardingStateV1 | null {
+  if (!isRecord(value) || value.version !== 1) return null;
+  if (value.status !== 'in-progress' && value.status !== 'completed')
+    return null;
+  if (!Array.isArray(value.completedSteps) || !Array.isArray(value.skippedSteps))
+    return null;
+  const currentStep =
+    value.currentStep === 'floating-button'
+      ? 'model'
+      : isStep(value.currentStep)
+        ? value.currentStep
+        : value.currentStep === null
+          ? null
+          : undefined;
+  if (currentStep === undefined) return null;
+  return {
+    version: 1,
+    status: value.status,
+    currentStep,
+    completedSteps: value.completedSteps.filter(isStep),
+    skippedSteps: value.skippedSteps.filter(isStep),
+    updatedAt: now
+  };
 }
 
 function unique(values: OnboardingStepId[]): OnboardingStepId[] {

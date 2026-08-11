@@ -5,7 +5,7 @@ import {
 } from 'node:http';
 
 const host = '127.0.0.1';
-const port = 4173;
+const port = 43_173;
 interface RecordedRequest {
   method: string;
   path: string;
@@ -141,10 +141,12 @@ function analysis() {
 async function providerPayload(request: IncomingMessage, url: URL) {
   const body = await recordRequest(request, url);
   const serialized = JSON.stringify(body);
-  const probe =
+  const analysisProbe = serialized.includes('siftmark_analysis_probe');
+  const legacyProbe =
     serialized.includes('siftmark_probe') ||
     serialized.includes('"required":["ok"]') ||
     serialized.includes('"max_tokens":32');
+  const probe = analysisProbe || legacyProbe;
   if (!probe && behavior.failAnalysisCount > 0) {
     behavior.failAnalysisCount -= 1;
     return { status: 503, payload: null };
@@ -160,7 +162,10 @@ async function providerPayload(request: IncomingMessage, url: URL) {
       payload: { ...analysis(), url: 'https://schema-must-reject.test/' }
     };
   }
-  return { status: 200, payload: probe ? { ok: true } : analysis() };
+  return {
+    status: 200,
+    payload: legacyProbe && !analysisProbe ? { ok: true } : analysis()
+  };
 }
 
 async function recordRequest(request: IncomingMessage, url: URL) {

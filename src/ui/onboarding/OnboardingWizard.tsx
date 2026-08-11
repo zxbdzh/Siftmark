@@ -10,7 +10,6 @@ import {
 const stepTitles: Record<OnboardingStepId, string> = {
   'permissions-privacy': '权限与隐私',
   'special-folders': '特殊文件夹',
-  'floating-button': '网页悬浮按钮',
   model: '可选模型',
   migration: '迁移数据',
   'read-only-scan': '只读扫描'

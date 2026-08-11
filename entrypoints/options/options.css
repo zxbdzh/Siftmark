@@ -172,9 +172,67 @@ section button {
 }
 .ai-assignment-grid label {
   display: grid;
-  grid-template-columns: 86px minmax(0, 1fr);
+  grid-template-columns: 100px minmax(0, 1fr);
   align-items: center;
   gap: 10px;
+}
+.agent-rule-list {
+  display: grid;
+  margin: 20px 0 0;
+  padding: 0;
+  border-top: 1px solid var(--border);
+  list-style: none;
+}
+.agent-rule-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 34px;
+  gap: 14px;
+  align-items: center;
+  min-height: 70px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.agent-rule-main {
+  display: grid;
+  grid-template-columns: minmax(120px, .7fr) minmax(0, 1.3fr);
+  gap: 3px 14px;
+  min-width: 0;
+}
+.agent-rule-main strong,
+.agent-rule-action,
+.agent-rule-main small {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.agent-rule-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.agent-rule-action svg {
+  width: 15px;
+  height: 15px;
+  flex: none;
+  color: var(--settings-accent);
+}
+.agent-rule-main small {
+  grid-column: 1 / -1;
+  color: var(--text-2);
+}
+.agent-rule-list .icon-button svg {
+  width: 16px;
+  height: 16px;
+}
+.agent-rule-empty {
+  min-height: 76px;
+  margin: 20px 0 0;
+  padding: 26px 0;
+  border-block: 1px solid var(--border);
+  color: var(--text-2);
+  text-align: center;
+}
+.capture-preferences-section output {
+  margin-top: 8px;
 }
 .stacked-field {
   display: grid;
@@ -225,7 +283,7 @@ section button {
 }
 .backup-encrypted {
   display: grid;
-  grid-template-columns: repeat(2, minmax(180px, 1fr)) auto;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
   align-items: end;
   gap: 12px;
   margin-top: 14px;
@@ -235,7 +293,16 @@ section button {
 }
 .backup-encrypted label {
   display: grid;
+  min-width: 0;
   gap: 6px;
+}
+.backup-encrypted input {
+  width: 100%;
+  min-width: 0;
+}
+.backup-encrypted button,
+.backup-import-controls > button {
+  white-space: nowrap;
 }
 .folder-scope label,
 .backup-roots label {
@@ -268,9 +335,17 @@ section button {
 }
 .backup-import-controls {
   display: grid;
-  grid-template-columns: minmax(220px, 1fr) minmax(180px, 1fr) auto;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) auto;
   align-items: end;
   gap: 12px;
+}
+.backup-import-controls > * {
+  min-width: 0;
+}
+@media (max-width: 900px) {
+  .backup-import-controls {
+    grid-template-columns: 1fr;
+  }
 }
 .backup-import-password {
   display: grid;
@@ -501,6 +576,12 @@ output {
     grid-template-columns: 1fr;
     gap: 5px;
   }
+  .agent-rule-main {
+    grid-template-columns: 1fr;
+  }
+  .agent-rule-main small {
+    grid-column: 1;
+  }
   .special-folder-row {
     grid-template-columns: 1fr;
   }
@@ -536,8 +617,14 @@ output {
 
 /* Options shell */
 body {
-  --settings-accent: #4f6ef7;
+  --settings-accent: #3857d6;
+  --settings-on-accent: #ffffff;
   overflow: hidden;
+}
+
+[data-theme='dark'] body {
+  --settings-accent: #91a4ff;
+  --settings-on-accent: #111318;
 }
 
 .options-shell {
@@ -590,7 +677,7 @@ body {
   height: 32px;
   border-radius: 6px;
   background: var(--settings-accent);
-  color: #ffffff;
+  color: var(--settings-on-accent);
 }
 
 .settings-sidebar nav {
@@ -712,7 +799,7 @@ main.settings-main {
 .primary-button {
   border-color: var(--settings-accent) !important;
   background: var(--settings-accent) !important;
-  color: #ffffff !important;
+  color: var(--settings-on-accent) !important;
 }
 
 input[type='checkbox'],
@@ -779,8 +866,23 @@ input[type='range'] {
   height: 18px;
 }
 
-.preference-row > input[type='range'] {
-  width: min(240px, 35%);
+.range-control {
+  display: grid;
+  grid-template-columns: minmax(140px, 240px) 44px;
+  align-items: center;
+  gap: 12px;
+  width: min(296px, 45%);
+}
+
+.range-control input[type='range'] {
+  width: 100%;
+  min-width: 0;
+}
+
+.range-control output {
+  color: var(--text-1);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
 }
 
 .segmented-control {
@@ -804,7 +906,7 @@ input[type='range'] {
 
 .segmented-control button[data-active='true'] {
   background: var(--settings-accent);
-  color: #ffffff;
+  color: var(--settings-on-accent);
 }
 
 .section-actions {
@@ -1022,8 +1124,9 @@ input[type='range'] {
     padding: 14px 0;
   }
 
-  .preference-row > input[type='range'] {
+  .range-control {
     width: 100%;
+    grid-template-columns: minmax(0, 1fr) 44px;
   }
 
   .history-main {

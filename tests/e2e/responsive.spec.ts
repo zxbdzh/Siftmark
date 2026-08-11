@@ -3,13 +3,13 @@ import { createRootFolder } from './fixtures/chrome-state';
 import { openExtensionPage } from './helpers/extension-pages';
 
 const viewports = [
-  { width: 1440, height: 900, mode: 'wide' },
-  { width: 1280, height: 720, mode: 'wide' },
-  { width: 1024, height: 768, mode: 'wide' },
-  { width: 800, height: 700, mode: 'collapsed' }
+  { width: 1440, height: 900, mode: 'split' },
+  { width: 800, height: 700, mode: 'split' },
+  { width: 760, height: 700, mode: 'stacked' },
+  { width: 390, height: 844, mode: 'stacked' }
 ] as const;
 
-test('uses three columns at wide widths and a detail drawer at 800px', async ({
+test('keeps the bookmark tree and batch tools usable across widths', async ({
   context,
   extensionId
 }) => {
@@ -25,38 +25,25 @@ test('uses three columns at wide widths and a detail drawer at 800px', async ({
     folderId
   );
   await manager.reload();
-  await manager.getByRole('treeitem', { name: '响应式样本' }).click();
-  await expect(manager.getByText('响应式书签')).toBeVisible();
+  await manager.getByPlaceholder('搜索书签…').fill('响应式书签');
+  await expect(manager.getByText('响应式书签', { exact: true })).toBeVisible();
 
   for (const viewport of viewports) {
     await manager.setViewportSize(viewport);
-    const folders = manager.locator('.manager-folders');
-    const list = manager.locator('.manager-list');
-    const detail = manager.locator('.manager-detail');
-    const detailButton = manager.getByRole('button', { name: '打开详情' });
-
-    await expect(list).toBeVisible();
-    await expect(folders).toBeVisible();
-    if (viewport.mode === 'wide') {
-      await expect(detail).toBeVisible();
-      await expect(detailButton).toBeHidden();
-      const columns = await manager
-        .locator('.manager-shell')
-        .evaluate((element) =>
-          getComputedStyle(element).gridTemplateColumns.split(' ')
-        );
-      expect(columns).toHaveLength(3);
-    } else {
-      await expect(detail).toBeHidden();
-      await expect(detailButton).toBeVisible();
-      await detailButton.click();
-      await expect(
-        manager.getByRole('dialog', { name: '书签详情' })
-      ).toBeVisible();
-      await manager.getByRole('button', { name: '关闭' }).click();
-      await expect(
-        manager.getByRole('dialog', { name: '书签详情' })
-      ).toBeHidden();
-    }
+    const workspace = manager.locator('.manager-workspace');
+    const columns = await workspace.evaluate((element) =>
+      getComputedStyle(element).gridTemplateColumns.split(' ')
+    );
+    expect(columns).toHaveLength(viewport.mode === 'split' ? 2 : 1);
+    await expect(manager.locator('.tree-panel')).toBeVisible();
+    await expect(manager.locator('.bulk-toolbar')).toBeVisible();
+    await expect(
+      manager.getByText('响应式书签', { exact: true })
+    ).toBeVisible();
+    expect(
+      await manager.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth + 1
+      )
+    ).toBe(true);
   }
 });

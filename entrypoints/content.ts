@@ -1,103 +1,219 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { FloatingButton } from '../src/ui/content/FloatingButton';
-import { ContentToast } from '../src/ui/content/ContentToast';
 import { extractPageCapture } from '../src/capture/extract-page';
+import type { CaptureSession } from '../src/capture-agent/types';
+import {
+  CaptureOverlay,
+  type CaptureOverlayAction,
+  type CaptureOverlayPhase,
+  type CaptureOverlayView
+} from '../src/ui/content/CaptureOverlay';
+import { captureOverlayStyles } from '../src/ui/content/capture-overlay.css';
 
-const contentStyles = '.siftmark-floating{position:fixed;right:18px;bottom:18px;z-index:2147483647;display:flex;background:#111;border-radius:8px;box-shadow:0 8px 24px rgb(0 0 0 / 24%)}.siftmark-floating button{width:38px;height:38px;border:0;background:transparent;color:#fff;display:grid;place-items:center}.siftmark-floating svg{width:18px}.siftmark-floating .siftmark-drag{cursor:grab;color:#b7ff36}.siftmark-toast{position:fixed;right:18px;bottom:64px;z-index:2147483647;display:flex;align-items:flex-start;gap:9px;width:min(360px,calc(100vw - 36px));padding:11px 13px;border:1px solid rgb(255 255 255 / 18%);border-radius:6px;background:#17191d;color:#fff;box-shadow:0 12px 30px rgb(0 0 0 / 26%);font:14px/1.45 "Noto Sans SC",system-ui,sans-serif}.siftmark-toast::before{content:"";flex:none;width:8px;height:8px;margin-top:6px;border-radius:50%;background:#4f6ef7}.siftmark-toast[data-tone="processing"]::before{animation:siftmark-pulse 1.1s ease-in-out infinite}.siftmark-toast[data-tone="success"]::before{background:#39b86c}.siftmark-toast[data-tone="error"]::before{background:#e05252}@keyframes siftmark-pulse{50%{opacity:.35;transform:scale(.72)}}@media(prefers-reduced-motion:reduce){.siftmark-toast[data-tone="processing"]::before{animation:none}}';
+const HIDE_AFTER_MS: Partial<Record<CaptureOverlayPhase, number>> = {
+  approval: 18_000,
+  saved: 8_000,
+  rejected: 8_000,
+  error: 12_000
+};
 
-type ToastTone = 'processing' | 'success' | 'error';
-interface ToastState {
-  message: string;
-  tone: ToastTone;
+interface CaptureAgentOverlayMessage {
+  type?: string;
+  view?: CaptureOverlayView;
+  session?: CaptureOverlayView | CaptureSession;
+  status?: CaptureOverlayPhase | 'success';
+  sessionId?: string;
+  title?: string;
+  destinationPath?: string[];
+  newFolderName?: string;
+  detail?: string;
+  canAdjust?: boolean;
+  canUndo?: boolean;
 }
 
-function ContentEntry({ floatingEnabled, initialPosition }: { floatingEnabled: boolean; initialPosition: { x: number; y: number } }) {
-  const [buttonEnabled, setButtonEnabled] = useState(floatingEnabled);
-  const [toast, setToast] = useState<ToastState>();
-  const dismissTimer = useRef<ReturnType<typeof globalThis.setTimeout>>();
-  const showToast = (message: string, tone: ToastTone, duration?: number) => {
-    if (dismissTimer.current) globalThis.clearTimeout(dismissTimer.current);
-    setToast({ message, tone });
-    dismissTimer.current = duration
-      ? globalThis.setTimeout(() => setToast(undefined), duration)
-      : undefined;
+interface CaptureAgentActionResponse {
+  success?: boolean;
+  view?: CaptureOverlayView;
+  session?: CaptureOverlayView | CaptureSession;
+  error?: string;
+}
+
+function viewFromSession(session: CaptureSession): CaptureOverlayView {
+  const phaseByState: Record<CaptureSession['state'], CaptureOverlayPhase> = {
+    analyzing: 'processing',
+    ready: 'processing',
+    pending: 'approval',
+    adjusting: 'approval',
+    executing: 'processing',
+    applied: 'saved',
+    rejected: 'rejected',
+    failed: 'error',
+    expired: 'rejected',
+    undone: 'rejected'
   };
+  const phase = phaseByState[session.state];
+  return {
+    sessionId: session.id,
+    phase,
+    title: session.plan?.title,
+    destinationPath: session.plan?.destination.path.map(({ title }) => title),
+    newFolderName: session.plan?.destination.newFolders[0],
+    message: session.failure?.message,
+    canAdjust: phase === 'approval' || phase === 'saved',
+    canUndo: phase === 'saved' && Boolean(session.operationBatchId)
+  };
+}
+
+function isCaptureSession(
+  value: CaptureOverlayView | CaptureSession
+): value is CaptureSession {
+  return 'state' in value && 'bookmarkId' in value;
+}
+
+function readOverlayView(message: unknown): CaptureOverlayView | undefined {
+  const value = message as CaptureAgentOverlayMessage;
+  if (
+    value.type !== 'capture-agent-overlay' &&
+    value.type !== 'capture-agent-session-changed' &&
+    value.type !== 'native-smart-bookmark-status'
+  )
+    return undefined;
+
+  if (value.view?.phase) return value.view;
+  if (value.session)
+    return isCaptureSession(value.session)
+      ? viewFromSession(value.session)
+      : value.session;
+  if (!value.status) return undefined;
+
+  const phase = value.status === 'success' ? 'saved' : value.status;
+  return {
+    phase,
+    sessionId: value.sessionId,
+    title: value.title,
+    destinationPath: value.destinationPath,
+    newFolderName: value.newFolderName,
+    message: value.detail,
+    canAdjust:
+      value.canAdjust ?? (phase === 'saved' && Boolean(value.sessionId)),
+    canUndo: value.canUndo ?? (phase === 'saved' && Boolean(value.sessionId))
+  };
+}
+
+export function ContentEntry() {
+  const [view, setView] = useState<CaptureOverlayView>();
+  const [busyAction, setBusyAction] = useState<CaptureOverlayAction>();
+  const hideTimer = useRef<ReturnType<typeof globalThis.setTimeout>>();
+
+  const dismiss = useCallback(() => {
+    if (hideTimer.current) globalThis.clearTimeout(hideTimer.current);
+    setView(undefined);
+    setBusyAction(undefined);
+  }, []);
+
   useEffect(() => {
     const listener = (message: unknown) => {
-      const value = message as {
-        type?: string;
-        status?: ToastTone;
-        detail?: string;
-      };
-      if (value.type !== 'native-smart-bookmark-status' || !value.status) return;
-      const fallback =
-        value.status === 'processing'
-          ? '正在整理书签…'
-          : value.status === 'success'
-            ? '收藏成功'
-            : '智能收藏失败';
-      showToast(
-        value.detail || fallback,
-        value.status,
-        value.status === 'processing' ? undefined : value.status === 'success' ? 6_000 : 8_000
-      );
+      const nextView = readOverlayView(message);
+      if (!nextView) return;
+      setBusyAction(undefined);
+      setView(nextView);
     };
     browser.runtime.onMessage.addListener(listener);
-    return () => {
-      browser.runtime.onMessage.removeListener(listener);
-      if (dismissTimer.current) globalThis.clearTimeout(dismissTimer.current);
-    };
+    return () => browser.runtime.onMessage.removeListener(listener);
   }, []);
-  const hide = () => {
-    setButtonEnabled(false);
-    void browser.storage.local.set({
-      [`siftmark.content.hidden.${location.hostname}`]: true
-    });
-  };
-  const save = async () => {
-    showToast('正在分析页面并整理书签…', 'processing');
+
+  useEffect(() => {
+    if (hideTimer.current) globalThis.clearTimeout(hideTimer.current);
+    if (!view) return;
+    const delay = HIDE_AFTER_MS[view.phase];
+    if (delay)
+      hideTimer.current = globalThis.setTimeout(() => {
+        setView(undefined);
+        setBusyAction(undefined);
+      }, delay);
+    return () => {
+      if (hideTimer.current) globalThis.clearTimeout(hideTimer.current);
+    };
+  }, [view]);
+
+  useEffect(() => {
+    if (!view) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') dismiss();
+    };
+    globalThis.addEventListener('keydown', onKeyDown);
+    return () => globalThis.removeEventListener('keydown', onKeyDown);
+  }, [dismiss, view]);
+
+  const act = async (action: CaptureOverlayAction) => {
+    if (!view || busyAction) return;
+    setBusyAction(action);
     try {
-      const result = await browser.runtime.sendMessage({ type: 'save-current-page' }) as {
-        success?: boolean;
-        category?: string;
-        error?: string;
-      };
-      showToast(
-        result.success ? `已收藏到 ${result.category || '书签栏'}` : result.error || '智能收藏失败，请打开扩展重试',
-        result.success ? 'success' : 'error',
-        result.success ? 6_000 : 8_000
-      );
-    } catch {
-      showToast('智能收藏失败，请打开扩展重试', 'error', 8_000);
+      const response = (await browser.runtime.sendMessage({
+        type: 'capture-agent-action',
+        input: {
+          action,
+          sessionId: view.sessionId
+        }
+      })) as CaptureAgentActionResponse | undefined;
+      const responseView = response?.view ?? response?.session;
+      const nextView = responseView
+        ? isCaptureSession(responseView)
+          ? viewFromSession(responseView)
+          : responseView
+        : undefined;
+      if (nextView?.phase) setView(nextView);
+      else if (response?.success === false)
+        setView({
+          ...view,
+          phase: 'error',
+          message: response.error || '操作未完成，请重试。'
+        });
+      else if (action === 'adjust' || action === 'reject') dismiss();
+    } catch (error) {
+      setView({
+        ...view,
+        phase: 'error',
+        message: error instanceof Error ? error.message : '操作未完成，请重试。'
+      });
+    } finally {
+      setBusyAction(undefined);
     }
   };
-  return React.createElement(React.Fragment, null,
-    React.createElement('style', null, contentStyles),
-    React.createElement(FloatingButton, { enabled: buttonEnabled, initialPosition, onSave: () => void save(), onHide: hide, onPositionChange: (position) => void browser.storage.local.set({ 'siftmark.content.position': position }) }),
-    React.createElement(ContentToast, { message: toast?.message, tone: toast?.tone })
+
+  return React.createElement(
+    React.Fragment,
+    null,
+    React.createElement('style', null, captureOverlayStyles),
+    view
+      ? React.createElement(CaptureOverlay, {
+          view,
+          busyAction,
+          onAction: (action) => void act(action),
+          onDismiss: dismiss
+        })
+      : null
   );
 }
 
 export default defineContentScript({
   matches: ['http://*/*', 'https://*/*'],
   cssInjectionMode: 'ui',
-  async main() {
+  main() {
     browser.runtime.onMessage.addListener((message: unknown) => {
       const value = message as { type?: string; blockedDomains?: string[] };
-      if (value.type === 'capture-page') return Promise.resolve(extractPageCapture(document, location, value.blockedDomains ?? []));
+      if (value.type === 'capture-page')
+        return Promise.resolve(
+          extractPageCapture(document, location, value.blockedDomains ?? [])
+        );
     });
-    const hiddenKey = `siftmark.content.hidden.${location.hostname}`;
-    const settings = await browser.storage.local.get(['siftmark.content.floating', 'siftmark.content.position', hiddenKey]);
+
     const host = document.createElement('div');
     host.id = 'siftmark-root';
     document.documentElement.append(host);
     const shadow = host.attachShadow({ mode: 'open' });
     const mount = document.createElement('div');
     shadow.append(mount);
-    const storedPosition = settings['siftmark.content.position'];
-    const initialPosition = typeof storedPosition === 'object' && storedPosition !== null && 'x' in storedPosition && 'y' in storedPosition ? { x: Number(storedPosition.x) || 0, y: Number(storedPosition.y) || 0 } : { x: 0, y: 0 };
-    const floatingEnabled = settings['siftmark.content.floating'] === true && settings[hiddenKey] !== true;
-    createRoot(mount).render(React.createElement(ContentEntry, { floatingEnabled, initialPosition }));
+    createRoot(mount).render(React.createElement(ContentEntry));
   }
 });

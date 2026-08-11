@@ -29,10 +29,17 @@ export interface SpecialFolderSettings {
   recycleBinId?: string;
 }
 
-export type ProfileAssignments = Partial<Record<'classify' | 'rename' | 'summarize' | 'embed', string>>;
+export type ProfileAssignments = Partial<
+  Record<'classify' | 'rename' | 'summarize' | 'embed' | 'agent', string>
+>;
+
+export const smartBookmarkFolderLevelBounds = { min: 1, max: 5 } as const;
+
 export interface SmartBookmarkSettings {
   allowNewFolders: boolean;
   folderCreationLevel: 'weak' | 'medium' | 'strong';
+  maxNewFolderLevels: number;
+  preferredFolderDepth: number;
   smartRename: boolean;
   renameMaxLength: number;
   captureNativeBookmarks: boolean;
@@ -42,11 +49,13 @@ export interface BookmarkSort { field: BookmarkSortField; direction: 'asc' | 'de
 
 const defaultAppearance: AppearanceSettings = { theme: 'system', density: 'comfortable' };
 export const defaultSmartBookmarkSettings: SmartBookmarkSettings = {
-  allowNewFolders: false,
+  allowNewFolders: true,
   folderCreationLevel: 'weak',
+  maxNewFolderLevels: 1,
+  preferredFolderDepth: 2,
   smartRename: true,
   renameMaxLength: 12,
-  captureNativeBookmarks: false
+  captureNativeBookmarks: true
 };
 
 export class ChromeSettingsRepository {
@@ -122,24 +131,14 @@ export class ChromeSettingsRepository {
   async getSmartBookmarkSettings(): Promise<SmartBookmarkSettings> {
     const value = await this.read(settingsKeys.smartBookmark);
     if (!isRecord(value)) return defaultSmartBookmarkSettings;
-    return {
-      allowNewFolders: value.allowNewFolders === true,
-      folderCreationLevel:
-        value.folderCreationLevel === 'medium' ||
-        value.folderCreationLevel === 'strong'
-          ? value.folderCreationLevel
-          : 'weak',
-      smartRename: value.smartRename !== false,
-      renameMaxLength:
-        typeof value.renameMaxLength === 'number'
-          ? Math.min(50, Math.max(6, Math.round(value.renameMaxLength)))
-          : 12,
-      captureNativeBookmarks: value.captureNativeBookmarks === true
-    };
+    return normalizeSmartBookmarkSettings(value);
   }
 
   setSmartBookmarkSettings(value: SmartBookmarkSettings): Promise<void> {
-    return this.write(settingsKeys.smartBookmark, value);
+    return this.write(
+      settingsKeys.smartBookmark,
+      normalizeSmartBookmarkSettings(value)
+    );
   }
 
   async getFolderSort(folderId: string): Promise<BookmarkSort> {
@@ -162,6 +161,44 @@ export class ChromeSettingsRepository {
   private async write(key: string, value: unknown): Promise<void> {
     await this.storage.set({ [key]: value });
   }
+}
+
+function normalizeSmartBookmarkSettings(
+  value: Partial<Record<keyof SmartBookmarkSettings, unknown>>
+): SmartBookmarkSettings {
+  return {
+    allowNewFolders: value.allowNewFolders === true,
+    folderCreationLevel:
+      value.folderCreationLevel === 'medium' ||
+      value.folderCreationLevel === 'strong'
+        ? value.folderCreationLevel
+        : 'weak',
+    maxNewFolderLevels: normalizeFolderLevel(
+      value.maxNewFolderLevels,
+      defaultSmartBookmarkSettings.maxNewFolderLevels
+    ),
+    preferredFolderDepth: normalizeFolderLevel(
+      value.preferredFolderDepth,
+      defaultSmartBookmarkSettings.preferredFolderDepth
+    ),
+    smartRename: value.smartRename !== false,
+    renameMaxLength:
+      typeof value.renameMaxLength === 'number'
+        ? Math.min(50, Math.max(6, Math.round(value.renameMaxLength)))
+        : 12,
+    captureNativeBookmarks: value.captureNativeBookmarks === true
+  };
+}
+
+function normalizeFolderLevel(value: unknown, fallback: number): number {
+  const numeric =
+    typeof value === 'number' && Number.isFinite(value)
+      ? Math.round(value)
+      : fallback;
+  return Math.min(
+    smartBookmarkFolderLevelBounds.max,
+    Math.max(smartBookmarkFolderLevelBounds.min, numeric)
+  );
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
