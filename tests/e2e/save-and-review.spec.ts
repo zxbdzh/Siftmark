@@ -120,14 +120,19 @@ test('saves first, requests approval for risk, applies locally, and supports und
   await expect(article.getByRole('status')).toContainText('收藏已放好');
 
   const popup = await openExtensionPage(context, extensionId, 'popup.html');
-  await expect(popup.getByRole('heading', { name: '最近结果' })).toBeVisible();
+  await expect(popup.getByRole('tab', { name: /回执/ })).toHaveAttribute(
+    'aria-selected',
+    'true'
+  );
   await expect(popup.getByText('本地模型建议标题')).toBeVisible();
   await popup.getByRole('button', { name: '撤销 本地模型建议标题' }).click();
 
   await expect
     .poll(() => bookmarkState(manager, bookmark.id))
     .toMatchObject({ parentId: inboxId, title: 'Siftmark 本地文章' });
-  await expect(popup.getByText('已撤销')).toBeVisible();
+  await expect(
+    popup.locator('.recent-main').filter({ hasText: '本地模型建议标题' })
+  ).toContainText('已撤销');
 });
 
 async function configureCaptureAgent(

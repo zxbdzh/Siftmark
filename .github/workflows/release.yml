@@ -1,0 +1,167 @@
+name: Release Chromium extension
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (defaults to package.json, for example 0.1.1)'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: siftmark-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Verify, build, and release
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.15.0
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Validate release version
+        id: release
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          package_version="$(node -p "require('./package.json').version")"
+          requested_version="${INPUT_VERSION#v}"
+
+          if [ "$EVENT_NAME" = 'push' ]; then
+            requested_version="${REF_NAME#v}"
+          elif [ -z "$requested_version" ]; then
+            requested_version="$package_version"
+          fi
+
+          if [[ ! "$requested_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid release version: $requested_version (expected x.y.z)" >&2
+            exit 1
+          fi
+
+          if [ "$requested_version" != "$package_version" ]; then
+            echo "Release version $requested_version does not match package.json version $package_version" >&2
+            exit 1
+          fi
+
+          release_tag="v$package_version"
+          release_commit="$(git rev-parse HEAD)"
+          if git rev-parse --verify --quiet "refs/tags/${release_tag}^{commit}" >/dev/null; then
+            tagged_commit="$(git rev-parse "refs/tags/${release_tag}^{commit}")"
+            if [ "$tagged_commit" != "$release_commit" ]; then
+              echo "Tag $release_tag points to another commit; bump package.json before publishing a new release" >&2
+              exit 1
+            fi
+          fi
+
+          echo "version=$package_version" >> "$GITHUB_OUTPUT"
+          echo "tag=$release_tag" >> "$GITHUB_OUTPUT"
+          echo "commit=$release_commit" >> "$GITHUB_OUTPUT"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run type checks
+        run: pnpm typecheck
+
+      - name: Run lint checks
+        run: pnpm lint
+
+      - name: Run unit and integration tests
+        run: pnpm test --coverage
+
+      - name: Build extension
+        run: pnpm build
+
+      - name: Run end-to-end tests
+        run: pnpm test:e2e
+
+      - name: Package release artifacts
+        id: package
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          pnpm zip
+
+          source_path=".output/siftmark-${VERSION}-chrome.zip"
+          target_name="siftmark-${VERSION}-chromium.zip"
+          target_path="release/${target_name}"
+
+          if [ ! -f "$source_path" ]; then
+            echo "WXT artifact not found: $source_path" >&2
+            exit 1
+          fi
+
+          manifest_version="$(node -p "JSON.parse(require('fs').readFileSync('.output/chrome-mv3/manifest.json', 'utf8')).version")"
+          if [ "$manifest_version" != "$VERSION" ]; then
+            echo "Extension version $manifest_version does not match release version $VERSION" >&2
+            exit 1
+          fi
+
+          mkdir -p release
+          cp "$source_path" "$target_path"
+          (
+            cd release
+            sha256sum "$target_name" > "${target_name}.sha256"
+          )
+
+          echo "zip=$target_path" >> "$GITHUB_OUTPUT"
+          echo "checksum=${target_path}.sha256" >> "$GITHUB_OUTPUT"
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: siftmark-${{ steps.release.outputs.version }}-chromium
+          path: |
+            ${{ steps.package.outputs.zip }}
+            ${{ steps.package.outputs.checksum }}
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
+          RELEASE_COMMIT: ${{ steps.release.outputs.commit }}
+          ZIP_PATH: ${{ steps.package.outputs.zip }}
+          CHECKSUM_PATH: ${{ steps.package.outputs.checksum }}
+        run: |
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" "$ZIP_PATH" "$CHECKSUM_PATH" \
+              --clobber \
+              --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create "$RELEASE_TAG" "$ZIP_PATH" "$CHECKSUM_PATH" \
+              --target "$RELEASE_COMMIT" \
+              --title "Siftmark v${RELEASE_VERSION}" \
+              --generate-notes \
+              --repo "$GITHUB_REPOSITORY"
+          fi

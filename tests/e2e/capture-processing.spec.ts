@@ -80,6 +80,8 @@ async function openProcessingPopup(
   const popup = await openExtensionPage(context, extensionId, 'popup.html');
   if (reducedMotion) await popup.emulateMedia({ reducedMotion: 'reduce' });
   await popup.reload();
-  await expect(popup.getByText(`处理中-${flow}`)).toBeVisible();
+  await expect(
+    popup.getByRole('heading', { name: `处理中-${flow}` })
+  ).toBeVisible();
   return popup;
 }

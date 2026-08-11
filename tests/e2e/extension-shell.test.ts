@@ -11,8 +11,11 @@ test('loads the current popup, manager, options, side panel, and worker', async 
 
   const popup = await openExtensionPage(context, extensionId, 'popup.html');
   await expect(popup.locator('.brand-type')).toHaveText('Siftmark');
-  await expect(popup.getByRole('heading', { name: '待处理' })).toBeVisible();
-  await expect(popup.getByRole('heading', { name: '最近结果' })).toBeVisible();
+  await expect(popup.getByRole('tab', { name: /任务/ })).toHaveAttribute(
+    'aria-selected',
+    'true'
+  );
+  await expect(popup.getByRole('tab', { name: /回执/ })).toBeVisible();
   await expect(popup.getByText('没有待确认的收藏')).toBeVisible();
 
   const manager = await openExtensionPage(context, extensionId, 'manager.html');
@@ -198,9 +201,7 @@ test('supports the bookmark tree, Agent proposal, and in-page approval shell', a
           status: 'completed',
           label: '联网搜索已完成',
           detail: '模型服务返回了标准 web_search 工具调用记录',
-          facts: [
-            { label: '工具证据', value: '返回标准搜索调用记录' }
-          ],
+          facts: [{ label: '工具证据', value: '返回标准搜索调用记录' }],
           durationMs: 910,
           createdAt: timestamp + 644,
           updatedAt: timestamp + 1554
@@ -304,9 +305,9 @@ test('supports the bookmark tree, Agent proposal, and in-page approval shell', a
   await sidePanel.locator('.analysis-trace').scrollIntoViewIfNeeded();
   await expect(sidePanel.locator('.analysis-trace')).toBeInViewport();
   expect(
-    await sidePanel.locator('.analysis-trace').evaluate(
-      (element) => element.scrollWidth <= element.clientWidth + 1
-    )
+    await sidePanel
+      .locator('.analysis-trace')
+      .evaluate((element) => element.scrollWidth <= element.clientWidth + 1)
   ).toBe(true);
 
   const article = await context.newPage();

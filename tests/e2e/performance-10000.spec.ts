@@ -92,7 +92,9 @@ test('keeps a 10,000-bookmark tree searchable and responsive', async ({
     )
     .toBe(1);
   const popup = await openExtensionPage(context, extensionId, 'popup.html');
-  await expect(popup.getByText('万级书签保存验证')).toBeVisible();
+  await expect(
+    popup.getByRole('heading', { name: '万级书签保存验证' })
+  ).toBeVisible();
 
   const cdp = await context.newCDPSession(manager);
   await cdp.send('Performance.enable');

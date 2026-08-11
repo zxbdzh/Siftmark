@@ -39,7 +39,7 @@ describe('extension shell motion styles', () => {
     expect(shellRule).toBeDefined();
     expect(shellRule).not.toContain('animation:');
     expect(shellRule).not.toContain('transition:');
-    expect(popup).toContain('.task-actions button:active:not(:disabled)');
+    expect(popup).toContain('.popup-shell button:active:not(:disabled)');
     expect(popup).toContain('@media (prefers-reduced-motion: reduce)');
 
     const hoverMedia = popup.indexOf(
