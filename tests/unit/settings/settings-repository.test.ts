@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   ChromeSettingsRepository,
+  defaultSleepReviewSettings,
   defaultSmartBookmarkSettings,
   settingsKeys
 } from '../../../src/settings/settings-repository';
@@ -85,6 +86,31 @@ describe('ChromeSettingsRepository', () => {
     await expect(repository.getSmartBookmarkSettings()).resolves.toMatchObject({
       enableWebSearch: false,
       enableVision: false
+    });
+  });
+
+  it('keeps metered sleep review opt-in and clamps its idle budget', async () => {
+    const values: Record<string, unknown> = {};
+    const repository = new ChromeSettingsRepository({
+      get: async (key) => ({ [key]: values[key] }),
+      set: async (items) => {
+        Object.assign(values, items);
+      }
+    });
+
+    await expect(repository.getSleepReviewSettings()).resolves.toEqual(
+      defaultSleepReviewSettings
+    );
+    await repository.setSleepReviewSettings({
+      enabled: true,
+      idleMinutes: 1,
+      batchSize: 99
+    });
+
+    await expect(repository.getSleepReviewSettings()).resolves.toEqual({
+      enabled: true,
+      idleMinutes: 5,
+      batchSize: 12
     });
   });
 });

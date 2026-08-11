@@ -1,7 +1,10 @@
 import path from 'node:path';
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures/extension';
-import { createRootFolder } from './fixtures/chrome-state';
+import {
+  createRootFolder,
+  putDatabaseRecord
+} from './fixtures/chrome-state';
 import { openExtensionPage } from './helpers/extension-pages';
 
 test('keeps controls reachable, text fitted, and pages free of overlap', async ({
@@ -39,12 +42,58 @@ test('keeps controls reachable, text fitted, and pages free of overlap', async (
   await manager.setViewportSize({ width: 390, height: 844 });
   await expectVisualIntegrity(manager, 'manager 390x844');
 
+  const reviewedAt = Date.now();
+  await putDatabaseRecord(manager, 'capturePreferences', {
+    id: 'sleep-review:docs.example.test',
+    kind: 'learned',
+    domain: 'docs.example.test',
+    updatedAt: reviewedAt,
+    payload: {
+      id: 'sleep-review:docs.example.test',
+      kind: 'learned',
+      domain: 'docs.example.test',
+      action: 'prefer-folder',
+      destinationPath: ['开发', 'AI 参考资料'],
+      source: 'sleep-review',
+      sourceSessionId: 'review-source',
+      reviewSummary: '连续批准技术文档进入开发目录，形成弱偏好。',
+      evidenceCount: 4,
+      confidence: 'high',
+      reviewedAt,
+      createdAt: reviewedAt,
+      updatedAt: reviewedAt
+    }
+  });
+  await manager.evaluate(async (timestamp) => {
+    await chrome.storage.local.set({
+      'siftmark.settings.sleep-review.v1': {
+        enabled: true,
+        idleMinutes: 15,
+        batchSize: 8
+      },
+      'siftmark.runtime.sleep-review-status.v1': {
+        state: 'learned',
+        lastCompletedAt: timestamp,
+        reviewedSessions: 4,
+        learnedMemories: 1,
+        summary: '从 4 个收藏结果中整理出 1 条记忆'
+      }
+    });
+  }, reviewedAt);
+
   const options = await openExtensionPage(context, extensionId, 'options.html');
   await options.setViewportSize({ width: 360, height: 760 });
   await expect(
     options.getByRole('heading', { name: '设置', exact: true })
   ).toBeVisible();
   await expectVisualIntegrity(options, 'options 360x760');
+  const learning = options.locator('.capture-learning-section');
+  await learning.scrollIntoViewIfNeeded();
+  await expect(options.getByText('docs.example.test')).toBeVisible();
+  await expect(
+    options.getByText('连续批准技术文档进入开发目录，形成弱偏好。')
+  ).toBeVisible();
+  await expectVisualIntegrity(options, 'learning memory 360x760');
 
   await options.setViewportSize({ width: 800, height: 700 });
   await expectVisualIntegrity(options, 'options 800x700');

@@ -12,6 +12,7 @@ export interface CapturePreferenceRepository {
   listMatching(url: string, title: string): Promise<CapturePreference[]>;
   put(preference: CapturePreference): Promise<void>;
   remove(id: string): Promise<void>;
+  clear(kind: CapturePreferenceKind): Promise<number>;
 }
 
 export class DexieCapturePreferenceRepository
@@ -52,8 +53,7 @@ export class DexieCapturePreferenceRepository
       )
       .sort(
         (left, right) =>
-          Number(right.kind === 'fixed-rule') -
-            Number(left.kind === 'fixed-rule') ||
+          preferencePriority(right.kind) - preferencePriority(left.kind) ||
           right.updatedAt - left.updatedAt
       );
   }
@@ -64,6 +64,10 @@ export class DexieCapturePreferenceRepository
 
   async remove(id: string): Promise<void> {
     await this.database.capturePreferences.delete(id);
+  }
+
+  async clear(kind: CapturePreferenceKind): Promise<number> {
+    return this.database.capturePreferences.where('kind').equals(kind).delete();
   }
 }
 
@@ -129,4 +133,10 @@ function domainOf(value: string): string {
   } catch {
     return '';
   }
+}
+
+function preferencePriority(kind: CapturePreferenceKind): number {
+  if (kind === 'fixed-rule') return 3;
+  if (kind === 'learned') return 2;
+  return 1;
 }

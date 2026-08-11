@@ -131,6 +131,122 @@ test('supports the bookmark tree, Agent proposal, and in-page approval shell', a
         reasons: ['new-folder'],
         canExecute: true
       },
+      activities: [
+        {
+          id: 'capture',
+          kind: 'capture',
+          status: 'completed',
+          label: '原生书签已保存',
+          detail: '收藏先保存在浏览器中，分析失败也不会丢失',
+          facts: [
+            { label: '触发入口', value: '浏览器原生收藏' },
+            { label: '保存顺序', value: '先保存，再分析' }
+          ],
+          durationMs: 0,
+          createdAt: timestamp,
+          updatedAt: timestamp
+        },
+        {
+          id: 'page-context',
+          kind: 'page',
+          status: 'completed',
+          label: '网页内容已准备',
+          detail: '已提取标题、描述与正文用于本次归类',
+          facts: [
+            { label: '描述', value: '86 字符' },
+            { label: '正文', value: '3,420 字符' },
+            { label: '页面截图', value: '当前可见区域已准备' },
+            { label: '隐私处理', value: '网址参数在发送前移除' }
+          ],
+          durationMs: 18,
+          createdAt: timestamp + 1,
+          updatedAt: timestamp + 19
+        },
+        {
+          id: 'folder-candidates',
+          kind: 'folders',
+          status: 'completed',
+          label: '已比较候选目录',
+          detail: '比较了 12 个相关目录，并结合目录深度与本地偏好排序',
+          facts: [
+            { label: '目录总数', value: '48 个' },
+            { label: '送入模型', value: '12 个候选' },
+            { label: '本地信号', value: '2 条偏好或记忆' },
+            { label: '推荐深度', value: '2 级' }
+          ],
+          durationMs: 42,
+          createdAt: timestamp + 20,
+          updatedAt: timestamp + 62
+        },
+        {
+          id: 'vision',
+          kind: 'vision',
+          status: 'completed',
+          label: '模型服务已确认图片输入',
+          detail: '当前可见区域仅用于本次判断，未写入收藏会话',
+          facts: [
+            { label: '服务确认', value: '图片输入已接受' },
+            { label: '持久化', value: '截图未写入收藏会话' }
+          ],
+          durationMs: 580,
+          createdAt: timestamp + 63,
+          updatedAt: timestamp + 643
+        },
+        {
+          id: 'web-search',
+          kind: 'web-search',
+          status: 'completed',
+          label: '联网搜索已完成',
+          detail: '模型服务返回了标准 web_search 工具调用记录',
+          facts: [
+            { label: '工具证据', value: '返回标准搜索调用记录' }
+          ],
+          durationMs: 910,
+          createdAt: timestamp + 644,
+          updatedAt: timestamp + 1554
+        },
+        {
+          id: 'model-analysis',
+          kind: 'model',
+          status: 'completed',
+          label: 'AI 已生成归类方案',
+          detail: '内容与 Agent 产品研究相关，建议归入研究目录。',
+          facts: [
+            { label: '建议位置', value: 'Agent 验收目录 / 研究' },
+            { label: '置信度', value: '中' },
+            { label: '建议标题', value: 'Agent 建议标题' },
+            { label: '内容标签', value: '验收、Agent' }
+          ],
+          durationMs: 1620,
+          createdAt: timestamp + 1555,
+          updatedAt: timestamp + 3175
+        },
+        {
+          id: 'risk-check',
+          kind: 'risk',
+          status: 'completed',
+          label: '风险检查完成',
+          detail: '发现 1 项需要批准的风险',
+          facts: [
+            { label: '审批结论', value: '风险方案，需要用户批准' },
+            { label: '命中规则', value: '新建目录' }
+          ],
+          durationMs: 7,
+          createdAt: timestamp + 3176,
+          updatedAt: timestamp + 3183
+        },
+        {
+          id: 'execution',
+          kind: 'execution',
+          status: 'skipped',
+          label: '等待批准后执行',
+          detail: '尚未调用本地书签接口',
+          facts: [{ label: '写入状态', value: '未执行' }],
+          durationMs: 0,
+          createdAt: timestamp + 3184,
+          updatedAt: timestamp + 3184
+        }
+      ],
       messages: [],
       createdAt: timestamp,
       updatedAt: timestamp,
@@ -144,12 +260,22 @@ test('supports the bookmark tree, Agent proposal, and in-page approval shell', a
     'sidepanel.html?session=shell-agent-session'
   );
   await expect(sidePanel.getByText('Siftmark Agent')).toBeVisible();
-  await expect(sidePanel.getByText('Agent 建议标题')).toBeVisible();
+  await expect(
+    sidePanel.getByRole('heading', { name: 'Agent 建议标题' })
+  ).toBeVisible();
   await expect(sidePanel.getByRole('list', { name: '收藏位置' })).toContainText(
     '研究'
   );
   await expect(sidePanel.getByText('将新建目录')).toBeVisible();
   await expect(sidePanel.getByText('当前网页')).toBeVisible();
+  await expect(
+    sidePanel.getByRole('heading', { name: '分析过程' })
+  ).toBeVisible();
+  await expect(sidePanel.getByText('8 / 8 完成')).toBeVisible();
+  await expect(sidePanel.getByText('模型服务已确认图片输入')).toBeVisible();
+  await expect(sidePanel.getByText('联网搜索已完成')).toBeVisible();
+  await expect(sidePanel.getByText('返回标准搜索调用记录')).toBeVisible();
+  await expect(sidePanel.getByText('1.6 s')).toBeVisible();
   await expect(sidePanel.getByText('查看 AI 分析')).toBeVisible();
   await expect(
     sidePanel.getByRole('button', { name: '不要新建目录' })
@@ -173,6 +299,13 @@ test('supports the bookmark tree, Agent proposal, and in-page approval shell', a
   expect(
     await sidePanel.evaluate(
       () => document.documentElement.scrollWidth <= window.innerWidth + 1
+    )
+  ).toBe(true);
+  await sidePanel.locator('.analysis-trace').scrollIntoViewIfNeeded();
+  await expect(sidePanel.locator('.analysis-trace')).toBeInViewport();
+  expect(
+    await sidePanel.locator('.analysis-trace').evaluate(
+      (element) => element.scrollWidth <= element.clientWidth + 1
     )
   ).toBe(true);
 
@@ -203,7 +336,23 @@ test('supports the bookmark tree, Agent proposal, and in-page approval shell', a
           phase: 'approval',
           destinationPath: ['书签栏', 'Agent 验收目录'],
           newFolderName: '研究',
-          title: 'Agent 建议标题'
+          title: 'Agent 建议标题',
+          activities: [
+            {
+              id: 'risk-check',
+              kind: 'risk',
+              status: 'completed',
+              label: '风险检查完成',
+              detail: '发现 1 项需要批准的风险',
+              facts: [
+                { label: '审批结论', value: '风险方案，需要用户批准' },
+                { label: '命中规则', value: '新建目录' }
+              ],
+              durationMs: 7,
+              createdAt: 1,
+              updatedAt: 8
+            }
+          ]
         }
       }),
     tabId
@@ -213,9 +362,22 @@ test('supports the bookmark tree, Agent proposal, and in-page approval shell', a
   });
   await expect(approval).toContainText('Agent 验收目录');
   await expect(approval).toContainText('研究');
+  await expect(approval).toContainText('分析过程');
+  await expect(approval).toContainText('风险检查完成');
+  await expect(approval).toContainText('命中规则');
   await expect(
     approval.getByRole('button', { name: '与 Agent 调整' })
   ).toBeVisible();
+  expect(
+    await approval
+      .getByRole('list', { name: '分析过程' })
+      .evaluate((element) => getComputedStyle(element).overflowY)
+  ).toBe('visible');
+  expect(
+    await approval
+      .locator('.siftmark-overlay-actions')
+      .evaluate((element) => getComputedStyle(element).position)
+  ).toBe('sticky');
   await article.keyboard.press('Escape');
   await expect(approval).toHaveCount(0);
   await expect(article.getByRole('button')).toHaveCount(0);

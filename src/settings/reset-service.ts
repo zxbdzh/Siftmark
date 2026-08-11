@@ -39,7 +39,9 @@ export const RESET_CONFIRMATION_PHRASE = '重置 Siftmark';
 const encoder = new TextEncoder();
 const modelConfigurationKeys = [
   'siftmark.ai.profiles.v1',
-  'siftmark.settings.profile-assignments.v1'
+  'siftmark.settings.profile-assignments.v1',
+  'siftmark.settings.sleep-review.v1',
+  'siftmark.runtime.sleep-review-status.v1'
 ] as const;
 const scopeTables: Record<'ai-metadata-index' | 'history-tasks', string[]> = {
   'ai-metadata-index': [

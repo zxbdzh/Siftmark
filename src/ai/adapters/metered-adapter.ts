@@ -3,6 +3,8 @@ import { ProviderError } from '../network/errors';
 import type { RequestMetric } from '../network/request-metrics';
 import type {
   AiAnalysisResult,
+  AiCaptureReviewContext,
+  AiCaptureReviewResult,
   AiProtocol,
   AiRequestContext,
   CapabilityProbe,
@@ -49,6 +51,22 @@ export class MeteredAiAdapter implements AiAdapter {
       context.taskType ?? 'analysis',
       signal,
       () => this.adapter.analyze(profile, context, signal),
+      (result) => result.usageTokens
+    );
+  }
+
+  reviewCaptureHistory(
+    profile: ModelProfile,
+    context: AiCaptureReviewContext,
+    signal: AbortSignal
+  ): Promise<AiCaptureReviewResult> {
+    if (!this.adapter.reviewCaptureHistory)
+      return Promise.reject(new Error('所选协议不支持睡眠回顾'));
+    return this.measure(
+      profile,
+      'sleep-review',
+      signal,
+      () => this.adapter.reviewCaptureHistory!(profile, context, signal),
       (result) => result.usageTokens
     );
   }

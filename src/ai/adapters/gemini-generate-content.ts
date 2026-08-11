@@ -1,6 +1,16 @@
 import type { AiAdapter } from './adapter';
-import type { AiAnalysisResult, AiRequestContext, CapabilityProbe, ModelProfile } from '../types';
+import type {
+  AiAnalysisResult,
+  AiCaptureReviewContext,
+  AiCaptureReviewResult,
+  AiRequestContext,
+  CapabilityProbe,
+  ModelProfile
+} from '../types';
 import { buildAnalysisPrompt } from '../prompts/analysis-prompt';
+import { buildCaptureReviewPrompt } from '../prompts/capture-review-prompt';
+import { captureReviewJsonSchema } from '../schemas/capture-review-contract';
+import { parseCaptureReviewText } from '../schemas/capture-review-parser';
 import { postProviderJson, type ProviderJsonRequest } from '../network/http-client';
 import { ProviderError } from '../network/errors';
 import { analysisJsonSchema, appendEndpointPath, parseAnalysisText, parseProbeText, probeJsonSchema } from './openai-common';
@@ -44,6 +54,20 @@ export class GeminiGenerateContentAdapter implements AiAdapter {
       ...parseAnalysisText(text),
       usageTokens: response.usageMetadata?.totalTokenCount
     };
+  }
+
+  async reviewCaptureHistory(profile: ModelProfile, context: AiCaptureReviewContext, signal: AbortSignal): Promise<AiCaptureReviewResult> {
+    const prompt = buildCaptureReviewPrompt(context);
+    const response = await this.post<GeminiResponse>({
+      url: modelUrl(profile), headers: { 'x-goog-api-key': profile.apiKey }, signal, timeoutMs: profile.timeoutMs,
+      body: { systemInstruction: { parts: [{ text: prompt.system }] }, contents: [{ role: 'user', parts: [{ text: prompt.user }] }], generationConfig: { responseMimeType: 'application/json', responseJsonSchema: captureReviewJsonSchema } }
+    });
+    if (response.promptFeedback?.blockReason) throw new ProviderError('unknown-result', 'Provider blocked the sleep review');
+    const candidate = response.candidates?.[0];
+    if (!candidate || (candidate.finishReason && candidate.finishReason !== 'STOP')) throw new ProviderError('unknown-result', 'Provider returned an incomplete sleep review');
+    const text = candidate.content?.parts?.find((part) => part.text)?.text;
+    if (!text) throw new ProviderError('unknown-result', 'Provider returned no sleep review result');
+    return { ...parseCaptureReviewText(text), usageTokens: response.usageMetadata?.totalTokenCount };
   }
 
   async embed(profile: ModelProfile, texts: string[], signal: AbortSignal): Promise<number[][]> {

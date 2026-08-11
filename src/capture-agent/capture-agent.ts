@@ -18,6 +18,7 @@ import {
   type CaptureFailure,
   type CapturePlan,
   type CapturePreference,
+  type CaptureRiskAssessment,
   type CaptureSession
 } from './types';
 
@@ -188,7 +189,11 @@ export class CaptureAgent {
         id: 'risk-check',
         kind: 'risk',
         status: 'running',
-        label: '正在检查风险'
+        label: '正在检查风险',
+        facts: [
+          { label: '建议位置', value: planDestinationLabel(plan) },
+          { label: '置信度', value: confidenceLabel(plan.confidence) }
+        ]
       });
       const risk = await this.assess(currentSession, plan, page);
       currentSession = await this.recordActivity(currentSession, {
@@ -196,7 +201,23 @@ export class CaptureAgent {
         kind: 'risk',
         status: 'completed',
         label: '风险检查完成',
-        detail: riskActivityDetail(risk.reasons.length)
+        detail: riskActivityDetail(risk.reasons),
+        facts: [
+          {
+            label: '审批结论',
+            value:
+              risk.decision === 'auto' && risk.canExecute
+                ? '安全方案，可自动执行'
+                : '风险方案，需要用户批准'
+          },
+          {
+            label: '命中规则',
+            value:
+              risk.reasons.length > 0
+                ? risk.reasons.map(riskReasonLabel).join('、')
+                : '无'
+          }
+        ]
       });
       const ready: CaptureSession = {
         ...currentSession,
@@ -274,7 +295,8 @@ export class CaptureAgent {
         id: `risk-check-revision-${revisionNumber}`,
         kind: 'risk',
         status: 'running',
-        label: '正在复核调整后的风险'
+        label: '正在复核调整后的风险',
+        facts: [{ label: '建议位置', value: planDestinationLabel(plan) }]
       });
       const risk = await this.assess(currentSession, plan);
       currentSession = await this.recordActivity(currentSession, {
@@ -282,7 +304,16 @@ export class CaptureAgent {
         kind: 'risk',
         status: 'completed',
         label: '调整方案风险复核完成',
-        detail: riskActivityDetail(risk.reasons.length)
+        detail: riskActivityDetail(risk.reasons),
+        facts: [
+          {
+            label: '命中规则',
+            value:
+              risk.reasons.length > 0
+                ? risk.reasons.map(riskReasonLabel).join('、')
+                : '无'
+          }
+        ]
       });
       const withAssistantMessage =
         await this.dependencies.sessions.appendMessage(session.id, {
@@ -323,7 +354,14 @@ export class CaptureAgent {
         id: 'execution',
         kind: 'execution',
         status: 'running',
-        label: '正在执行前安全复核'
+        label: '正在执行前安全复核',
+        facts: [
+          { label: '写入方式', value: '仅使用本地书签接口' },
+          {
+            label: '方案范围',
+            value: executionScopeLabel(currentSession.plan)
+          }
+        ]
       });
       const currentRisk = currentSession.plan
         ? await this.assess(currentSession, currentSession.plan)
@@ -342,7 +380,22 @@ export class CaptureAgent {
         kind: 'execution',
         status: 'running',
         label: '正在整理书签',
-        detail: '仅执行已通过风险检查的本地书签操作'
+        detail: '仅执行已通过风险检查的本地书签操作',
+        facts: currentSession.plan
+          ? [
+              {
+                label: '目标目录',
+                value: planDestinationLabel(currentSession.plan)
+              },
+              {
+                label: '新建目录',
+                value:
+                  currentSession.plan.destination.newFolders.length > 0
+                    ? currentSession.plan.destination.newFolders.join(' / ')
+                    : '无'
+              }
+            ]
+          : undefined
       });
       const receipt = await this.dependencies.executor.execute(currentSession);
       if (receipt.bookmarkId !== session.bookmarkId) {
@@ -357,7 +410,23 @@ export class CaptureAgent {
         kind: 'execution',
         status: 'completed',
         label: '书签整理完成',
-        detail: '标题与收藏位置已按最终方案更新'
+        detail: '标题与收藏位置已按最终方案更新',
+        facts: currentSession.plan
+          ? [
+              {
+                label: '最终位置',
+                value: planDestinationLabel(currentSession.plan)
+              },
+              {
+                label: '标题处理',
+                value:
+                  currentSession.plan.title ===
+                  currentSession.sourceSnapshot.title
+                    ? '保留原标题'
+                    : '已采用建议标题'
+              }
+            ]
+          : undefined
       });
       const applied = this.requireResolved(
         await this.dependencies.sessions.resolve(
@@ -422,7 +491,15 @@ export class CaptureAgent {
     const activity: CaptureActivity = {
       ...safeDraft,
       createdAt: existing?.createdAt ?? timestamp,
-      updatedAt: timestamp
+      updatedAt: timestamp,
+      ...(safeDraft.status === 'running'
+        ? {}
+        : {
+            durationMs: Math.max(
+              0,
+              timestamp - (existing?.createdAt ?? timestamp)
+            )
+          })
     };
     const activities = [...session.activities];
     if (existingIndex >= 0) activities[existingIndex] = activity;
@@ -641,8 +718,13 @@ function initialActivities(
       status: 'completed',
       label: '原生书签已保存',
       detail: '收藏先保存在浏览器中，分析失败也不会丢失',
+      facts: [
+        { label: '触发入口', value: triggerLabel(input.trigger) },
+        { label: '保存顺序', value: '先保存，再分析' }
+      ],
       createdAt: timestamp,
-      updatedAt: timestamp
+      updatedAt: timestamp,
+      durationMs: 0
     },
     {
       id: 'page-context',
@@ -652,8 +734,26 @@ function initialActivities(
       detail: hasPage
         ? '已提取标题、描述与正文用于本次归类'
         : '将仅根据书签标题与网址判断',
+      facts: [
+        {
+          label: '描述',
+          value: `${Array.from(input.page?.description?.trim() ?? '').length} 字符`
+        },
+        {
+          label: '正文',
+          value: `${Array.from(input.page?.text?.trim() ?? '').length} 字符`
+        },
+        {
+          label: '页面截图',
+          value: validImageDataUrl(input.page?.imageDataUrl)
+            ? '当前可见区域已准备'
+            : '未提供'
+        },
+        { label: '隐私处理', value: '网址参数在发送前移除' }
+      ],
       createdAt: timestamp,
-      updatedAt: timestamp
+      updatedAt: timestamp,
+      durationMs: 0
     }
   ];
 }
@@ -663,12 +763,20 @@ function sanitizeActivityDraft(
 ): CaptureActivityDraft {
   const label = safeAuditText(draft.label, 120) || 'Agent 步骤';
   const detail = draft.detail ? safeAuditText(draft.detail, 500) : undefined;
+  const facts = draft.facts
+    ?.slice(0, 6)
+    .map((fact) => ({
+      label: safeAuditText(fact.label, 40),
+      value: safeAuditText(fact.value, 180)
+    }))
+    .filter((fact) => fact.label && fact.value);
   return {
     id: draft.id.slice(0, 120),
     kind: draft.kind,
     status: draft.status,
     label,
-    ...(detail ? { detail } : {})
+    ...(detail ? { detail } : {}),
+    ...(facts?.length ? { facts } : {})
   };
 }
 
@@ -680,10 +788,63 @@ function safeAuditText(value: string, limit: number): string {
   return Array.from(redacted.trim()).slice(0, limit).join('');
 }
 
-function riskActivityDetail(reasonCount: number): string {
-  return reasonCount > 0
-    ? `发现 ${reasonCount} 项需要批准的风险`
+function riskActivityDetail(reasons: CaptureRiskAssessment['reasons']): string {
+  return reasons.length > 0
+    ? `发现 ${reasons.length} 项需要批准的风险`
     : '未发现需要批准的风险';
+}
+
+function triggerLabel(trigger: CaptureAgentBeginInput['trigger']): string {
+  if (trigger === 'native-bookmark') return '浏览器原生收藏';
+  if (trigger === 'keyboard-command') return '扩展快捷键';
+  if (trigger === 'context-menu') return '网页右键菜单';
+  return '扩展收藏入口';
+}
+
+function confidenceLabel(confidence: CapturePlan['confidence']): string {
+  if (confidence === 'high') return '高';
+  if (confidence === 'medium') return '中';
+  if (confidence === 'low') return '低';
+  return '未知';
+}
+
+function planDestinationLabel(plan: CapturePlan): string {
+  return [
+    ...plan.destination.path.map((folder) => folder.title),
+    ...plan.destination.newFolders
+  ]
+    .filter(Boolean)
+    .join(' / ') || '书签栏';
+}
+
+function executionScopeLabel(plan: CapturePlan | undefined): string {
+  if (!plan) return '方案不可用';
+  const operations = ['移动书签', '更新元数据'];
+  if (plan.title) operations.push('检查标题');
+  if (plan.destination.newFolders.length > 0) operations.push('创建目录');
+  if (plan.relatedBookmarks.some((bookmark) => bookmark.relation === 'exact'))
+    operations.push('处理精确重复');
+  return operations.join('、');
+}
+
+function riskReasonLabel(reason: CaptureRiskAssessment['reasons'][number]): string {
+  const labels: Record<
+    CaptureRiskAssessment['reasons'][number],
+    string
+  > = {
+    'new-folder': '新建目录',
+    'multi-level-folder-creation': '多级目录',
+    'unclear-destination': '目标不明确',
+    'low-confidence': '置信度不足',
+    'exact-duplicate': '相同网址',
+    'similar-bookmark': '相似收藏',
+    'rule-conflict': '规则冲突',
+    'large-title-change': '标题变化较大',
+    'special-folder': '特殊目录',
+    'insufficient-page-information': '页面信息不足',
+    'stale-state': '状态已变化'
+  };
+  return labels[reason];
 }
 
 function userMessageCount(session: CaptureSession): number {

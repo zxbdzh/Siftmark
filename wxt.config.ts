@@ -12,7 +12,7 @@ export default defineConfig({
     name: '__MSG_extensionName__',
     description: '__MSG_extensionDescription__',
     default_locale: 'zh_CN',
-    permissions: ['bookmarks', 'storage', 'tabs', 'scripting', 'contextMenus', 'alarms', 'sidePanel'],
+    permissions: ['bookmarks', 'storage', 'tabs', 'scripting', 'contextMenus', 'alarms', 'idle', 'sidePanel'],
     optional_permissions: ['notifications'],
     host_permissions: ['<all_urls>'],
     action: { default_title: 'Siftmark' },

@@ -29,7 +29,9 @@ button {
   right: max(18px, env(safe-area-inset-right));
   z-index: 2147483647;
   width: min(408px, calc(100vw - 28px));
-  overflow: hidden;
+  max-height: calc(100vh - 36px);
+  overflow-x: hidden;
+  overflow-y: auto;
   border: 1px solid var(--siftmark-line);
   border-top: 3px solid var(--siftmark-blue);
   border-radius: 8px;
@@ -45,11 +47,15 @@ button {
 }
 
 .siftmark-overlay-header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   display: grid;
   grid-template-columns: 34px minmax(0, 1fr) 32px;
   gap: 10px;
   align-items: center;
   padding: 14px 14px 12px;
+  background: var(--siftmark-paper);
 }
 
 .siftmark-agent-mark {
@@ -258,6 +264,45 @@ button {
   -webkit-line-clamp: 2;
 }
 
+.siftmark-activity-copy dl {
+  display: grid;
+  gap: 0;
+  margin: 4px 0 2px;
+  border-top: 1px solid #edf0f4;
+}
+
+.siftmark-activity-copy dl > div {
+  display: grid;
+  grid-template-columns: 68px minmax(0, 1fr);
+  gap: 7px;
+  padding: 3px 0;
+  border-bottom: 1px solid #f0f2f6;
+}
+
+.siftmark-activity-copy dt,
+.siftmark-activity-copy dd {
+  min-width: 0;
+  margin: 0;
+  font-size: 9px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.siftmark-activity-copy dt {
+  color: #818999;
+}
+
+.siftmark-activity-copy dd {
+  color: #465064;
+}
+
+.siftmark-activity-duration {
+  justify-self: start;
+  color: #8a93a2;
+  font: 500 9px/1.3 "Space Grotesk", "Noto Sans SC", system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+
 .siftmark-overlay-field {
   display: grid;
   grid-template-columns: 62px minmax(0, 1fr);
@@ -356,11 +401,16 @@ button {
 }
 
 .siftmark-overlay-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 8px;
   padding: 12px 14px 14px;
   border-top: 1px solid var(--siftmark-line);
+  background: var(--siftmark-paper);
+  box-shadow: 0 -8px 18px rgb(23 26 31 / 6%);
 }
 
 .siftmark-result-actions {

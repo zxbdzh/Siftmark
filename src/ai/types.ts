@@ -33,6 +33,42 @@ export interface AiAnalysisResult {
   };
 }
 
+export type AiCaptureReviewResolution =
+  | 'auto'
+  | 'allowed'
+  | 'rejected'
+  | 'undone';
+
+export interface AiCaptureReviewExample {
+  sessionId: string;
+  domain: string;
+  title: string;
+  destinationPath: string[];
+  resolution: AiCaptureReviewResolution;
+  tags: string[];
+  summary: string;
+  confidence: 'high' | 'medium' | 'low';
+  reason: string;
+}
+
+export interface AiCaptureReviewContext {
+  examples: AiCaptureReviewExample[];
+}
+
+export interface AiCaptureReviewMemory {
+  domain: string;
+  action: 'prefer-folder' | 'avoid-folder';
+  destinationPath: string[];
+  confidence: 'high' | 'medium' | 'low';
+  summary: string;
+}
+
+export interface AiCaptureReviewResult {
+  memories: AiCaptureReviewMemory[];
+  reviewSummary: string;
+  usageTokens?: number;
+}
+
 export interface AiRequestContext {
   title: string;
   url: string;

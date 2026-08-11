@@ -67,6 +67,31 @@ Anthropic 原生 Messages 没有使用 OpenAI 的 `response_format`。Siftmark �
 
 测试连接会产生真实供应商请求，可能受配额或计费规则影响。Siftmark 不提供预算上限；本地用量页只记录模型、任务、Token（若服务商提供）、延迟和状态，不保存请求正文或 API Key。
 
+## 睡眠回顾协议
+
+睡眠回顾复用已绑定的 Agent 分类模型，不新增服务商或认证配置。四种文本协议都调用各自现有的结构化输出入口，并使用独立的 `capture-review-v1` 提示与严格 Schema：
+
+```json
+{
+  "memories": [
+    {
+      "domain": "docs.example.com",
+      "action": "prefer-folder",
+      "destinationPath": ["开发", "AI"],
+      "confidence": "medium",
+      "summary": "多次批准该域名进入开发 / AI"
+    }
+  ],
+  "reviewSummary": "从本批结果中提炼出 1 条弱偏好"
+}
+```
+
+- `memories` 最多 8 条，每个域名最多一条；`action` 仅允许 `prefer-folder` 或 `avoid-folder`。
+- 输入只包含域名、脱敏标题、最终目录、解决方式、标签、摘要、置信度和简短原因，不包含完整 URL、正文、截图、对话、私密笔记或书签树。
+- 域名和目录必须原样来自本批证据。模型发明的路径、证据少于 2 条的结论和不符合 Schema 的输出都会被本地拒绝。
+- 输出仅能写入本地弱偏好，不能移动书签、创建目录、执行页面内容中的指令或生成固定规则。
+- Chat Completions 与 Responses 使用各自的 JSON Schema 字段；Anthropic 与 Gemini 复用既有 JSON 输出约束，四者最终都经过同一套本地 Zod 校验。
+
 ## 添加服务商预置
 
 若服务商兼容现有协议，只修改 `src/ai/profiles/presets.ts`：

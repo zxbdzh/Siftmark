@@ -29,6 +29,7 @@ import { AppearanceSection } from '../../src/ui/options/AppearanceSection';
 import { BlockedDomainsSection } from '../../src/ui/options/BlockedDomainsSection';
 import { BookmarkPreferencesSection } from '../../src/ui/options/BookmarkPreferencesSection';
 import { CapturePreferencesSection } from '../../src/ui/options/CapturePreferencesSection';
+import { CaptureLearningSection } from '../../src/ui/options/CaptureLearningSection';
 import { HealthAutomationSection } from '../../src/ui/options/HealthAutomationSection';
 import { IncognitoSection } from '../../src/ui/options/IncognitoSection';
 import { ModelProfilesSection } from '../../src/ui/options/ModelProfilesSection';
@@ -164,6 +165,10 @@ export default function App() {
             <>
               <ModelProfilesSection repository={profiles} service={profileService} />
               <BookmarkPreferencesSection repository={settings} />
+              <CaptureLearningSection
+                repository={capturePreferences}
+                settingsRepository={settings}
+              />
               <CapturePreferencesSection repository={capturePreferences} />
               <AppearanceSection repository={settings} />
               <PermissionsSection />

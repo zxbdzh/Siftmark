@@ -98,6 +98,53 @@ describe('OpenAiChatAdapter', () => {
     expect(result.confidence).toBe('high');
   });
 
+  it('uses a strict structured contract for sleep review', async () => {
+    const post = vi.fn().mockResolvedValue({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({
+              memories: [
+                {
+                  domain: 'a.test',
+                  action: 'prefer-folder',
+                  destinationPath: ['开发'],
+                  confidence: 'high',
+                  summary: '连续批准归入开发'
+                }
+              ],
+              reviewSummary: '整理出一条记忆'
+            })
+          }
+        }
+      ]
+    });
+
+    const result = await new OpenAiChatAdapter(post).reviewCaptureHistory(
+      profile,
+      { examples: [] },
+      new AbortController().signal
+    );
+
+    expect(result.memories[0]?.domain).toBe('a.test');
+    expect(post).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: expect.objectContaining({
+          response_format: {
+            type: 'json_schema',
+            json_schema: expect.objectContaining({
+              name: 'siftmark_capture_review',
+              strict: true,
+              schema: expect.objectContaining({
+                required: ['memories', 'reviewSummary']
+              })
+            })
+          }
+        })
+      })
+    );
+  });
+
   it('sends optional web search and vision inputs in Chat format', async () => {
     const post = vi.fn().mockResolvedValue(fixture);
     const result = await new OpenAiChatAdapter(post).analyze(

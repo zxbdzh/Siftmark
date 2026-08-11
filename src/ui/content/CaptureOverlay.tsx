@@ -104,20 +104,19 @@ function ProcessingTrace({
   activities?: CaptureActivity[];
 }) {
   if (activities.length === 0) return null;
-  const visibleActivities =
-    activities.length <= 4
-      ? activities
-      : [activities[0]!, ...activities.slice(-3)];
+  const completed = activities.filter((activity) =>
+    ['completed', 'skipped'].includes(activity.status)
+  ).length;
   return (
     <div className="siftmark-processing-trace">
       <div className="siftmark-trace-heading">
         <span>分析过程</span>
         <span>
-          {activities.length} / {activities.length}
+          {completed} / {activities.length}
         </span>
       </div>
       <ol aria-label="分析过程">
-        {visibleActivities.map((activity) => (
+        {activities.map((activity) => (
           <li key={activity.id} data-status={activity.status}>
             <span className="siftmark-activity-icon">
               <ActivityIcon status={activity.status} />
@@ -125,12 +124,32 @@ function ProcessingTrace({
             <span className="siftmark-activity-copy">
               <strong>{activity.label}</strong>
               {activity.detail ? <small>{activity.detail}</small> : null}
+              {activity.facts?.length ? (
+                <dl>
+                  {activity.facts.slice(0, 4).map((fact, index) => (
+                    <div key={`${fact.label}-${index}`}>
+                      <dt>{fact.label}</dt>
+                      <dd>{fact.value}</dd>
+                    </div>
+                  ))}
+                </dl>
+              ) : null}
+              {activity.durationMs !== undefined ? (
+                <span className="siftmark-activity-duration">
+                  {formatDuration(activity.durationMs)}
+                </span>
+              ) : null}
             </span>
           </li>
         ))}
       </ol>
     </div>
   );
+}
+
+function formatDuration(durationMs: number): string {
+  if (durationMs < 1_000) return `${durationMs} ms`;
+  return `${(durationMs / 1_000).toFixed(1)} s`;
 }
 
 export function CaptureOverlay({
@@ -165,12 +184,13 @@ export function CaptureOverlay({
       </header>
 
       {view.phase === 'processing' ? (
-        <>
-          <div className="siftmark-processing-line" aria-hidden="true">
-            <span />
-          </div>
-          <ProcessingTrace activities={view.activities} />
-        </>
+        <div className="siftmark-processing-line" aria-hidden="true">
+          <span />
+        </div>
+      ) : null}
+
+      {view.activities?.length ? (
+        <ProcessingTrace activities={view.activities} />
       ) : null}
 
       {hasRoute ? (

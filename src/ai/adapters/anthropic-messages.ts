@@ -1,6 +1,15 @@
 import type { AiAdapter } from './adapter';
-import type { AiAnalysisResult, AiRequestContext, CapabilityProbe, ModelProfile } from '../types';
+import type {
+  AiAnalysisResult,
+  AiCaptureReviewContext,
+  AiCaptureReviewResult,
+  AiRequestContext,
+  CapabilityProbe,
+  ModelProfile
+} from '../types';
 import { buildAnalysisPrompt } from '../prompts/analysis-prompt';
+import { buildCaptureReviewPrompt } from '../prompts/capture-review-prompt';
+import { parseCaptureReviewText } from '../schemas/capture-review-parser';
 import { postProviderJson, type ProviderJsonRequest } from '../network/http-client';
 import { ProviderError } from '../network/errors';
 import { appendEndpointPath, parseAnalysisText, parseProbeText } from './openai-common';
@@ -33,6 +42,18 @@ export class AnthropicMessagesAdapter implements AiAdapter {
       ...parseAnalysisText(text),
       usageTokens: totalTokens(response.usage)
     };
+  }
+
+  async reviewCaptureHistory(profile: ModelProfile, context: AiCaptureReviewContext, signal: AbortSignal): Promise<AiCaptureReviewResult> {
+    const prompt = buildCaptureReviewPrompt(context);
+    const response = await this.post<AnthropicResponse>({
+      url: appendEndpointPath(profile.endpoint, 'messages'), headers: headers(profile.apiKey), signal, timeoutMs: profile.timeoutMs,
+      body: { model: profile.model, max_tokens: 1200, system: prompt.system, messages: [{ role: 'user', content: prompt.user }] }
+    });
+    if (response.stop_reason === 'max_tokens') throw new ProviderError('unknown-result', 'Provider sleep review was truncated');
+    const text = response.content?.find((block) => block.type === 'text')?.text;
+    if (!text) throw new ProviderError('unknown-result', 'Provider returned no sleep review result');
+    return { ...parseCaptureReviewText(text), usageTokens: totalTokens(response.usage) };
   }
 }
 

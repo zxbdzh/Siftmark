@@ -20,4 +20,46 @@ describe('GeminiGenerateContentAdapter', () => {
     expect(post).toHaveBeenCalledWith(expect.objectContaining({ url: expect.stringMatching(/models\/gemini:generateContent$/), headers: { 'x-goog-api-key': 'key' }, body: expect.objectContaining({ systemInstruction: expect.any(Object), contents: expect.any(Array) }) }));
     expect(result.title).toBe('论文');
   });
+
+  it('reviews capture history with the Gemini JSON schema contract', async () => {
+    const post = vi.fn().mockResolvedValue({
+      candidates: [
+        {
+          finishReason: 'STOP',
+          content: {
+            parts: [
+              {
+                text: JSON.stringify({
+                  memories: [],
+                  reviewSummary: '暂未发现稳定规律'
+                })
+              }
+            ]
+          }
+        }
+      ]
+    });
+
+    const result = await new GeminiGenerateContentAdapter(
+      post
+    ).reviewCaptureHistory(
+      profile,
+      { examples: [] },
+      new AbortController().signal
+    );
+
+    expect(result.reviewSummary).toBe('暂未发现稳定规律');
+    expect(post).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: expect.objectContaining({
+          generationConfig: expect.objectContaining({
+            responseMimeType: 'application/json',
+            responseJsonSchema: expect.objectContaining({
+              required: ['memories', 'reviewSummary']
+            })
+          })
+        })
+      })
+    );
+  });
 });

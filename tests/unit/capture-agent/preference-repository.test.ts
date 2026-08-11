@@ -23,6 +23,14 @@ describe('capture preferences', () => {
     const { database, repository } = createRepository();
     await repository.put(preference({ id: 'soft', updatedAt: 5 }));
     await repository.put(
+      preference({
+        id: 'learned',
+        kind: 'learned',
+        source: 'sleep-review',
+        updatedAt: 3
+      })
+    );
+    await repository.put(
       preference({ id: 'rule', kind: 'fixed-rule', updatedAt: 1 })
     );
     await repository.put(
@@ -31,7 +39,11 @@ describe('capture preferences', () => {
 
     await expect(
       repository.listMatching('https://example.test/docs/agent', 'Agent docs')
-    ).resolves.toMatchObject([{ id: 'rule' }, { id: 'soft' }]);
+    ).resolves.toMatchObject([
+      { id: 'rule' },
+      { id: 'learned' },
+      { id: 'soft' }
+    ]);
     database.close();
   });
 

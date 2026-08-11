@@ -77,6 +77,9 @@ function ActivityStatusIcon({ status }: { status: CaptureActivity['status'] }) {
 }
 
 function AnalysisTrace({ activities }: { activities: CaptureActivity[] }) {
+  const completed = activities.filter((activity) =>
+    ['completed', 'skipped'].includes(activity.status)
+  ).length;
   return (
     <section className="analysis-trace" aria-labelledby="analysis-trace-title">
       <header>
@@ -84,7 +87,7 @@ function AnalysisTrace({ activities }: { activities: CaptureActivity[] }) {
           <Sparkles aria-hidden="true" />
           <h2 id="analysis-trace-title">分析过程</h2>
         </div>
-        <span>{activities.length} 步</span>
+        <span>{completed} / {activities.length} 完成</span>
       </header>
 
       {activities.length ? (
@@ -94,12 +97,27 @@ function AnalysisTrace({ activities }: { activities: CaptureActivity[] }) {
               <span className="trace-status-icon">
                 <ActivityStatusIcon status={activity.status} />
               </span>
-              <div>
-                <span className="trace-kind">
-                  {activityKindLabels[activity.kind]}
-                </span>
+              <div className="trace-copy">
+                <div className="trace-step-meta">
+                  <span className="trace-kind">
+                    {activityKindLabels[activity.kind]}
+                  </span>
+                  {activity.durationMs !== undefined ? (
+                    <span>{formatDuration(activity.durationMs)}</span>
+                  ) : null}
+                </div>
                 <strong>{activity.label}</strong>
                 {activity.detail ? <p>{activity.detail}</p> : null}
+                {activity.facts?.length ? (
+                  <dl className="trace-facts">
+                    {activity.facts.map((fact, index) => (
+                      <div key={`${fact.label}-${index}`}>
+                        <dt>{fact.label}</dt>
+                        <dd>{fact.value}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                ) : null}
               </div>
             </li>
           ))}
@@ -114,6 +132,12 @@ function AnalysisTrace({ activities }: { activities: CaptureActivity[] }) {
       </p>
     </section>
   );
+}
+
+function formatDuration(durationMs: number): string {
+  if (durationMs < 1_000) return `${durationMs} ms`;
+  if (durationMs < 60_000) return `${(durationMs / 1_000).toFixed(1)} s`;
+  return `${Math.floor(durationMs / 60_000)} min`;
 }
 
 export default function App() {

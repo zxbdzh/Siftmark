@@ -284,6 +284,73 @@ describe('SmartCapturePlanner', () => {
     expect(context?.availableFolderPaths?.[0]).toBe('开发/AI/Agent');
   });
 
+  it('uses reviewed memory ahead of a one-off soft preference', async () => {
+    let context: AiRequestContext | undefined;
+    const registry = new AiAdapterRegistry();
+    registry.register({
+      protocol: 'openai-chat',
+      testConnection: vi.fn(),
+      analyze: vi.fn(async (_profile, nextContext: AiRequestContext) => {
+        context = nextContext;
+        return {
+          folderPath: ['研究'],
+          title: '无关页面',
+          tags: [],
+          summary: '',
+          confidence: 'high' as const,
+          reason: '采用历史学习结果'
+        };
+      })
+    });
+    const planner = new SmartCapturePlanner({
+      bookmarks: { getTree: vi.fn().mockResolvedValue(baseTree()) },
+      profiles: { list: vi.fn().mockResolvedValue([profile]) },
+      settings: settings({ preferredFolderDepth: 2 }),
+      adapters: registry
+    });
+
+    await planner.plan({
+      source: {
+        id: 'current',
+        parentId: 'missing',
+        index: 0,
+        title: '无关页面',
+        url: 'https://example.test'
+      },
+      preferences: [
+        {
+          id: 'soft',
+          kind: 'soft',
+          domain: 'example.test',
+          action: 'prefer-folder',
+          destinationPath: ['开发', 'AI'],
+          source: 'allow',
+          sourceSessionId: 'old',
+          createdAt: 1,
+          updatedAt: 1
+        },
+        {
+          id: 'memory',
+          kind: 'learned',
+          domain: 'example.test',
+          action: 'prefer-folder',
+          destinationPath: ['研究'],
+          source: 'sleep-review',
+          sourceSessionId: 'latest',
+          reviewSummary: '连续三次批准归入研究',
+          evidenceCount: 3,
+          confidence: 'high',
+          reviewedAt: 2,
+          createdAt: 2,
+          updatedAt: 2
+        }
+      ]
+    });
+
+    expect(context?.availableFolderPaths?.[0]).toBe('研究');
+    expect(context?.additionalRules).toContain('连续三次批准归入研究');
+  });
+
   it('uses configured web search and vision and reports their auditable steps', async () => {
     let context: AiRequestContext | undefined;
     const registry = new AiAdapterRegistry();
@@ -338,14 +405,30 @@ describe('SmartCapturePlanner', () => {
       expect.objectContaining({
         id: 'vision',
         status: 'completed',
-        label: '页面截图识别完成'
+        label: '页面截图识别完成',
+        facts: expect.arrayContaining([
+          { label: '服务确认', value: '图片输入已接受' }
+        ])
       })
     );
     expect(reportActivity).toHaveBeenCalledWith(
       expect.objectContaining({
         id: 'web-search',
         status: 'completed',
-        label: '联网搜索完成'
+        label: '联网搜索完成',
+        facts: expect.arrayContaining([
+          { label: '工具证据', value: '返回标准搜索调用记录' }
+        ])
+      })
+    );
+    expect(reportActivity).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'model-analysis',
+        status: 'completed',
+        facts: expect.arrayContaining([
+          { label: '建议位置', value: '开发 / AI' },
+          { label: '置信度', value: '高' }
+        ])
       })
     );
   });

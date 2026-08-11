@@ -37,7 +37,7 @@ describe('CaptureOverlay', () => {
 
     expect(screen.getByRole('status')).toHaveTextContent('原生书签已保存');
     expect(screen.getByRole('status')).toHaveTextContent('AI 正在生成归类方案');
-    expect(screen.getByText('2 / 2')).toBeInTheDocument();
+    expect(screen.getByText('1 / 2')).toBeInTheDocument();
   });
 
   it('keeps the bookmark-saved guarantee visible when enhancement steps are added', () => {
@@ -73,7 +73,7 @@ describe('CaptureOverlay', () => {
     expect(status).toHaveTextContent('正在识别页面截图');
     expect(status).toHaveTextContent('正在请求联网搜索');
     expect(status).toHaveTextContent('AI 正在生成归类方案');
-    expect(screen.getByText('6 / 6')).toBeInTheDocument();
+    expect(screen.getByText('5 / 6')).toBeInTheDocument();
   });
 
   it('shows a risky destination and asks for a simple decision', () => {
@@ -85,7 +85,22 @@ describe('CaptureOverlay', () => {
           phase: 'approval',
           destinationPath: ['书签栏', '开发', 'AI'],
           newFolderName: 'Agent',
-          title: '浏览器收藏 Agent 设计'
+          title: '浏览器收藏 Agent 设计',
+          activities: [
+            {
+              id: 'risk-check',
+              kind: 'risk',
+              status: 'completed',
+              label: '风险检查完成',
+              facts: [
+                { label: '命中规则', value: '新建目录' },
+                { label: '审批结论', value: '风险方案，需要用户批准' }
+              ],
+              createdAt: 1,
+              updatedAt: 21,
+              durationMs: 20
+            }
+          ]
         }}
         onAction={onAction}
         onDismiss={vi.fn()}
@@ -95,6 +110,8 @@ describe('CaptureOverlay', () => {
     expect(screen.getByRole('dialog')).toHaveTextContent('开发');
     expect(screen.getByText('Agent')).toBeInTheDocument();
     expect(screen.getByText('浏览器收藏 Agent 设计')).toBeInTheDocument();
+    expect(screen.getByText('命中规则')).toBeInTheDocument();
+    expect(screen.getByText('风险方案，需要用户批准')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: '允许' }));
     fireEvent.click(screen.getByRole('button', { name: '拒绝' }));

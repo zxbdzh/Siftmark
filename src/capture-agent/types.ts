@@ -103,6 +103,11 @@ export type CaptureActivityKind =
 export type CaptureActivityStatus =
   'running' | 'completed' | 'skipped' | 'failed';
 
+export interface CaptureActivityFact {
+  label: string;
+  value: string;
+}
+
 /**
  * A safe, user-facing audit event. It records what the Agent did and a short
  * conclusion, never provider reasoning tokens, prompts, page bodies or raw
@@ -114,13 +119,16 @@ export interface CaptureActivity {
   status: CaptureActivityStatus;
   label: string;
   detail?: string;
+  /** Small, redacted evidence fields suitable for a local audit timeline. */
+  facts?: CaptureActivityFact[];
   createdAt: number;
   updatedAt: number;
+  durationMs?: number;
 }
 
 export type CaptureActivityDraft = Omit<
   CaptureActivity,
-  'createdAt' | 'updatedAt'
+  'createdAt' | 'updatedAt' | 'durationMs'
 >;
 
 export type CaptureResolution =
@@ -145,9 +153,14 @@ export interface CaptureSession {
   updatedAt: number;
   expiresAt: number;
   resolvedAt?: number;
+  learningReview?: {
+    reviewedAt: number;
+    outcome: 'learned' | 'no-pattern';
+    memoryIds: string[];
+  };
 }
 
-export type CapturePreferenceKind = 'soft' | 'fixed-rule';
+export type CapturePreferenceKind = 'soft' | 'learned' | 'fixed-rule';
 
 export interface CapturePreference {
   id: string;
@@ -158,10 +171,28 @@ export interface CapturePreference {
   action: 'prefer-folder' | 'avoid-folder';
   destinationFolderId?: string;
   destinationPath: string[];
-  source: 'allow' | 'reject' | 'agent-adjustment' | 'explicit-rule';
+  source:
+    | 'allow'
+    | 'reject'
+    | 'agent-adjustment'
+    | 'sleep-review'
+    | 'explicit-rule';
   sourceSessionId: string;
+  reviewSummary?: string;
+  evidenceCount?: number;
+  confidence?: Confidence;
+  reviewedAt?: number;
   createdAt: number;
   updatedAt: number;
+}
+
+export interface CaptureLearningMemory extends CapturePreference {
+  kind: 'learned';
+  source: 'sleep-review';
+  reviewSummary: string;
+  evidenceCount: number;
+  confidence: Confidence;
+  reviewedAt: number;
 }
 
 export const pendingCaptureStates: readonly CaptureSessionState[] = [

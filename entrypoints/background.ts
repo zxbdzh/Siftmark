@@ -10,7 +10,10 @@ import {
   registerContextMenus
 } from '../src/platform/chrome/context-menus';
 import { RuleEngine } from '../src/rules/rule-engine';
-import { ChromeSettingsRepository } from '../src/settings/settings-repository';
+import {
+  ChromeSettingsRepository,
+  settingsKeys
+} from '../src/settings/settings-repository';
 import { openSiftmarkDatabase } from '../src/storage/database';
 import { DexieTaskRepository } from '../src/tasks/task-repository';
 import { recoverInterruptedTasks } from '../src/tasks/task-recovery';
@@ -65,9 +68,12 @@ import { SmartBookmarkService } from '../src/bookmarks/smart-bookmark-service';
 import { UsageRepository } from '../src/ai/network/usage-repository';
 import {
   CaptureAgent,
+  CaptureSleepReviewService,
+  DexieCaptureLearningRepository,
   DexieCapturePreferenceRepository,
   DexieCaptureSessionRepository,
   LocalCaptureExecutor,
+  ModelCaptureMemoryReviewer,
   SmartCapturePlanner,
   type CaptureAgentAction,
   type CaptureSession,
@@ -77,6 +83,7 @@ import { UndoService } from '../src/operations/undo-service';
 
 const TASK_WAKE_ALARM = 'siftmark-task-wake';
 const RECYCLE_PURGE_ALARM = 'siftmark-recycle-purge';
+const SLEEP_REVIEW_ALARM = 'siftmark-sleep-review';
 const VISIT_TRACKING_KEY = 'siftmark.visits.enabled.v1';
 const ACTIVE_CAPTURE_SESSION_KEY = 'siftmark.capture-agent.active-session.v1';
 
@@ -133,6 +140,7 @@ export default defineBackground(() => {
   const adapters = createDefaultAiAdapterRegistry(usage);
   const captureSessions = new DexieCaptureSessionRepository(database);
   const capturePreferences = new DexieCapturePreferenceRepository(database);
+  const captureLearning = new DexieCaptureLearningRepository(database);
   const smartHistory = new ChromeSmartBookmarkHistoryRepository(
     browser.storage.local
   );
@@ -213,6 +221,31 @@ export default defineBackground(() => {
       ].filter((id): id is string => Boolean(id));
     }
   });
+  const sleepReview = new CaptureSleepReviewService({
+    learning: captureLearning,
+    reviewer: new ModelCaptureMemoryReviewer({ profiles, settings, adapters }),
+    settings,
+    hasActiveCapture: async () =>
+      (await captureSessions.listPending(20)).some((session) =>
+        ['analyzing', 'adjusting', 'executing', 'ready'].includes(session.state)
+      )
+  });
+  const publishSleepReview = async (force = false) => {
+    const result = await sleepReview.review({ force });
+    void browser.runtime
+      .sendMessage({ type: 'capture-learning-changed', result })
+      .catch(() => undefined);
+    return result;
+  };
+  const configureSleepReview = async () => {
+    const configuration = await settings.getSleepReviewSettings();
+    browser.idle.setDetectionInterval(configuration.idleMinutes * 60);
+    if (configuration.enabled)
+      void browser.alarms.create(SLEEP_REVIEW_ALARM, {
+        periodInMinutes: 60
+      });
+    else await browser.alarms.clear(SLEEP_REVIEW_ALARM);
+  };
   const smartBookmarks = new SmartBookmarkService(
     bookmarks,
     profiles,
@@ -782,6 +815,7 @@ export default defineBackground(() => {
   void processTasks();
   void enqueueConfiguredEmbeddings();
   void healthScheduler.restore();
+  void configureSleepReview();
   void visitAggregator.prune(Date.now());
   browser.runtime.onInstalled.addListener(() => {
     logger.info('扩展已安装');
@@ -790,6 +824,7 @@ export default defineBackground(() => {
       periodInMinutes: 24 * 60
     });
     void registerContextMenus(browser.contextMenus);
+    void configureSleepReview();
   });
   registerBrowserCommands(browser.commands, () => void saveActiveTab());
   browser.runtime.onMessage.addListener(
@@ -814,6 +849,8 @@ export default defineBackground(() => {
           });
       if (value.type === 'capture-agent-action' && value.input)
         return respondToCapture(value.input, sender.tab?.id);
+      if (value.type === 'capture-learning-review-now')
+        return publishSleepReview(true);
       if (value.type === 'queue-analysis' && value.input?.bookmarkId)
         return enqueueAnalysis({
           bookmarkId: value.input.bookmarkId,
@@ -971,6 +1008,13 @@ export default defineBackground(() => {
           .catch(() => undefined);
     });
   });
+  browser.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName === 'local' && changes[settingsKeys.sleepReview])
+      void configureSleepReview();
+  });
+  browser.idle.onStateChanged.addListener((state) => {
+    if (state === 'idle' || state === 'locked') void publishSleepReview();
+  });
   browser.alarms.onAlarm.addListener((alarm) => {
     if (alarm.name === TASK_WAKE_ALARM) void runner.runUntilIdle();
     else if (alarm.name === RECYCLE_PURGE_ALARM) void enqueueRecyclePurge();
@@ -981,6 +1025,15 @@ export default defineBackground(() => {
         else
           for (const folderId of schedule.folderIds)
             await enqueueHealthScan({ folderId });
+      });
+    else if (alarm.name === SLEEP_REVIEW_ALARM)
+      void settings.getSleepReviewSettings().then(async (configuration) => {
+        if (!configuration.enabled) return;
+        const state = await browser.idle.queryState(
+          configuration.idleMinutes * 60
+        );
+        if (state === 'idle' || state === 'locked')
+          await publishSleepReview();
       });
   });
 });

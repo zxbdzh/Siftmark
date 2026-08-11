@@ -127,7 +127,17 @@ export class SmartCapturePlanner implements CapturePlanner {
       kind: 'folders',
       status: 'completed',
       label: '已比较候选目录',
-      detail: `比较了 ${availableFolderPaths.length} 个相关目录，并结合目录深度与本地偏好排序`
+      detail: `比较了 ${availableFolderPaths.length} 个相关目录，并结合目录深度与本地偏好排序`,
+      facts: [
+        { label: '目录总数', value: `${catalog.length} 个` },
+        { label: '送入模型', value: `${availableFolderPaths.length} 个候选` },
+        { label: '本地信号', value: `${input.preferences.length} 条偏好或记忆` },
+        { label: '推荐深度', value: `${settings.preferredFolderDepth} 级` },
+        {
+          label: '优先候选',
+          value: availableFolderPaths.slice(0, 3).join('；') || '书签栏'
+        }
+      ]
     });
     const currentFolderPath = logicalPathForFolder(
       input.source.parentId,
@@ -152,7 +162,17 @@ export class SmartCapturePlanner implements CapturePlanner {
           ? '当前模型协议尚未接入多模态图片输入'
           : !input.page?.imageDataUrl
             ? '页面策略、标签页状态或截图大小不允许发送截图'
-            : undefined
+            : undefined,
+        facts: useVision
+          ? [
+              { label: '图片范围', value: '当前标签页可见区域' },
+              {
+                label: '临时输入',
+                value: imagePayloadLabel(input.page?.imageDataUrl)
+              },
+              { label: '模型协议', value: protocolLabel(profile.protocol) }
+            ]
+          : undefined
       });
     if (settings.enableWebSearch)
       await input.reportActivity?.({
@@ -162,7 +182,13 @@ export class SmartCapturePlanner implements CapturePlanner {
         label: useWebSearch ? '正在请求联网搜索' : '本次未使用联网搜索',
         detail: supportsOpenAiEnhancements
           ? undefined
-          : '当前模型协议尚未接入联网工具参数'
+          : '当前模型协议尚未接入联网工具参数',
+        facts: useWebSearch
+          ? [
+              { label: '搜索策略', value: '要求模型使用联网检索' },
+              { label: '模型协议', value: protocolLabel(profile.protocol) }
+            ]
+          : undefined
       });
     const context: AiRequestContext = {
       title: input.source.title,
@@ -191,7 +217,20 @@ export class SmartCapturePlanner implements CapturePlanner {
       id: `model-analysis${activitySuffix}`,
       kind: 'model',
       status: 'running',
-      label: revision ? 'AI 正在重新规划方案' : 'AI 正在生成归类方案'
+      label: revision ? 'AI 正在重新规划方案' : 'AI 正在生成归类方案',
+      facts: [
+        { label: '模型', value: `${profile.name} · ${profile.model}` },
+        {
+          label: '上下文',
+          value: `${Array.from(context.pageText ?? '').length} 字符正文，${availableFolderPaths.length} 个目录，${relatedContext.length} 个相关收藏`
+        },
+        {
+          label: '增强工具',
+          value: [useVision ? '页面识图' : '', useWebSearch ? '联网搜索' : '']
+            .filter(Boolean)
+            .join('、') || '未启用'
+        }
+      ]
     });
     const analysis = await adapter.analyze(
       profile,
@@ -208,7 +247,16 @@ export class SmartCapturePlanner implements CapturePlanner {
           : '模型服务未确认图片输入',
         detail: analysis.toolUsage?.vision
           ? '当前可见区域仅用于本次判断，未写入收藏会话'
-          : '中转服务可能忽略了图片输入'
+          : '中转服务可能忽略了图片输入',
+        facts: [
+          {
+            label: '服务确认',
+            value: analysis.toolUsage?.vision
+              ? '图片输入已接受'
+              : '未确认图片输入'
+          },
+          { label: '持久化', value: '截图未写入收藏会话' }
+        ]
       });
     if (useWebSearch) {
       const webSearchUsage = analysis.toolUsage?.webSearch;
@@ -230,7 +278,18 @@ export class SmartCapturePlanner implements CapturePlanner {
             ? '模型服务返回了标准 web_search 工具调用记录'
             : webSearchUsage === 'requested'
               ? '当前格式不提供可验证的标准搜索调用记录'
-              : '模型可能判断无需搜索，或中转未返回工具轨迹'
+              : '模型可能判断无需搜索，或中转未返回工具轨迹',
+        facts: [
+          {
+            label: '工具证据',
+            value:
+              webSearchUsage === 'used'
+                ? '返回标准搜索调用记录'
+                : webSearchUsage === 'requested'
+                  ? '请求已发送，协议不返回调用明细'
+                  : '未返回可验证的搜索记录'
+          }
+        ]
       });
     }
     await input.reportActivity?.({
@@ -238,7 +297,22 @@ export class SmartCapturePlanner implements CapturePlanner {
       kind: 'model',
       status: 'completed',
       label: revision ? 'AI 已生成调整方案' : 'AI 已生成归类方案',
-      detail: safeTraceDetail(analysis.reason)
+      detail: safeTraceDetail(analysis.reason),
+      facts: [
+        {
+          label: '建议位置',
+          value: analysis.folderPath.join(' / ') || '书签栏'
+        },
+        { label: '置信度', value: confidenceLabel(analysis.confidence) },
+        {
+          label: '建议标题',
+          value: safeTraceDetail(analysis.title)
+        },
+        {
+          label: '内容标签',
+          value: analysis.tags.slice(0, 5).join('、') || '无'
+        }
+      ]
     });
     const resolvedDestination = resolveDestination(
       analysis.folderPath,
@@ -294,7 +368,9 @@ export class SmartCapturePlanner implements CapturePlanner {
           terminalFolderId && terminalFolderId !== destination.folderId
         ),
         pageInformation:
-          input.page?.description?.trim() || input.page?.text?.trim()
+          input.page?.description?.trim() ||
+          input.page?.text?.trim() ||
+          input.page?.imageDataUrl
             ? 'sufficient'
             : 'insufficient'
       }
@@ -330,11 +406,6 @@ function rankFolderCandidates(
   nodes: BookmarkNode[],
   preferredFolderDepth: number
 ): FolderCatalogEntry[] {
-  const preferencePaths = new Set(
-    input.preferences.map((preference) =>
-      normalizePath(preference.destinationPath)
-    )
-  );
   const currentPath = normalizePath(
     logicalPathForFolder(input.source.parentId, nodes)
   );
@@ -353,7 +424,7 @@ function rankFolderCandidates(
         entry.logicalPath.length - preferredFolderDepth
       );
       const score =
-        (preferencePaths.has(normalized) ? 100 : 0) +
+        preferenceScore(input.preferences, normalized) +
         (normalized === currentPath ? 20 : 0) +
         tokenScore * 4 -
         depthDistance * 0.25;
@@ -368,6 +439,23 @@ function rankFolderCandidates(
     )
     .slice(0, MAX_FOLDER_CANDIDATES)
     .map(({ entry }) => entry);
+}
+
+function preferenceScore(
+  preferences: CapturePreference[],
+  normalizedPath: string
+): number {
+  return preferences.reduce((score, preference) => {
+    if (normalizePath(preference.destinationPath) !== normalizedPath)
+      return score;
+    const strength =
+      preference.kind === 'fixed-rule'
+        ? 160
+        : preference.kind === 'learned'
+          ? 110 + Math.min(20, preference.evidenceCount ?? 0)
+          : 60;
+    return score + (preference.action === 'prefer-folder' ? strength : -strength);
+  }, 0);
 }
 
 function resolveDestination(
@@ -511,7 +599,14 @@ function buildAgentRules(
         preferences.slice(0, 8).map((preference) => ({
           kind: preference.kind,
           action: preference.action,
-          destinationPath: preference.destinationPath
+          destinationPath: preference.destinationPath,
+          ...(preference.kind === 'learned'
+            ? {
+                evidenceCount: preference.evidenceCount,
+                confidence: preference.confidence,
+                summary: preference.reviewSummary
+              }
+            : {})
         }))
       )}`
     );
@@ -603,4 +698,28 @@ function domainOf(value: string): string {
 function clampTitle(value: string, limit: number, fallback: string): string {
   const clean = value.trim();
   return clean ? Array.from(clean).slice(0, limit).join('') : fallback;
+}
+
+function confidenceLabel(value: CapturePlan['confidence']): string {
+  if (value === 'high') return '高';
+  if (value === 'medium') return '中';
+  if (value === 'low') return '低';
+  return '未知';
+}
+
+function protocolLabel(value: string): string {
+  if (value === 'openai-responses') return 'OpenAI Responses';
+  if (value === 'openai-chat') return 'OpenAI Chat Completions';
+  if (value === 'anthropic-messages') return 'Anthropic Messages';
+  if (value === 'gemini-generate-content') return 'Gemini GenerateContent';
+  return value;
+}
+
+function imagePayloadLabel(value: string | undefined): string {
+  if (!value) return '未提供';
+  const base64 = value.split(',', 2)[1] ?? '';
+  const bytes = Math.max(0, Math.floor((base64.length * 3) / 4));
+  return bytes >= 1024
+    ? `约 ${(bytes / 1024).toFixed(0)} KB`
+    : `约 ${bytes} B`;
 }

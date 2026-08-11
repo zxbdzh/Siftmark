@@ -19,4 +19,37 @@ describe('AnthropicMessagesAdapter', () => {
     expect(post).toHaveBeenCalledWith(expect.objectContaining({ headers: { 'x-api-key': 'key', 'anthropic-version': '2023-06-01' }, body: expect.objectContaining({ system: expect.any(String), messages: expect.any(Array), max_tokens: 1024 }) }));
     expect(result.confidence).toBe('medium');
   });
+
+  it('reviews capture history with the Anthropic message contract', async () => {
+    const post = vi.fn().mockResolvedValue({
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify({
+            memories: [],
+            reviewSummary: '暂未发现稳定规律'
+          })
+        }
+      ]
+    });
+
+    const result = await new AnthropicMessagesAdapter(
+      post
+    ).reviewCaptureHistory(
+      profile,
+      { examples: [] },
+      new AbortController().signal
+    );
+
+    expect(result.reviewSummary).toBe('暂未发现稳定规律');
+    expect(post).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: expect.objectContaining({
+          max_tokens: 1200,
+          system: expect.stringContaining('memories'),
+          messages: expect.any(Array)
+        })
+      })
+    );
+  });
 });

@@ -69,7 +69,7 @@ IndexedDB 数据库 `siftmark`（Schema v5）包含：
 | `importRecoveryPoints`    | 导入前原生节点与元数据快照               | 失败恢复                            |
 | `specialFolderPlacements` | 归档/回收原位置                          | 恢复原位置                          |
 | `captureSessions`         | 收藏快照、方案、风险、会话状态和操作批次 | 最长 7 天；解决后清空完整对话       |
-| `capturePreferences`      | 普通偏好与用户明确设置的固定规则         | 本地结构化信号，不含完整对话        |
+| `capturePreferences`      | 普通偏好、睡眠回顾记忆与用户固定规则     | 本地结构化信号，不含完整对话        |
 
 ## 收藏 Agent 序列
 
@@ -80,6 +80,12 @@ IndexedDB 数据库 `siftmark`（Schema v5）包含：
 5. 安全方案由 `LocalCaptureExecutor` 自动写入。风险方案先移动到已配置的待整理箱，再通过网页浮层、Popup 或 Side Panel 等待允许/拒绝。
 6. 执行前重新读取书签与目录；移动、改名、目录创建、元数据和精确重复合并写入同一操作批次，可确定性撤销。
 7. 用户在 Side Panel 调整时只替换当前方案。明确表达“以后都……”才生成可见固定规则；普通允许/拒绝只形成较弱的本地偏好。
+
+## 睡眠回顾
+
+`CaptureSleepReviewService` 的外部接口只有“回顾当前增量结果”。它读取已解决且尚未回顾的会话，通过已分配的 Agent 模型提炼弱偏好，再由 `DexieCaptureLearningRepository` 在同一事务中写入记忆和会话回顾标记。该模块没有书签仓库或写入命令依赖，因此不能移动书签、创建目录或改名。
+
+Chromium `idle` 事件负责主触发，小时级 alarm 用于 Service Worker 挂起后的补偿唤醒。模块内部仍执行启用状态、最少 3 个新结果、12 小时冷却、单批上限和当前收藏任务检查。模型输出的域名和目录必须已经出现在本批证据中，否则本地丢弃；固定规则始终高于学习记忆，学习记忆高于单次弱偏好。
 
 状态和安全不变量详见 [收藏 Agent 设计](design/2026-08-11-capture-agent.md)。
 

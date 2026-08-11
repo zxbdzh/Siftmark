@@ -1,10 +1,15 @@
 import type { AiAdapter } from './adapter';
 import type {
   AiAnalysisResult,
+  AiCaptureReviewContext,
+  AiCaptureReviewResult,
   AiRequestContext,
   CapabilityProbe,
   ModelProfile
 } from '../types';
+import { buildCaptureReviewPrompt } from '../prompts/capture-review-prompt';
+import { captureReviewJsonSchema } from '../schemas/capture-review-contract';
+import { parseCaptureReviewText } from '../schemas/capture-review-parser';
 import {
   buildAnalysisProbePrompt,
   buildAnalysisPrompt
@@ -175,6 +180,44 @@ export class OpenAiResponsesAdapter implements AiAdapter {
             }
           }
         : {})
+    };
+  }
+
+  async reviewCaptureHistory(
+    profile: ModelProfile,
+    context: AiCaptureReviewContext,
+    signal: AbortSignal
+  ): Promise<AiCaptureReviewResult> {
+    const prompt = buildCaptureReviewPrompt(context);
+    const response = await this.post<ResponsesResponse>({
+      url: appendEndpointPath(profile.endpoint, 'responses'),
+      headers: openAiHeaders(profile.apiKey),
+      body: {
+        model: profile.model,
+        instructions: prompt.system,
+        input: prompt.user,
+        max_output_tokens: 1200,
+        text: {
+          format: {
+            type: 'json_schema',
+            name: 'siftmark_capture_review',
+            strict: true,
+            schema: captureReviewJsonSchema
+          }
+        }
+      },
+      signal,
+      timeoutMs: profile.timeoutMs
+    });
+    const text = readResponseText(response);
+    if (!text)
+      throw new ProviderError(
+        'unknown-result',
+        'Provider returned no sleep review result'
+      );
+    return {
+      ...parseCaptureReviewText(text),
+      usageTokens: response.usage?.total_tokens
     };
   }
 

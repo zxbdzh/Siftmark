@@ -13,7 +13,9 @@ export const settingsKeys = {
   recentFolder: 'siftmark.settings.recent-folder.v1',
   profileAssignments: 'siftmark.settings.profile-assignments.v1',
   folderSorts: 'siftmark.settings.folder-sorts.v1',
-  smartBookmark: 'siftmark.settings.smart-bookmark.v1'
+  smartBookmark: 'siftmark.settings.smart-bookmark.v1',
+  sleepReview: 'siftmark.settings.sleep-review.v1',
+  sleepReviewStatus: 'siftmark.runtime.sleep-review-status.v1'
 } as const;
 
 export interface SettingsStorageArea {
@@ -49,6 +51,39 @@ export interface SmartBookmarkSettings {
   renameMaxLength: number;
   captureNativeBookmarks: boolean;
 }
+
+export const sleepReviewBounds = {
+  idleMinutes: { min: 5, max: 60 },
+  batchSize: { min: 3, max: 12 }
+} as const;
+
+export interface SleepReviewSettings {
+  /** Background model calls are metered, so this remains an explicit opt-in. */
+  enabled: boolean;
+  idleMinutes: number;
+  batchSize: number;
+}
+
+export type SleepReviewState =
+  | 'idle'
+  | 'running'
+  | 'waiting'
+  | 'learned'
+  | 'reviewed'
+  | 'skipped'
+  | 'failed';
+
+export interface SleepReviewStatus {
+  state: SleepReviewState;
+  lastStartedAt?: number;
+  lastCompletedAt?: number;
+  nextEligibleAt?: number;
+  pendingSessions?: number;
+  reviewedSessions?: number;
+  learnedMemories?: number;
+  summary?: string;
+  error?: string;
+}
 export type BookmarkSortField =
   | 'manual'
   | 'title'
@@ -77,6 +112,12 @@ export const defaultSmartBookmarkSettings: SmartBookmarkSettings = {
   smartRename: true,
   renameMaxLength: 12,
   captureNativeBookmarks: true
+};
+
+export const defaultSleepReviewSettings: SleepReviewSettings = {
+  enabled: false,
+  idleMinutes: 15,
+  batchSize: 8
 };
 
 export class ChromeSettingsRepository {
@@ -174,6 +215,32 @@ export class ChromeSettingsRepository {
     );
   }
 
+  async getSleepReviewSettings(): Promise<SleepReviewSettings> {
+    const value = await this.read(settingsKeys.sleepReview);
+    if (!isRecord(value)) return defaultSleepReviewSettings;
+    return normalizeSleepReviewSettings(value);
+  }
+
+  setSleepReviewSettings(value: SleepReviewSettings): Promise<void> {
+    return this.write(
+      settingsKeys.sleepReview,
+      normalizeSleepReviewSettings(value)
+    );
+  }
+
+  async getSleepReviewStatus(): Promise<SleepReviewStatus> {
+    const value = await this.read(settingsKeys.sleepReviewStatus);
+    if (!isRecord(value)) return { state: 'idle' };
+    return normalizeSleepReviewStatus(value);
+  }
+
+  setSleepReviewStatus(value: SleepReviewStatus): Promise<void> {
+    return this.write(
+      settingsKeys.sleepReviewStatus,
+      normalizeSleepReviewStatus(value)
+    );
+  }
+
   async getFolderSort(folderId: string): Promise<BookmarkSort> {
     const value = await this.read(settingsKeys.folderSorts);
     if (!isRecord(value) || !isRecord(value[folderId]))
@@ -249,6 +316,59 @@ function normalizeSmartBookmarkSettings(
   };
 }
 
+function normalizeSleepReviewSettings(
+  value: Partial<Record<keyof SleepReviewSettings, unknown>>
+): SleepReviewSettings {
+  return {
+    enabled: value.enabled === true,
+    idleMinutes: normalizeBoundedNumber(
+      value.idleMinutes,
+      defaultSleepReviewSettings.idleMinutes,
+      sleepReviewBounds.idleMinutes.min,
+      sleepReviewBounds.idleMinutes.max
+    ),
+    batchSize: normalizeBoundedNumber(
+      value.batchSize,
+      defaultSleepReviewSettings.batchSize,
+      sleepReviewBounds.batchSize.min,
+      sleepReviewBounds.batchSize.max
+    )
+  };
+}
+
+function normalizeSleepReviewStatus(
+  value: SleepReviewStatus | Record<string, unknown>
+): SleepReviewStatus {
+  const record = value as Record<string, unknown>;
+  const states: SleepReviewState[] = [
+    'idle',
+    'running',
+    'waiting',
+    'learned',
+    'reviewed',
+    'skipped',
+    'failed'
+  ];
+  const state = states.includes(record.state as SleepReviewState)
+    ? (record.state as SleepReviewState)
+    : 'idle';
+  return {
+    state,
+    ...numberProperty(record, 'lastStartedAt'),
+    ...numberProperty(record, 'lastCompletedAt'),
+    ...numberProperty(record, 'nextEligibleAt'),
+    ...numberProperty(record, 'pendingSessions'),
+    ...numberProperty(record, 'reviewedSessions'),
+    ...numberProperty(record, 'learnedMemories'),
+    ...(typeof record.summary === 'string'
+      ? { summary: record.summary.slice(0, 300) }
+      : {}),
+    ...(typeof record.error === 'string'
+      ? { error: record.error.slice(0, 300) }
+      : {})
+  };
+}
+
 function normalizeFolderLevel(value: unknown, fallback: number): number {
   const numeric =
     typeof value === 'number' && Number.isFinite(value)
@@ -258,6 +378,29 @@ function normalizeFolderLevel(value: unknown, fallback: number): number {
     smartBookmarkFolderLevelBounds.max,
     Math.max(smartBookmarkFolderLevelBounds.min, numeric)
   );
+}
+
+function normalizeBoundedNumber(
+  value: unknown,
+  fallback: number,
+  min: number,
+  max: number
+): number {
+  const numeric =
+    typeof value === 'number' && Number.isFinite(value)
+      ? Math.round(value)
+      : fallback;
+  return Math.min(max, Math.max(min, numeric));
+}
+
+function numberProperty(
+  value: Record<string, unknown>,
+  key: keyof SleepReviewStatus
+): Partial<SleepReviewStatus> {
+  const candidate = value[key];
+  return typeof candidate === 'number' && Number.isFinite(candidate)
+    ? ({ [key]: candidate } as Partial<SleepReviewStatus>)
+    : {};
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

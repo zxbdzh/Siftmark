@@ -234,6 +234,145 @@ section button {
 .capture-preferences-section output {
   margin-top: 8px;
 }
+.learning-status {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  gap: 11px;
+  align-items: center;
+  min-height: 68px;
+  margin-top: 20px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--settings-accent);
+  border-radius: 6px;
+  background: var(--surface-1);
+}
+.learning-status[data-state='failed'] {
+  border-left-color: var(--danger);
+}
+.learning-status-mark,
+.memory-icon {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--settings-accent) 12%, transparent);
+  color: var(--settings-accent);
+}
+.learning-status-mark svg,
+.memory-icon svg {
+  width: 17px;
+  height: 17px;
+}
+.learning-status strong,
+.learning-status p,
+.learning-memory-heading h3,
+.memory-main p,
+.memory-main small {
+  margin: 0;
+}
+.learning-status p {
+  margin-top: 3px;
+  color: var(--text-2);
+  font-size: 12px;
+}
+.learning-memory-count {
+  padding: 3px 7px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-0);
+  color: var(--text-2);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.learning-actions {
+  align-items: center;
+  margin-top: 16px;
+}
+.learning-actions output {
+  color: var(--text-2);
+  font-size: 12px;
+}
+.learning-memory-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 24px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+.learning-memory-heading > div {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.learning-memory-heading svg {
+  width: 16px;
+  height: 16px;
+  color: var(--settings-accent);
+}
+.learning-memory-heading h3 {
+  font-size: 14px;
+}
+.learning-memory-list {
+  display: grid;
+  margin: 10px 0 0;
+  padding: 0;
+  border-top: 1px solid var(--border);
+  list-style: none;
+}
+.learning-memory-list li {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) 34px;
+  gap: 11px;
+  align-items: center;
+  min-height: 82px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.memory-main {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+.memory-main > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+}
+.memory-main > div span {
+  padding: 2px 5px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-2);
+  font-size: 10px;
+}
+.memory-main > div span[data-confidence='high'] {
+  border-color: color-mix(in srgb, #2f8f5b 35%, var(--border));
+  color: #2f8f5b;
+}
+.memory-main p,
+.memory-main small {
+  overflow-wrap: anywhere;
+}
+.memory-main p {
+  font-size: 12px;
+}
+.memory-main small {
+  color: var(--text-2);
+}
+.learning-memory-list .icon-button svg,
+.danger-text-button svg,
+.learning-actions button svg {
+  width: 15px;
+  height: 15px;
+}
+.danger-text-button {
+  color: var(--danger);
+}
 .stacked-field {
   display: grid;
   gap: 6px;
@@ -578,6 +717,13 @@ output {
   }
   .agent-rule-main {
     grid-template-columns: 1fr;
+  }
+  .learning-status {
+    grid-template-columns: 34px minmax(0, 1fr);
+  }
+  .learning-memory-count {
+    grid-column: 2;
+    justify-self: start;
   }
   .agent-rule-main small {
     grid-column: 1;

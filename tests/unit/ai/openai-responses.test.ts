@@ -71,6 +71,36 @@ describe('OpenAiResponsesAdapter', () => {
     expect(result.title).toBe('示例');
   });
 
+  it('runs sleep review through Responses structured text', async () => {
+    const post = vi.fn().mockResolvedValue({
+      output_text: JSON.stringify({
+        memories: [],
+        reviewSummary: '暂未发现稳定规律'
+      })
+    });
+
+    const result = await new OpenAiResponsesAdapter(post).reviewCaptureHistory(
+      profile,
+      { examples: [] },
+      new AbortController().signal
+    );
+
+    expect(result.reviewSummary).toBe('暂未发现稳定规律');
+    expect(post).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: expect.objectContaining({
+          text: {
+            format: expect.objectContaining({
+              name: 'siftmark_capture_review',
+              type: 'json_schema',
+              strict: true
+            })
+          }
+        })
+      })
+    );
+  });
+
   it('uses nested output text when the relay returns a blank top-level field', async () => {
     const post = vi.fn().mockResolvedValue({
       output_text: '',

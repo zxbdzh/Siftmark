@@ -55,6 +55,11 @@ const session: CaptureSession = {
       status: 'completed',
       label: '已比较候选目录',
       detail: '找到 8 个相关目录',
+      facts: [
+        { label: '送入模型', value: '8 个候选' },
+        { label: '本地信号', value: '2 条偏好或记忆' }
+      ],
+      durationMs: 42,
       createdAt: 2,
       updatedAt: 2
     },
@@ -139,6 +144,9 @@ describe('Side panel Agent workspace', () => {
     expect(screen.getByText('原生书签已保存')).toBeInTheDocument();
     expect(screen.getByText('已比较候选目录')).toBeInTheDocument();
     expect(screen.getByText('找到 8 个相关目录')).toBeInTheDocument();
+    expect(screen.getByText('送入模型')).toBeInTheDocument();
+    expect(screen.getByText('8 个候选')).toBeInTheDocument();
+    expect(screen.getByText('42 ms')).toBeInTheDocument();
     expect(
       screen.getByText('展示操作记录与判断摘要，不包含模型的私密思维链。')
     ).toBeInTheDocument();

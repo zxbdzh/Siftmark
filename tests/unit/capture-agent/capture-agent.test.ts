@@ -99,6 +99,20 @@ describe('CaptureAgent', () => {
       expect.objectContaining({ state: 'analyzing' })
     );
     expect(JSON.stringify(result.activities)).not.toContain('token=private');
+    expect(result.activities[0]).toMatchObject({
+      facts: expect.arrayContaining([
+        { label: '触发入口', value: '浏览器原生收藏' }
+      ]),
+      durationMs: 0
+    });
+    expect(
+      result.activities.find((activity) => activity.id === 'page-context')
+    ).toMatchObject({
+      facts: expect.arrayContaining([
+        { label: '正文', value: '17 字符' },
+        { label: '页面截图', value: '未提供' }
+      ])
+    });
   });
 
   it('reopens an auto-applied bookmark from its current location for adjustment', async () => {
