@@ -362,7 +362,7 @@ test('supports the bookmark tree, Agent proposal, and in-page approval shell', a
   });
   await expect(approval).toContainText('Agent 验收目录');
   await expect(approval).toContainText('研究');
-  await expect(approval).toContainText('分析详情');
+  await expect(approval).toContainText('分析过程');
   await expect(approval).toContainText('风险检查完成');
   const analysisTrace = approval.locator('.siftmark-processing-trace');
   const analysisList = approval.getByRole('list', { name: '分析过程' });

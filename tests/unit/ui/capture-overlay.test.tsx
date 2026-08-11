@@ -37,10 +37,11 @@ describe('CaptureOverlay', () => {
 
     expect(screen.getByRole('status')).toHaveTextContent('原生书签已保存');
     expect(screen.getByRole('status')).toHaveTextContent('AI 正在生成归类方案');
+    expect(screen.getByText(/书签已保存 · 正在分析/)).toBeVisible();
     expect(screen.getByText(/1 \/ 2/)).toBeInTheDocument();
     expect(screen.getByRole('list', { name: '分析过程' })).not.toBeVisible();
 
-    fireEvent.click(screen.getByText('分析详情'));
+    fireEvent.click(screen.getByText('分析过程'));
     expect(screen.getByRole('list', { name: '分析过程' })).toBeVisible();
   });
 
@@ -77,7 +78,52 @@ describe('CaptureOverlay', () => {
     expect(status).toHaveTextContent('正在识别页面截图');
     expect(status).toHaveTextContent('正在请求联网搜索');
     expect(status).toHaveTextContent('AI 正在生成归类方案');
+    expect(screen.getByText(/书签已保存 · 正在分析/)).toBeVisible();
     expect(screen.getByText(/5 \/ 6/)).toBeInTheDocument();
+  });
+
+  it('features the latest running activity when analysis runs in parallel', () => {
+    render(
+      <CaptureOverlay
+        view={{
+          phase: 'processing',
+          activities: [
+            {
+              id: 'vision',
+              kind: 'vision',
+              status: 'running',
+              label: '正在识别页面截图',
+              createdAt: 1,
+              updatedAt: 1
+            },
+            {
+              id: 'web-search',
+              kind: 'web-search',
+              status: 'running',
+              label: '正在联网搜索',
+              createdAt: 2,
+              updatedAt: 2
+            },
+            {
+              id: 'model',
+              kind: 'model',
+              status: 'running',
+              label: 'AI 正在综合判断',
+              createdAt: 3,
+              updatedAt: 3
+            }
+          ]
+        }}
+        onAction={vi.fn()}
+        onDismiss={vi.fn()}
+      />
+    );
+
+    expect(
+      screen.getByText('AI 正在综合判断', {
+        selector: '.siftmark-trace-summary-copy strong'
+      })
+    ).toBeVisible();
   });
 
   it('shows a risky destination and asks for a simple decision', () => {
@@ -88,7 +134,7 @@ describe('CaptureOverlay', () => {
           sessionId: 'session-1',
           phase: 'approval',
           destinationPath: ['书签栏', '开发', 'AI'],
-          newFolderName: 'Agent',
+          newFolderNames: ['Agent', '研究'],
           title: '浏览器收藏 Agent 设计',
           activities: [
             {
@@ -113,12 +159,13 @@ describe('CaptureOverlay', () => {
 
     expect(screen.getByRole('dialog')).toHaveTextContent('开发');
     expect(screen.getByText('Agent')).toBeInTheDocument();
-    expect(screen.getByText('新建')).toBeInTheDocument();
+    expect(screen.getByText('研究')).toBeInTheDocument();
+    expect(screen.getAllByText('新建')).toHaveLength(2);
     expect(screen.getByText('浏览器收藏 Agent 设计')).toBeInTheDocument();
     expect(screen.getByText('命中规则')).not.toBeVisible();
     expect(screen.getByText('风险方案，需要用户批准')).not.toBeVisible();
 
-    fireEvent.click(screen.getByText('分析详情'));
+    fireEvent.click(screen.getByText('分析过程'));
     expect(screen.getByText('命中规则')).toBeVisible();
     expect(screen.getByText('风险方案，需要用户批准')).toBeVisible();
 

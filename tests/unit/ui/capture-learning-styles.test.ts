@@ -25,4 +25,18 @@ describe('sleep review motion styles', () => {
     expect(optionsStyles).toContain('@media (prefers-contrast: more)');
     expect(optionsStyles).toContain('@media (forced-colors: active)');
   });
+
+  it('uses the shared restrained motion language across settings', () => {
+    expect(optionsStyles).toContain('--settings-accent: #0f766e');
+    expect(optionsStyles).toContain(
+      '.settings-content section button:active:not(:disabled)'
+    );
+
+    const hoverMedia = optionsStyles.indexOf(
+      '@media (hover: hover) and (pointer: fine)'
+    );
+    expect(hoverMedia).toBeGreaterThan(-1);
+    expect(optionsStyles.indexOf(':hover')).toBeGreaterThan(hoverMedia);
+    expect(optionsStyles.slice(0, hoverMedia)).not.toContain(':hover');
+  });
 });

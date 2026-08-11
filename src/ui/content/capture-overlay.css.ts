@@ -5,15 +5,14 @@ export const captureOverlayStyles = `
   --siftmark-ink: #171a1f;
   --siftmark-muted: #667085;
   --siftmark-line: #d9dee7;
-  --siftmark-blue: #3e63dd;
-  --siftmark-blue-pressed: #2f4fc0;
-  --siftmark-risk: #d97706;
-  --siftmark-danger: #c2413b;
-  --siftmark-success: #2f8f5b;
+  --siftmark-blue: #0f766e;
+  --siftmark-blue-pressed: #115e59;
+  --siftmark-risk: #b54722;
+  --siftmark-danger: #b42318;
+  --siftmark-success: #237a4b;
   --siftmark-accent: var(--siftmark-blue);
   --siftmark-motion-fast: 100ms;
   --siftmark-motion-base: 160ms;
-  --siftmark-motion-slow: 220ms;
   --siftmark-ease-out: cubic-bezier(.23, 1, .32, 1);
   font-family: "Noto Sans SC", "Microsoft YaHei UI", system-ui, sans-serif;
   font-synthesis: none;
@@ -95,8 +94,8 @@ button {
 }
 
 [data-phase="processing"] .siftmark-agent-mark {
-  border-color: rgb(62 99 221 / 42%);
-  box-shadow: 0 0 0 3px rgb(62 99 221 / 8%);
+  border-color: rgb(15 118 110 / 42%);
+  box-shadow: 0 0 0 3px rgb(15 118 110 / 8%);
 }
 
 [data-phase="approval"] .siftmark-agent-mark,
@@ -261,7 +260,6 @@ button {
 .siftmark-trace-details {
   max-height: min(300px, 38vh);
   overflow-y: auto;
-  overscroll-behavior: contain;
   border-top: 1px solid #e4e8ef;
   background: #fbfcfe;
   opacity: 1;
@@ -345,7 +343,7 @@ button {
 }
 
 [data-status="running"] .siftmark-activity-copy strong {
-  color: #2f4fc0;
+  color: #0f6b63;
 }
 
 .siftmark-activity-copy small {
@@ -521,12 +519,7 @@ button {
   box-shadow: 0 -8px 18px rgb(23 26 31 / 6%);
   backdrop-filter: blur(16px) saturate(135%);
   -webkit-backdrop-filter: blur(16px) saturate(135%);
-  opacity: 1;
-  transform: translateY(0);
-  transition:
-    opacity var(--siftmark-motion-base) var(--siftmark-ease-out),
-    transform var(--siftmark-motion-slow) var(--siftmark-ease-out),
-    background-color var(--siftmark-motion-base) var(--siftmark-ease-out);
+  transition: background-color var(--siftmark-motion-base) var(--siftmark-ease-out);
 }
 
 .siftmark-result-actions {
@@ -587,7 +580,7 @@ button {
 .siftmark-button:focus-visible {
   outline: 2px solid var(--siftmark-blue);
   outline-offset: 2px;
-  box-shadow: 0 0 0 4px rgb(62 99 221 / 13%);
+  box-shadow: 0 0 0 4px rgb(15 118 110 / 13%);
 }
 
 .siftmark-processing-trace > summary:focus-visible {
@@ -633,11 +626,6 @@ button {
 @starting-style {
   .siftmark-processing-trace[open] .siftmark-trace-details {
     opacity: 0;
-  }
-
-  .siftmark-overlay-actions {
-    opacity: 0;
-    transform: translateY(4px);
   }
 }
 
@@ -720,9 +708,9 @@ button {
   :host {
     --siftmark-muted: #475467;
     --siftmark-line: #8792a2;
-    --siftmark-blue: #234bc4;
-    --siftmark-blue-pressed: #16399f;
-    --siftmark-risk: #a54700;
+    --siftmark-blue: #095f59;
+    --siftmark-blue-pressed: #064c47;
+    --siftmark-risk: #8c3518;
     --siftmark-danger: #9f2621;
     --siftmark-success: #176b3d;
   }

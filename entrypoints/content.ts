@@ -25,6 +25,7 @@ interface CaptureAgentOverlayMessage {
   sessionId?: string;
   title?: string;
   destinationPath?: string[];
+  newFolderNames?: string[];
   newFolderName?: string;
   detail?: string;
   canAdjust?: boolean;
@@ -57,7 +58,7 @@ function viewFromSession(session: CaptureSession): CaptureOverlayView {
     phase,
     title: session.plan?.title,
     destinationPath: session.plan?.destination.path.map(({ title }) => title),
-    newFolderName: session.plan?.destination.newFolders[0],
+    newFolderNames: session.plan?.destination.newFolders,
     message: session.failure?.message,
     activities: session.activities,
     canAdjust: phase === 'approval' || phase === 'saved',
@@ -93,7 +94,9 @@ function readOverlayView(message: unknown): CaptureOverlayView | undefined {
     sessionId: value.sessionId,
     title: value.title,
     destinationPath: value.destinationPath,
-    newFolderName: value.newFolderName,
+    newFolderNames:
+      value.newFolderNames ??
+      (value.newFolderName ? [value.newFolderName] : undefined),
     message: value.detail,
     canAdjust:
       value.canAdjust ?? (phase === 'saved' && Boolean(value.sessionId)),

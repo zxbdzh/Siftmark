@@ -32,6 +32,9 @@ describe('sidepanel motion styles', () => {
     expect(sidepanelStyles).toContain('button:not(:disabled):active');
     expect(sidepanelStyles).not.toContain('@keyframes message-enter');
     expect(sidepanelStyles).not.toContain('@keyframes status-enter');
+    expect(sidepanelStyles).toContain('.message-list article:last-of-type');
+    expect(sidepanelStyles).toContain('@starting-style');
+    expect(sidepanelStyles).toContain('transform: translateY(4px)');
 
     const hoverMedia = sidepanelStyles.indexOf(
       '@media (hover: hover) and (pointer: fine)'

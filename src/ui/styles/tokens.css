@@ -9,10 +9,15 @@
   --border: #d7dade;
   --danger: #c9362b;
   --warning: #a76700;
-  --focus: #1875d1;
+  --focus: #0f766e;
   --radius-sm: 4px;
   --radius-md: 8px;
   --shadow-menu: 0 12px 32px rgb(17 17 17 / 14%);
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --motion-press: 120ms;
+  --motion-state: 160ms;
+  --motion-feedback: 180ms;
 }
 
 [data-theme='dark'] {
@@ -24,5 +29,5 @@
   --border: #3b3f45;
   --danger: #ff7b70;
   --warning: #f0b44d;
-  --focus: #6eb4ff;
+  --focus: #76d6c2;
 }

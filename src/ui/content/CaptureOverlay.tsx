@@ -27,6 +27,8 @@ export interface CaptureOverlayView {
   phase: CaptureOverlayPhase;
   title?: string;
   destinationPath?: string[];
+  newFolderNames?: string[];
+  /** Legacy single-folder payload accepted from older background messages. */
   newFolderName?: string;
   message?: string;
   activities?: CaptureActivity[];
@@ -54,10 +56,10 @@ const phaseCopy: Record<
 
 function FolderRoute({
   path = [],
-  newFolderName
+  newFolderNames = []
 }: {
   path?: string[];
-  newFolderName?: string;
+  newFolderNames?: string[];
 }) {
   const visiblePath = path.length > 0 ? path : ['书签栏'];
   return (
@@ -71,16 +73,16 @@ function FolderRoute({
           </span>
         </li>
       ))}
-      {newFolderName ? (
-        <li>
+      {newFolderNames.map((folderName, index) => (
+        <li key={`new-${folderName}-${index}`}>
           <ChevronRight aria-hidden="true" />
           <span className="siftmark-route-node siftmark-route-new">
             <FolderPlus aria-hidden="true" />
-            {newFolderName}
+            {folderName}
             <small>新建</small>
           </span>
         </li>
-      ) : null}
+      ))}
     </ol>
   );
 }
@@ -124,8 +126,12 @@ function ProcessingTrace({
   const completed = activities.filter((activity) =>
     ['completed', 'skipped'].includes(activity.status)
   ).length;
-  const running = activities.find((activity) => activity.status === 'running');
-  const failed = activities.find((activity) => activity.status === 'failed');
+  const running = [...activities]
+    .reverse()
+    .find((activity) => activity.status === 'running');
+  const failed = [...activities]
+    .reverse()
+    .find((activity) => activity.status === 'failed');
   const latestMeaningful = [...activities]
     .reverse()
     .find((activity) => activity.status !== 'skipped');
@@ -147,11 +153,11 @@ function ProcessingTrace({
         <span className="siftmark-trace-summary-copy">
           <strong>{featured.label}</strong>
           <small>
-            分析过程 · {traceState} · {completed} / {activities.length}
+            书签已保存 · {traceState} · {completed} / {activities.length}
           </small>
         </span>
         <span className="siftmark-trace-disclosure" aria-hidden="true">
-          <span>分析详情</span>
+          <span>分析过程</span>
           <ChevronDown />
         </span>
       </summary>
@@ -202,7 +208,11 @@ export function CaptureOverlay({
 }: CaptureOverlayProps) {
   const copy = phaseCopy[view.phase];
   const isApproval = view.phase === 'approval';
-  const hasRoute = Boolean(view.destinationPath?.length || view.newFolderName);
+  const newFolderNames =
+    view.newFolderNames ?? (view.newFolderName ? [view.newFolderName] : []);
+  const hasRoute = Boolean(
+    view.destinationPath?.length || newFolderNames.length
+  );
 
   return (
     <section
@@ -240,7 +250,7 @@ export function CaptureOverlay({
           <span className="siftmark-field-label">收藏到</span>
           <FolderRoute
             path={view.destinationPath}
-            newFolderName={view.newFolderName}
+            newFolderNames={newFolderNames}
           />
         </div>
       ) : null}

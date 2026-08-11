@@ -947,13 +947,13 @@ output {
 
 /* Options shell */
 body {
-  --settings-accent: #3857d6;
+  --settings-accent: #0f766e;
   --settings-on-accent: #ffffff;
   overflow: hidden;
 }
 
 [data-theme='dark'] body {
-  --settings-accent: #91a4ff;
+  --settings-accent: #76d6c2;
   --settings-on-accent: #111318;
 }
 
@@ -1029,12 +1029,9 @@ body {
   color: var(--text-2);
   text-decoration: none;
   cursor: pointer;
-}
-
-.settings-sidebar nav a:hover,
-.manager-link:hover {
-  background: var(--surface-1);
-  color: var(--text-1);
+  transition:
+    background-color var(--motion-state) ease,
+    color var(--motion-state) ease;
 }
 
 .settings-sidebar nav a[aria-current='page'] {
@@ -1122,8 +1119,29 @@ main.settings-main {
   cursor: pointer;
 }
 
-.settings-content section button:hover:not(:disabled) {
-  border-color: color-mix(in srgb, var(--settings-accent) 55%, var(--border));
+.settings-content section button {
+  transform: scale(1);
+  transition:
+    transform var(--motion-press) var(--ease-out),
+    border-color var(--motion-state) ease,
+    background-color var(--motion-state) ease,
+    color var(--motion-state) ease;
+}
+
+.settings-content section button:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .settings-sidebar nav a:hover,
+  .manager-link:hover {
+    background: var(--surface-1);
+    color: var(--text-1);
+  }
+
+  .settings-content section button:hover:not(:disabled) {
+    border-color: color-mix(in srgb, var(--settings-accent) 55%, var(--border));
+  }
 }
 
 .primary-button {
@@ -1470,6 +1488,19 @@ input[type='range'] {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .settings-sidebar nav a,
+  .manager-link,
+  .settings-content section button {
+    transition:
+      border-color var(--motion-press) ease,
+      background-color var(--motion-press) ease,
+      color var(--motion-press) ease;
+  }
+
+  .settings-content section button:active:not(:disabled) {
+    transform: none;
+  }
+
   .capture-learning-section button,
   .capture-learning-section .learning-status,
   .capture-learning-section .learning-status-mark,
