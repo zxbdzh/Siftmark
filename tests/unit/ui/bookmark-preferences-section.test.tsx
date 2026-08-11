@@ -49,7 +49,7 @@ describe('BookmarkPreferencesSection', () => {
     );
   });
 
-  it('keeps network search and screenshot recognition opt-in', async () => {
+  it('enables network search and screenshot recognition by default and saves opt-out', async () => {
     const user = userEvent.setup();
     const repository = {
       getSmartBookmarkSettings: vi
@@ -64,8 +64,8 @@ describe('BookmarkPreferencesSection', () => {
       name: /AI 联网搜索/
     });
     const vision = screen.getByRole('checkbox', { name: /AI 页面识图/ });
-    expect(webSearch).not.toBeChecked();
-    expect(vision).not.toBeChecked();
+    expect(webSearch).toBeChecked();
+    expect(vision).toBeChecked();
 
     await user.click(webSearch);
     await user.click(vision);
@@ -74,8 +74,8 @@ describe('BookmarkPreferencesSection', () => {
     await waitFor(() =>
       expect(repository.setSmartBookmarkSettings).toHaveBeenCalledWith(
         expect.objectContaining({
-          enableWebSearch: true,
-          enableVision: true
+          enableWebSearch: false,
+          enableVision: false
         })
       )
     );

@@ -72,8 +72,8 @@ export const defaultSmartBookmarkSettings: SmartBookmarkSettings = {
   folderCreationLevel: 'weak',
   maxNewFolderLevels: 1,
   preferredFolderDepth: 2,
-  enableWebSearch: false,
-  enableVision: false,
+  enableWebSearch: true,
+  enableVision: true,
   smartRename: true,
   renameMaxLength: 12,
   captureNativeBookmarks: true
@@ -232,8 +232,14 @@ function normalizeSmartBookmarkSettings(
       value.preferredFolderDepth,
       defaultSmartBookmarkSettings.preferredFolderDepth
     ),
-    enableWebSearch: value.enableWebSearch === true,
-    enableVision: value.enableVision === true,
+    enableWebSearch:
+      typeof value.enableWebSearch === 'boolean'
+        ? value.enableWebSearch
+        : defaultSmartBookmarkSettings.enableWebSearch,
+    enableVision:
+      typeof value.enableVision === 'boolean'
+        ? value.enableVision
+        : defaultSmartBookmarkSettings.enableVision,
     smartRename: value.smartRename !== false,
     renameMaxLength:
       typeof value.renameMaxLength === 'number'

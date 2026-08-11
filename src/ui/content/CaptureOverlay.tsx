@@ -104,7 +104,10 @@ function ProcessingTrace({
   activities?: CaptureActivity[];
 }) {
   if (activities.length === 0) return null;
-  const visibleActivities = activities.slice(-4);
+  const visibleActivities =
+    activities.length <= 4
+      ? activities
+      : [activities[0]!, ...activities.slice(-3)];
   return (
     <div className="siftmark-processing-trace">
       <div className="siftmark-trace-heading">

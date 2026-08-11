@@ -77,7 +77,11 @@ const server = createServer(async (request, response) => {
       return json(response, result.status, { error: 'fixture failure' });
     return json(response, 200, {
       output: [
+        ...(result.webSearchRequested
+          ? [{ type: 'web_search_call', status: 'completed' }]
+          : []),
         {
+          type: 'message',
           content: [
             { type: 'output_text', text: JSON.stringify(result.payload) }
           ]
@@ -141,6 +145,7 @@ function analysis() {
 async function providerPayload(request: IncomingMessage, url: URL) {
   const body = await recordRequest(request, url);
   const serialized = JSON.stringify(body);
+  const webSearchRequested = hasWebSearchTool(body);
   const analysisProbe = serialized.includes('siftmark_analysis_probe');
   const legacyProbe =
     serialized.includes('siftmark_probe') ||
@@ -149,7 +154,7 @@ async function providerPayload(request: IncomingMessage, url: URL) {
   const probe = analysisProbe || legacyProbe;
   if (!probe && behavior.failAnalysisCount > 0) {
     behavior.failAnalysisCount -= 1;
-    return { status: 503, payload: null };
+    return { status: 503, payload: null, webSearchRequested };
   }
   if (!probe && behavior.delayAnalysisMs > 0)
     await new Promise((resolve) =>
@@ -159,13 +164,22 @@ async function providerPayload(request: IncomingMessage, url: URL) {
     behavior.invalidAnalysisCount -= 1;
     return {
       status: 200,
-      payload: { ...analysis(), url: 'https://schema-must-reject.test/' }
+      payload: { ...analysis(), url: 'https://schema-must-reject.test/' },
+      webSearchRequested
     };
   }
   return {
     status: 200,
-    payload: legacyProbe && !analysisProbe ? { ok: true } : analysis()
+    payload: legacyProbe && !analysisProbe ? { ok: true } : analysis(),
+    webSearchRequested
   };
+}
+
+function hasWebSearchTool(body: unknown): boolean {
+  if (!isRecord(body) || !Array.isArray(body.tools)) return false;
+  return body.tools.some(
+    (tool) => isRecord(tool) && tool.type === 'web_search'
+  );
 }
 
 async function recordRequest(request: IncomingMessage, url: URL) {

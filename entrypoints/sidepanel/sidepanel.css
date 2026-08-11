@@ -392,7 +392,7 @@ textarea:disabled {
   padding: 8px 11px;
   border-top: 1px solid #e7ebf2;
   background: #f7f9fc;
-  color: #717c8e;
+  color: var(--agent-muted);
   font-size: 8px;
   line-height: 1.45;
 }

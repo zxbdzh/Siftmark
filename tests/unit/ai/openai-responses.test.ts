@@ -112,6 +112,7 @@ describe('OpenAiResponsesAdapter', () => {
       expect.objectContaining({
         body: expect.objectContaining({
           tools: [{ type: 'web_search' }],
+          tool_choice: 'required',
           input: [
             expect.objectContaining({
               role: 'user',

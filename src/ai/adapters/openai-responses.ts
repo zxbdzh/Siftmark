@@ -121,7 +121,10 @@ export class OpenAiResponsesAdapter implements AiAdapter {
           instructions: prompt.system,
           input: withEnhancements ? input : prompt.user,
           ...(withEnhancements && context.webSearch
-            ? { tools: [{ type: 'web_search' as const }] }
+            ? {
+                tools: [{ type: 'web_search' as const }],
+                tool_choice: 'required' as const
+              }
             : {}),
           text: {
             format: {

@@ -63,10 +63,25 @@ test('saves first, requests approval for risk, applies locally, and supports und
     expect.arrayContaining([
       expect.objectContaining({ kind: 'capture', status: 'completed' }),
       expect.objectContaining({ kind: 'folders', status: 'completed' }),
+      expect.objectContaining({ kind: 'vision', status: 'completed' }),
+      expect.objectContaining({ kind: 'web-search', status: 'completed' }),
       expect.objectContaining({ kind: 'model', status: 'completed' }),
       expect.objectContaining({ kind: 'risk', status: 'completed' })
     ])
   );
+  const providerRequest = (await providerRequests()).find(
+    (request) => request.path === '/v1/responses'
+  );
+  expect(providerRequest).toBeDefined();
+  const imageUrl = responseImageUrl(providerRequest?.body);
+  expect(imageUrl).toMatch(/^data:image\/jpeg;base64,[a-z0-9+/=]{1000,}$/i);
+  const jpeg = Buffer.from(imageUrl!.split(',', 2)[1]!, 'base64');
+  expect([...jpeg.subarray(0, 3)]).toEqual([0xff, 0xd8, 0xff]);
+  expect(jpeg.byteLength).toBeGreaterThan(1_000);
+  expect(providerRequest?.body).toMatchObject({
+    tools: [{ type: 'web_search' }],
+    tool_choice: 'required'
+  });
   await expect.poll(() => bookmarkParent(manager, bookmark.id)).toBe(inboxId);
 
   const agent = await openExtensionPage(
@@ -114,7 +129,7 @@ async function configureCaptureAgent(
           id: 'e2e-classifier',
           version: 'v1',
           name: '端到端收藏模型',
-          protocol: 'openai-chat',
+          protocol: 'openai-responses',
           endpoint: 'http://127.0.0.1:43173/v1',
           model: 'fixture-model',
           apiKey: 'e2e-secret-key',
@@ -184,6 +199,36 @@ async function resetProvider(): Promise<void> {
     method: 'POST'
   });
   expect(response.ok).toBe(true);
+}
+
+interface RecordedProviderRequest {
+  path: string;
+  body: Record<string, unknown>;
+}
+
+async function providerRequests(): Promise<RecordedProviderRequest[]> {
+  const response = await fetch('http://127.0.0.1:43173/__e2e/requests');
+  expect(response.ok).toBe(true);
+  return response.json() as Promise<RecordedProviderRequest[]>;
+}
+
+function responseImageUrl(body: unknown): string | undefined {
+  if (!body || typeof body !== 'object') return undefined;
+  const input = (body as { input?: unknown }).input;
+  if (!Array.isArray(input)) return undefined;
+  for (const message of input) {
+    if (!message || typeof message !== 'object') continue;
+    const content = (message as { content?: unknown }).content;
+    if (!Array.isArray(content)) continue;
+    const image = content.find(
+      (item) =>
+        item &&
+        typeof item === 'object' &&
+        (item as { type?: unknown }).type === 'input_image'
+    ) as { image_url?: unknown } | undefined;
+    if (typeof image?.image_url === 'string') return image.image_url;
+  }
+  return undefined;
 }
 
 async function setProviderBehavior(behavior: {

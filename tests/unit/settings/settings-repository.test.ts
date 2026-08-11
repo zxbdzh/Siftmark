@@ -52,8 +52,8 @@ describe('ChromeSettingsRepository', () => {
     await expect(repository.getSmartBookmarkSettings()).resolves.toMatchObject({
       maxNewFolderLevels: 1,
       preferredFolderDepth: 2,
-      enableWebSearch: false,
-      enableVision: false
+      enableWebSearch: true,
+      enableVision: true
     });
 
     values[settingsKeys.smartBookmark] = {
@@ -67,7 +67,7 @@ describe('ChromeSettingsRepository', () => {
     });
   });
 
-  it('persists opt-in web search and vision settings', async () => {
+  it('persists an explicit opt-out from web search and vision', async () => {
     const values: Record<string, unknown> = {};
     const repository = new ChromeSettingsRepository({
       get: async (key) => ({ [key]: values[key] }),
@@ -78,13 +78,13 @@ describe('ChromeSettingsRepository', () => {
 
     await repository.setSmartBookmarkSettings({
       ...defaultSmartBookmarkSettings,
-      enableWebSearch: true,
-      enableVision: true
+      enableWebSearch: false,
+      enableVision: false
     });
 
     await expect(repository.getSmartBookmarkSettings()).resolves.toMatchObject({
-      enableWebSearch: true,
-      enableVision: true
+      enableWebSearch: false,
+      enableVision: false
     });
   });
 });

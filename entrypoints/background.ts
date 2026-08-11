@@ -430,16 +430,16 @@ export default defineBackground(() => {
   }) => {
     if (input.tabId !== undefined)
       captureBookmarkTabs.set(input.bookmarkId, input.tabId);
-    if (input.tabId !== undefined)
-      await browser.tabs
-        .sendMessage(input.tabId, {
-          type: 'capture-agent-overlay',
-          view: { phase: 'processing' }
-        })
-        .catch(() => undefined);
     try {
       const page = input.page ?? (await pageCaptureForTab(input.tabId));
       const imageDataUrl = await screenshotForCapture(input.tabId, page);
+      if (input.tabId !== undefined)
+        await browser.tabs
+          .sendMessage(input.tabId, {
+            type: 'capture-agent-overlay',
+            view: { phase: 'processing' }
+          })
+          .catch(() => undefined);
       const session = await captureAgent.begin({
         bookmarkId: input.bookmarkId,
         trigger: input.trigger,

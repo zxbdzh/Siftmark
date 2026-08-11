@@ -172,7 +172,7 @@ test('opens settings directly and resets Siftmark data without deleting native b
   await expect(
     resetPreview.getByText('Agent 收藏偏好', { exact: true }).locator('..')
   ).toContainText('1 项');
-  await expect(resetPreview.getByText(/合计 12 项/)).toBeVisible();
+  await expect(resetPreview.getByText(/合计 13 项/)).toBeVisible();
   await expect(reset.getByRole('button', { name: '执行重置' })).toBeDisabled();
   await reset.getByLabel('确认短语').fill('重置 Siftmark ');
   await expect(reset.getByRole('button', { name: '执行重置' })).toBeDisabled();

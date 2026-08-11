@@ -33,7 +33,7 @@ Endpoint 填写协议根地址。适配器会去掉末尾 `/` 并追加下表路
 - 分析：`POST {endpoint}/responses`
 - Embedding：`POST {endpoint}/embeddings`
 - 认证：`Authorization: Bearer <API Key>`
-- 分析请求：`model`、`instructions`、`input`、`text.format.type=json_schema`。
+- 分析请求：`model`、`instructions`、`input`、`text.format.type=json_schema`；启用识图时加入 Base64 JPEG `input_image`，启用联网时加入 `tools=[{type:web_search}]` 与 `tool_choice=required`。
 - 文本响应：优先使用非空 `output_text`，否则查找 `output[].content[]` 的非空 `output_text`；增强请求成功但无文本时，会移除联网与图片参数降级重试一次。
 
 OpenAI 预置默认使用此协议。Embedding 与 Chat 协议共享 OpenAI 兼容形状。
