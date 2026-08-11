@@ -1,8 +1,45 @@
-import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CaptureOverlay } from '../../../src/ui/content/CaptureOverlay';
 
 describe('CaptureOverlay', () => {
+  afterEach(cleanup);
+
+  it('shows live analysis steps while Ctrl+D processing is in progress', () => {
+    render(
+      <CaptureOverlay
+        view={{
+          sessionId: 'session-1',
+          phase: 'processing',
+          activities: [
+            {
+              id: 'capture',
+              kind: 'capture',
+              status: 'completed',
+              label: '原生书签已保存',
+              createdAt: 1,
+              updatedAt: 1
+            },
+            {
+              id: 'model-analysis',
+              kind: 'model',
+              status: 'running',
+              label: 'AI 正在生成归类方案',
+              createdAt: 2,
+              updatedAt: 2
+            }
+          ]
+        }}
+        onAction={vi.fn()}
+        onDismiss={vi.fn()}
+      />
+    );
+
+    expect(screen.getByRole('status')).toHaveTextContent('原生书签已保存');
+    expect(screen.getByRole('status')).toHaveTextContent('AI 正在生成归类方案');
+    expect(screen.getByText('2 / 2')).toBeInTheDocument();
+  });
+
   it('shows a risky destination and asks for a simple decision', () => {
     const onAction = vi.fn();
     render(
@@ -27,11 +64,7 @@ describe('CaptureOverlay', () => {
     fireEvent.click(screen.getByRole('button', { name: '拒绝' }));
     fireEvent.click(screen.getByRole('button', { name: '与 Agent 调整' }));
 
-    expect(onAction.mock.calls).toEqual([
-      ['allow'],
-      ['reject'],
-      ['adjust']
-    ]);
+    expect(onAction.mock.calls).toEqual([['allow'], ['reject'], ['adjust']]);
   });
 
   it('offers undo and adjustment after automatic organization', () => {

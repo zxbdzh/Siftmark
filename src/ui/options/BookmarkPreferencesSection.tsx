@@ -47,7 +47,10 @@ export function BookmarkPreferencesSection({
             type="checkbox"
             checked={settings.allowNewFolders}
             onChange={(event) =>
-              setSettings({ ...settings, allowNewFolders: event.target.checked })
+              setSettings({
+                ...settings,
+                allowNewFolders: event.target.checked
+              })
             }
           />
         </label>
@@ -57,11 +60,13 @@ export function BookmarkPreferencesSection({
             <small>越积极，AI 越倾向于建立新的细分类目。</small>
           </span>
           <div className="segmented-control" aria-label="新目录策略">
-            {([
-              ['weak', '保守'],
-              ['medium', '平衡'],
-              ['strong', '积极']
-            ] as const).map(([value, label]) => (
+            {(
+              [
+                ['weak', '保守'],
+                ['medium', '平衡'],
+                ['strong', '积极']
+              ] as const
+            ).map(([value, label]) => (
               <button
                 type="button"
                 key={value}
@@ -141,6 +146,40 @@ export function BookmarkPreferencesSection({
         </label>
         <label className="preference-row">
           <span>
+            <strong>AI 联网搜索</strong>
+            <small>
+              归类时允许 OpenAI Chat 或 Responses
+              模型请求联网检索；仅在模型与中转支持时生效。
+            </small>
+          </span>
+          <input
+            type="checkbox"
+            checked={settings.enableWebSearch}
+            onChange={(event) =>
+              setSettings({
+                ...settings,
+                enableWebSearch: event.target.checked
+              })
+            }
+          />
+        </label>
+        <label className="preference-row">
+          <span>
+            <strong>AI 页面识图</strong>
+            <small>
+              将当前可见区域的临时截图发送给模型；登录、支付、内网页面及屏蔽域名不会截图。
+            </small>
+          </span>
+          <input
+            type="checkbox"
+            checked={settings.enableVision}
+            onChange={(event) =>
+              setSettings({ ...settings, enableVision: event.target.checked })
+            }
+          />
+        </label>
+        <label className="preference-row">
+          <span>
             <strong>智能重命名</strong>
             <small>收藏时根据网页内容生成便于浏览的短标题。</small>
           </span>
@@ -178,7 +217,11 @@ export function BookmarkPreferencesSection({
         </label>
       </div>
       <div className="section-actions">
-        <button type="button" className="primary-button" onClick={() => void save()}>
+        <button
+          type="button"
+          className="primary-button"
+          onClick={() => void save()}
+        >
           <Save size={16} />
           保存偏好
         </button>

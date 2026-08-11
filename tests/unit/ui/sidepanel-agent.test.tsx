@@ -40,6 +40,34 @@ const session: CaptureSession = {
     reasons: ['new-folder'],
     canExecute: true
   },
+  activities: [
+    {
+      id: 'capture',
+      kind: 'capture',
+      status: 'completed',
+      label: '原生书签已保存',
+      createdAt: 1,
+      updatedAt: 1
+    },
+    {
+      id: 'folder-candidates',
+      kind: 'folders',
+      status: 'completed',
+      label: '已比较候选目录',
+      detail: '找到 8 个相关目录',
+      createdAt: 2,
+      updatedAt: 2
+    },
+    {
+      id: 'risk-check',
+      kind: 'risk',
+      status: 'completed',
+      label: '风险检查完成',
+      detail: '发现 1 项需要批准',
+      createdAt: 3,
+      updatedAt: 3
+    }
+  ],
   messages: [],
   createdAt: 1,
   updatedAt: 1,
@@ -102,6 +130,18 @@ describe('Side panel Agent workspace', () => {
     expect(actionRequests()[0]).toMatchObject({
       input: { action: 'message', message: '不要新建目录，请改用已有目录' }
     });
+  });
+
+  it('shows the persistent analysis trace as a safe reasoning summary', async () => {
+    render(<App />);
+
+    expect(await screen.findByText('分析过程')).toBeInTheDocument();
+    expect(screen.getByText('原生书签已保存')).toBeInTheDocument();
+    expect(screen.getByText('已比较候选目录')).toBeInTheDocument();
+    expect(screen.getByText('找到 8 个相关目录')).toBeInTheDocument();
+    expect(
+      screen.getByText('展示操作记录与判断摘要，不包含模型的私密思维链。')
+    ).toBeInTheDocument();
   });
 
   function actionRequests() {

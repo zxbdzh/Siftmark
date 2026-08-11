@@ -243,9 +243,7 @@ describe('LocalCaptureExecutor', () => {
     });
     const executor = new LocalCaptureExecutor(dependencies);
 
-    await expect(executor.execute(session())).rejects.toThrow(
-      '书签已发生变化'
-    );
+    await expect(executor.execute(session())).rejects.toThrow('书签已发生变化');
     expect(dependencies.commands.move).not.toHaveBeenCalled();
     expect(dependencies.commands.rename).not.toHaveBeenCalled();
   });
@@ -312,7 +310,8 @@ function session(patch: Partial<CaptureSession> = {}): CaptureSession {
     createdAt: 1,
     updatedAt: 1,
     expiresAt: 2,
-    ...patch
+    ...patch,
+    activities: patch.activities ?? []
   };
 }
 
@@ -334,10 +333,7 @@ function plan(patch: Partial<NonNullable<CaptureSession['plan']>> = {}) {
   };
 }
 
-function operation(
-  type: OperationRecord['type'],
-  bookmarkId = 'bookmark'
-) {
+function operation(type: OperationRecord['type'], bookmarkId = 'bookmark') {
   return ok({
     id: `${type}-operation`,
     type,

@@ -14,7 +14,9 @@ const databaseNames: string[] = [];
 
 describe('capture preferences', () => {
   afterEach(async () => {
-    await Promise.all(databaseNames.splice(0).map((name) => Dexie.delete(name)));
+    await Promise.all(
+      databaseNames.splice(0).map((name) => Dexie.delete(name))
+    );
   });
 
   it('returns matching fixed rules before soft preferences', async () => {
@@ -76,9 +78,7 @@ function createRepository() {
   };
 }
 
-function preference(
-  patch: Partial<CapturePreference> = {}
-): CapturePreference {
+function preference(patch: Partial<CapturePreference> = {}): CapturePreference {
   return {
     id: 'preference',
     kind: 'soft',
@@ -125,6 +125,7 @@ function captureSession(): CaptureSession {
       relatedBookmarks: [],
       generatedAt: 1
     },
+    activities: [],
     messages: [],
     createdAt: 1,
     updatedAt: 1,

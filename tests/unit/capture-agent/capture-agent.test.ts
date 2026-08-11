@@ -35,6 +35,72 @@ describe('CaptureAgent', () => {
     expect(dependencies.executor.stageForApproval).not.toHaveBeenCalled();
   });
 
+  it('records and publishes an auditable analysis trace without raw reasoning', async () => {
+    const dependencies = createDependencies({
+      plan: safePlan({ confidence: 'medium' })
+    });
+    const onSessionChanged = vi.fn();
+    dependencies.onSessionChanged = onSessionChanged;
+    dependencies.planner.plan.mockImplementationOnce(async (input) => {
+      await input.reportActivity?.({
+        id: 'folder-candidates',
+        kind: 'folders',
+        status: 'completed',
+        label: '已比较候选目录',
+        detail: '找到 8 个相关目录'
+      });
+      await input.reportActivity?.({
+        id: 'model-analysis',
+        kind: 'model',
+        status: 'running',
+        label: 'AI 正在生成归类方案'
+      });
+      await input.reportActivity?.({
+        id: 'model-analysis',
+        kind: 'model',
+        status: 'completed',
+        label: 'AI 已生成归类方案',
+        detail: '内容与 React 文档相关'
+      });
+      return safePlan({ confidence: 'medium' });
+    });
+    const agent = new CaptureAgent(dependencies);
+
+    const result = await agent.begin({
+      bookmarkId: source.id,
+      trigger: 'native-bookmark',
+      page: { text: 'Server Components' }
+    });
+
+    expect(result.activities).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'capture',
+          status: 'completed',
+          label: '原生书签已保存'
+        }),
+        expect.objectContaining({
+          id: 'folder-candidates',
+          status: 'completed'
+        }),
+        expect.objectContaining({
+          id: 'model-analysis',
+          status: 'completed',
+          detail: '内容与 React 文档相关'
+        }),
+        expect.objectContaining({
+          kind: 'risk',
+          status: 'completed',
+          label: '风险检查完成'
+        })
+      ])
+    );
+    expect(onSessionChanged).toHaveBeenCalledWith(
+      expect.objectContaining({ state: 'analyzing' })
+    );
+    expect(JSON.stringify(result.activities)).not.toContain('token=private');
+  });
+
   it('reopens an auto-applied bookmark from its current location for adjustment', async () => {
     const revisedPlan = safePlan({
       destination: {
@@ -312,11 +378,13 @@ function safePlan(patch: Partial<CapturePlan> = {}): CapturePlan {
   };
 }
 
-function createDependencies(options: {
-  plan?: CapturePlan;
-  revisedPlan?: CapturePlan;
-  planningError?: Error;
-} = {}) {
+function createDependencies(
+  options: {
+    plan?: CapturePlan;
+    revisedPlan?: CapturePlan;
+    planningError?: Error;
+  } = {}
+) {
   const sessions = new MemorySessions();
   const plan = options.planningError
     ? vi.fn().mockRejectedValue(options.planningError)
@@ -324,14 +392,21 @@ function createDependencies(options: {
   return {
     bookmarks: {
       get: vi.fn().mockResolvedValue(source),
-      getTree: vi.fn().mockResolvedValue([
-        { id: 'root', parentId: '0', index: 0, title: '书签栏' },
-        { id: 'source-folder', parentId: 'root', index: 0, title: '收件箱' },
-        { id: 'react-folder', parentId: 'root', index: 1, title: 'React' },
-        { id: 'agent-folder', parentId: 'dev-folder', index: 0, title: 'Agent' },
-        { id: 'dev-folder', parentId: 'root', index: 2, title: '开发' },
-        source
-      ])
+      getTree: vi
+        .fn()
+        .mockResolvedValue([
+          { id: 'root', parentId: '0', index: 0, title: '书签栏' },
+          { id: 'source-folder', parentId: 'root', index: 0, title: '收件箱' },
+          { id: 'react-folder', parentId: 'root', index: 1, title: 'React' },
+          {
+            id: 'agent-folder',
+            parentId: 'dev-folder',
+            index: 0,
+            title: 'Agent'
+          },
+          { id: 'dev-folder', parentId: 'root', index: 2, title: '开发' },
+          source
+        ])
     },
     sessions,
     preferences: {
@@ -340,15 +415,20 @@ function createDependencies(options: {
     },
     planner: {
       plan,
-      revise: vi.fn().mockResolvedValue(options.revisedPlan ?? options.plan ?? safePlan())
+      revise: vi
+        .fn()
+        .mockResolvedValue(options.revisedPlan ?? options.plan ?? safePlan())
     },
     executor: {
       stageForApproval: vi.fn().mockResolvedValue({ batchId: 'batch-1' }),
-      execute: vi.fn().mockResolvedValue({ batchId: 'batch-1', bookmarkId: source.id }),
+      execute: vi
+        .fn()
+        .mockResolvedValue({ batchId: 'batch-1', bookmarkId: source.id }),
       undo: vi.fn().mockResolvedValue({ completed: 2, failed: 0 }),
       remove: vi.fn()
     },
     getSpecialFolderIds: vi.fn().mockResolvedValue(['source-folder']),
+    onSessionChanged: undefined as CaptureAgentDependencies['onSessionChanged'],
     now: vi.fn().mockReturnValue(10),
     createId: vi
       .fn()
@@ -360,7 +440,9 @@ function createDependencies(options: {
       .mockReturnValue('id'),
     ...({} as Pick<CaptureAgentDependencies, never>)
   } satisfies CaptureAgentDependencies & {
-    executor: CaptureAgentDependencies['executor'] & { remove: ReturnType<typeof vi.fn> };
+    executor: CaptureAgentDependencies['executor'] & {
+      remove: ReturnType<typeof vi.fn>;
+    };
   };
 }
 
@@ -377,9 +459,14 @@ class MemorySessions implements CaptureSessionRepository {
 
   async listPending(limit = 100) {
     return (await this.list(limit)).filter((session) =>
-      ['analyzing', 'ready', 'pending', 'adjusting', 'executing', 'failed'].includes(
-        session.state
-      )
+      [
+        'analyzing',
+        'ready',
+        'pending',
+        'adjusting',
+        'executing',
+        'failed'
+      ].includes(session.state)
     );
   }
 

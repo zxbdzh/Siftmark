@@ -25,6 +25,7 @@ export function createCaptureSession(
     trigger: input.trigger,
     sourceSnapshot: input.bookmark,
     state: 'analyzing',
+    activities: [],
     messages: [],
     createdAt: input.now,
     updatedAt: input.now,
@@ -65,9 +66,7 @@ export function failCaptureSession(
 
 export function canRetryCapture(failure: CaptureFailure): boolean {
   return (
-    failure.retryable &&
-    failure.kind === 'network' &&
-    failure.retryCount < 2
+    failure.retryable && failure.kind === 'network' && failure.retryCount < 2
   );
 }
 

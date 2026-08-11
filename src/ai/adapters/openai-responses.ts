@@ -24,7 +24,10 @@ import {
 type Poster = <T>(request: ProviderJsonRequest) => Promise<T>;
 interface ResponsesResponse {
   output_text?: string;
-  output?: Array<{ content?: Array<{ type?: string; text?: string }> }>;
+  output?: Array<{
+    type?: string;
+    content?: Array<{ type?: string; text?: string }>;
+  }>;
   usage?: { total_tokens?: number };
 }
 interface EmbeddingResponse {
@@ -95,25 +98,55 @@ export class OpenAiResponsesAdapter implements AiAdapter {
     signal: AbortSignal
   ): Promise<AiAnalysisResult> {
     const prompt = buildAnalysisPrompt(context);
-    const response = await this.post<ResponsesResponse>({
-      url: appendEndpointPath(profile.endpoint, 'responses'),
-      headers: openAiHeaders(profile.apiKey),
-      signal,
-      timeoutMs: profile.timeoutMs,
-      body: {
-        model: profile.model,
-        instructions: prompt.system,
-        input: prompt.user,
-        text: {
-          format: {
-            type: 'json_schema',
-            name: 'siftmark_analysis',
-            strict: true,
-            schema: analysisJsonSchema
+    const hasEnhancements = Boolean(context.imageDataUrl || context.webSearch);
+    const input = context.imageDataUrl
+      ? [
+          {
+            role: 'user',
+            content: [
+              { type: 'input_text', text: prompt.user },
+              {
+                type: 'input_image',
+                image_url: context.imageDataUrl,
+                detail: 'low'
+              }
+            ]
+          }
+        ]
+      : prompt.user;
+    const request = (withEnhancements: boolean) =>
+      this.post<ResponsesResponse>({
+        url: appendEndpointPath(profile.endpoint, 'responses'),
+        headers: openAiHeaders(profile.apiKey),
+        signal,
+        timeoutMs: profile.timeoutMs,
+        body: {
+          model: profile.model,
+          instructions: prompt.system,
+          input: withEnhancements ? input : prompt.user,
+          ...(withEnhancements && context.webSearch
+            ? { tools: [{ type: 'web_search' as const }] }
+            : {}),
+          text: {
+            format: {
+              type: 'json_schema',
+              name: 'siftmark_analysis',
+              strict: true,
+              schema: analysisJsonSchema
+            }
           }
         }
-      }
-    });
+      });
+    let enhancementsAccepted = true;
+    let response: ResponsesResponse;
+    try {
+      response = await request(true);
+    } catch (error) {
+      if (!hasEnhancements || !isEnhancementCompatibilityError(error))
+        throw error;
+      enhancementsAccepted = false;
+      response = await request(false);
+    }
     const text =
       response.output_text ??
       response.output
@@ -124,9 +157,24 @@ export class OpenAiResponsesAdapter implements AiAdapter {
         'unknown-result',
         'Provider returned no text result'
       );
+    const webSearchUsage = !context.webSearch
+      ? undefined
+      : !enhancementsAccepted
+        ? ('not-used' as const)
+        : response.output?.some((item) => item.type === 'web_search_call')
+          ? ('used' as const)
+          : ('not-used' as const);
     return {
       ...parseAnalysisText(text),
-      usageTokens: response.usage?.total_tokens
+      usageTokens: response.usage?.total_tokens,
+      ...(context.imageDataUrl || webSearchUsage
+        ? {
+            toolUsage: {
+              ...(context.imageDataUrl ? { vision: enhancementsAccepted } : {}),
+              ...(webSearchUsage ? { webSearch: webSearchUsage } : {})
+            }
+          }
+        : {})
     };
   }
 
@@ -160,4 +208,12 @@ export class OpenAiResponsesAdapter implements AiAdapter {
       );
     return vectors as number[][];
   }
+}
+
+function isEnhancementCompatibilityError(error: unknown): boolean {
+  return (
+    error instanceof ProviderError &&
+    error.kind === 'validation' &&
+    (error.status === 400 || error.status === 422)
+  );
 }

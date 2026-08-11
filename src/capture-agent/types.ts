@@ -4,10 +4,7 @@ import type { Confidence } from '../storage/types';
 export const CAPTURE_SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1_000;
 
 export type CaptureTrigger =
-  | 'native-bookmark'
-  | 'keyboard-command'
-  | 'context-menu'
-  | 'popup';
+  'native-bookmark' | 'keyboard-command' | 'context-menu' | 'popup';
 
 export type CaptureSessionState =
   | 'analyzing'
@@ -93,12 +90,41 @@ export interface CaptureFailure {
   retryCount: number;
 }
 
+export type CaptureActivityKind =
+  | 'capture'
+  | 'page'
+  | 'folders'
+  | 'model'
+  | 'vision'
+  | 'web-search'
+  | 'risk'
+  | 'execution';
+
+export type CaptureActivityStatus =
+  'running' | 'completed' | 'skipped' | 'failed';
+
+/**
+ * A safe, user-facing audit event. It records what the Agent did and a short
+ * conclusion, never provider reasoning tokens, prompts, page bodies or raw
+ * model responses.
+ */
+export interface CaptureActivity {
+  id: string;
+  kind: CaptureActivityKind;
+  status: CaptureActivityStatus;
+  label: string;
+  detail?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export type CaptureActivityDraft = Omit<
+  CaptureActivity,
+  'createdAt' | 'updatedAt'
+>;
+
 export type CaptureResolution =
-  | 'auto'
-  | 'allowed'
-  | 'rejected'
-  | 'expired'
-  | 'undone';
+  'auto' | 'allowed' | 'rejected' | 'expired' | 'undone';
 
 export interface CaptureSession {
   id: string;
@@ -108,6 +134,7 @@ export interface CaptureSession {
   state: CaptureSessionState;
   plan?: CapturePlan;
   risk?: CaptureRiskAssessment;
+  activities: CaptureActivity[];
   messages: CaptureMessage[];
   failure?: CaptureFailure;
   pageInformation?: 'sufficient' | 'insufficient';
@@ -149,6 +176,8 @@ export const pendingCaptureStates: readonly CaptureSessionState[] = [
 export interface CapturePageContext {
   description?: string;
   text?: string;
+  /** Ephemeral current-viewport image; session persistence must never include it. */
+  imageDataUrl?: string;
 }
 
 export interface CaptureAgentBeginInput {

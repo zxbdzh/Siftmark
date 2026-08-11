@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import fixture from '../../fixtures/ai/openai-responses-success.json';
 import { OpenAiResponsesAdapter } from '../../../src/ai/adapters/openai-responses';
+import { ProviderError } from '../../../src/ai/network/errors';
 import type { ModelProfile } from '../../../src/ai/types';
 
 const profile: ModelProfile = {
@@ -68,6 +69,79 @@ describe('OpenAiResponsesAdapter', () => {
       })
     );
     expect(result.title).toBe('示例');
+  });
+
+  it('sends optional web search and vision inputs in Responses format', async () => {
+    const post = vi.fn().mockResolvedValue({
+      ...fixture,
+      output: [{ type: 'web_search_call' }]
+    });
+    const result = await new OpenAiResponsesAdapter(post).analyze(
+      profile,
+      {
+        title: 'A',
+        url: 'https://a.test',
+        currentFolderPath: [],
+        imageDataUrl: 'data:image/jpeg;base64,AA==',
+        webSearch: true
+      },
+      new AbortController().signal
+    );
+
+    expect(post).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: expect.objectContaining({
+          tools: [{ type: 'web_search' }],
+          input: [
+            expect.objectContaining({
+              role: 'user',
+              content: expect.arrayContaining([
+                expect.objectContaining({ type: 'input_text' }),
+                {
+                  type: 'input_image',
+                  image_url: 'data:image/jpeg;base64,AA==',
+                  detail: 'low'
+                }
+              ])
+            })
+          ]
+        })
+      })
+    );
+    expect(result.toolUsage).toEqual({
+      vision: true,
+      webSearch: 'used'
+    });
+  });
+
+  it('falls back to text analysis when a compatible relay rejects enhancements', async () => {
+    const post = vi
+      .fn()
+      .mockRejectedValueOnce(
+        new ProviderError('validation', 'unsupported tools', 400)
+      )
+      .mockResolvedValueOnce(fixture);
+
+    const result = await new OpenAiResponsesAdapter(post).analyze(
+      profile,
+      {
+        title: 'A',
+        url: 'https://a.test',
+        currentFolderPath: [],
+        imageDataUrl: 'data:image/jpeg;base64,AA==',
+        webSearch: true
+      },
+      new AbortController().signal
+    );
+
+    expect(post).toHaveBeenCalledTimes(2);
+    const fallbackBody = post.mock.calls[1]![0].body as Record<string, unknown>;
+    expect(fallbackBody.tools).toBeUndefined();
+    expect(fallbackBody.input).toEqual(expect.any(String));
+    expect(result.toolUsage).toEqual({
+      vision: false,
+      webSearch: 'not-used'
+    });
   });
 
   it('keeps working when a compatible provider ignores text.format', async () => {

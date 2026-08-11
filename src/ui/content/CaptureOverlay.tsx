@@ -1,28 +1,25 @@
 import {
   Bot,
   Check,
+  CheckCircle2,
   ChevronRight,
+  CircleDashed,
   Folder,
   FolderPlus,
+  LoaderCircle,
   MessageSquareText,
   RotateCcw,
   RotateCw,
-  X
+  X,
+  XCircle
 } from 'lucide-react';
+import type { CaptureActivity } from '../../capture-agent/types';
 
 export type CaptureOverlayPhase =
-  | 'processing'
-  | 'approval'
-  | 'saved'
-  | 'rejected'
-  | 'error';
+  'processing' | 'approval' | 'saved' | 'rejected' | 'error';
 
 export type CaptureOverlayAction =
-  | 'allow'
-  | 'reject'
-  | 'adjust'
-  | 'undo'
-  | 'retry';
+  'allow' | 'reject' | 'adjust' | 'undo' | 'retry';
 
 export interface CaptureOverlayView {
   sessionId?: string;
@@ -31,6 +28,7 @@ export interface CaptureOverlayView {
   destinationPath?: string[];
   newFolderName?: string;
   message?: string;
+  activities?: CaptureActivity[];
   canAdjust?: boolean;
   canUndo?: boolean;
 }
@@ -90,6 +88,48 @@ function IconButton({
   );
 }
 
+function ActivityIcon({ status }: { status: CaptureActivity['status'] }) {
+  if (status === 'completed') return <CheckCircle2 aria-hidden="true" />;
+  if (status === 'failed') return <XCircle aria-hidden="true" />;
+  if (status === 'running')
+    return (
+      <LoaderCircle className="siftmark-activity-spinner" aria-hidden="true" />
+    );
+  return <CircleDashed aria-hidden="true" />;
+}
+
+function ProcessingTrace({
+  activities = []
+}: {
+  activities?: CaptureActivity[];
+}) {
+  if (activities.length === 0) return null;
+  const visibleActivities = activities.slice(-4);
+  return (
+    <div className="siftmark-processing-trace">
+      <div className="siftmark-trace-heading">
+        <span>分析过程</span>
+        <span>
+          {activities.length} / {activities.length}
+        </span>
+      </div>
+      <ol aria-label="分析过程">
+        {visibleActivities.map((activity) => (
+          <li key={activity.id} data-status={activity.status}>
+            <span className="siftmark-activity-icon">
+              <ActivityIcon status={activity.status} />
+            </span>
+            <span className="siftmark-activity-copy">
+              <strong>{activity.label}</strong>
+              {activity.detail ? <small>{activity.detail}</small> : null}
+            </span>
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
 export function CaptureOverlay({
   view,
   busyAction,
@@ -98,16 +138,16 @@ export function CaptureOverlay({
 }: CaptureOverlayProps) {
   const copy = phaseCopy[view.phase];
   const isApproval = view.phase === 'approval';
-  const hasRoute = Boolean(
-    view.destinationPath?.length || view.newFolderName
-  );
+  const hasRoute = Boolean(view.destinationPath?.length || view.newFolderName);
 
   return (
     <section
       className="siftmark-capture-overlay"
       data-phase={view.phase}
       role={isApproval ? 'dialog' : view.phase === 'error' ? 'alert' : 'status'}
-      aria-live={isApproval ? 'off' : view.phase === 'error' ? 'assertive' : 'polite'}
+      aria-live={
+        isApproval ? 'off' : view.phase === 'error' ? 'assertive' : 'polite'
+      }
       aria-labelledby="siftmark-overlay-heading"
     >
       <header className="siftmark-overlay-header">
@@ -122,9 +162,12 @@ export function CaptureOverlay({
       </header>
 
       {view.phase === 'processing' ? (
-        <div className="siftmark-processing-line" aria-hidden="true">
-          <span />
-        </div>
+        <>
+          <div className="siftmark-processing-line" aria-hidden="true">
+            <span />
+          </div>
+          <ProcessingTrace activities={view.activities} />
+        </>
       ) : null}
 
       {hasRoute ? (
@@ -172,8 +215,7 @@ export function CaptureOverlay({
             disabled={Boolean(busyAction)}
             onClick={() => onAction('adjust')}
           >
-            <MessageSquareText aria-hidden="true" />
-            与 Agent 调整
+            <MessageSquareText aria-hidden="true" />与 Agent 调整
           </button>
           <button
             type="button"

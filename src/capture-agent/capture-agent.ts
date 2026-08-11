@@ -1,5 +1,6 @@
 import type { BookmarkRepository } from '../bookmarks/ports';
 import { isBookmark, type BookmarkNode } from '../bookmarks/types';
+import { redactSensitiveText } from '../ai/security/redact-sensitive';
 import type { CapturePreferenceRepository } from './preference-repository';
 import {
   isFixedRuleInstruction,
@@ -10,6 +11,8 @@ import { assessCaptureRisk, type CaptureRiskFacts } from './risk-policy';
 import type { CaptureSessionRepository } from './session-repository';
 import {
   CAPTURE_SESSION_TTL_MS,
+  type CaptureActivity,
+  type CaptureActivityDraft,
   type CaptureAgentAction,
   type CaptureAgentBeginInput,
   type CaptureFailure,
@@ -22,6 +25,7 @@ export interface CapturePlannerInput {
   source: BookmarkNode & { url: string };
   page?: CaptureAgentBeginInput['page'];
   preferences: CapturePreference[];
+  reportActivity?: (activity: CaptureActivityDraft) => Promise<void>;
 }
 
 export interface CaptureRevisionInput extends CapturePlannerInput {
@@ -48,13 +52,11 @@ export interface CaptureExecutor {
 export interface CaptureAgentDependencies {
   bookmarks: Pick<BookmarkRepository, 'get' | 'getTree'>;
   sessions: CaptureSessionRepository;
-  preferences: Pick<
-    CapturePreferenceRepository,
-    'listMatching' | 'put'
-  >;
+  preferences: Pick<CapturePreferenceRepository, 'listMatching' | 'put'>;
   planner: CapturePlanner;
   executor: CaptureExecutor;
   getSpecialFolderIds(): Promise<string[]>;
+  onSessionChanged?: (session: CaptureSession) => void | Promise<void>;
   now?: () => number;
   createId?: () => string;
 }
@@ -82,6 +84,7 @@ export class CaptureAgent {
       trigger: input.trigger,
       sourceSnapshot: source,
       state: 'analyzing',
+      activities: initialActivities(input, timestamp),
       messages: [],
       pageInformation: hasPageInformation(input.page)
         ? 'sufficient'
@@ -90,7 +93,7 @@ export class CaptureAgent {
       updatedAt: timestamp,
       expiresAt: timestamp + CAPTURE_SESSION_TTL_MS
     };
-    await this.dependencies.sessions.put(session);
+    await this.persist(session);
     return this.planAndRoute(session, input.page);
   }
 
@@ -118,7 +121,7 @@ export class CaptureAgent {
           : ('insufficient' as const),
         updatedAt: this.now()
       };
-      await this.dependencies.sessions.put(retrying);
+      await this.persist(retrying);
       return this.planAndRoute(
         retrying,
         action.page,
@@ -137,7 +140,7 @@ export class CaptureAgent {
         pageInformation: session.pageInformation ?? 'sufficient',
         updatedAt: this.now()
       };
-      await this.dependencies.sessions.put(reopened);
+      await this.persist(reopened);
       return this.revise(reopened, action.message);
     }
     if (!['pending', 'adjusting', 'ready'].includes(session.state))
@@ -152,6 +155,7 @@ export class CaptureAgent {
           session.operationBatchId
         )
       );
+      await this.notifySessionChanged(rejected);
       await this.learn(session, 'reject');
       return rejected;
     }
@@ -166,6 +170,7 @@ export class CaptureAgent {
     page?: CaptureAgentBeginInput['page'],
     retryCount = 0
   ): Promise<CaptureSession> {
+    let currentSession = session;
     try {
       const preferences = await this.dependencies.preferences.listMatching(
         session.sourceSnapshot.url ?? '',
@@ -174,18 +179,34 @@ export class CaptureAgent {
       const plan = await this.dependencies.planner.plan({
         source: sourceForPlanner(session.sourceSnapshot),
         ...(page ? { page: pageForPlanner(page) } : {}),
-        preferences
+        preferences,
+        reportActivity: async (activity) => {
+          currentSession = await this.recordActivity(currentSession, activity);
+        }
       });
-      const risk = await this.assess(session, plan, page);
+      currentSession = await this.recordActivity(currentSession, {
+        id: 'risk-check',
+        kind: 'risk',
+        status: 'running',
+        label: '正在检查风险'
+      });
+      const risk = await this.assess(currentSession, plan, page);
+      currentSession = await this.recordActivity(currentSession, {
+        id: 'risk-check',
+        kind: 'risk',
+        status: 'completed',
+        label: '风险检查完成',
+        detail: riskActivityDetail(risk.reasons.length)
+      });
       const ready: CaptureSession = {
-        ...session,
+        ...currentSession,
         state: 'ready',
         plan,
         risk,
         failure: undefined,
         updatedAt: this.now()
       };
-      await this.dependencies.sessions.put(ready);
+      await this.persist(ready);
       if (risk.decision === 'auto' && risk.canExecute)
         return this.execute(ready, 'auto');
       const staged = await this.dependencies.executor.stageForApproval(ready);
@@ -202,16 +223,16 @@ export class CaptureAgent {
         stagingBatchId: staged.batchId,
         updatedAt: this.now()
       };
-      await this.dependencies.sessions.put(pending);
+      await this.persist(pending);
       return pending;
     } catch (error) {
       const failed: CaptureSession = {
-        ...session,
+        ...failRunningActivities(currentSession, this.now()),
         state: 'failed',
         failure: failureFrom(error, retryCount),
         updatedAt: this.now()
       };
-      await this.dependencies.sessions.put(failed);
+      await this.persist(failed);
       return failed;
     }
   }
@@ -232,6 +253,8 @@ export class CaptureAgent {
         createdAt: timestamp
       }
     );
+    await this.notifySessionChanged(withUserMessage);
+    let currentSession = withUserMessage;
     try {
       const preferences = await this.dependencies.preferences.listMatching(
         session.sourceSnapshot.url ?? '',
@@ -241,18 +264,34 @@ export class CaptureAgent {
         source: sourceForPlanner(session.sourceSnapshot),
         session: sessionForPlanner(withUserMessage),
         message,
-        preferences
+        preferences,
+        reportActivity: async (activity) => {
+          currentSession = await this.recordActivity(currentSession, activity);
+        }
       });
-      const risk = await this.assess(withUserMessage, plan);
-      const withAssistantMessage = await this.dependencies.sessions.appendMessage(
-        session.id,
-        {
+      const revisionNumber = userMessageCount(withUserMessage);
+      currentSession = await this.recordActivity(currentSession, {
+        id: `risk-check-revision-${revisionNumber}`,
+        kind: 'risk',
+        status: 'running',
+        label: '正在复核调整后的风险'
+      });
+      const risk = await this.assess(currentSession, plan);
+      currentSession = await this.recordActivity(currentSession, {
+        id: `risk-check-revision-${revisionNumber}`,
+        kind: 'risk',
+        status: 'completed',
+        label: '调整方案风险复核完成',
+        detail: riskActivityDetail(risk.reasons.length)
+      });
+      const withAssistantMessage =
+        await this.dependencies.sessions.appendMessage(session.id, {
           id: this.createId(),
           role: 'assistant',
           text: plan.reason || '方案已调整',
           createdAt: this.now()
-        }
-      );
+        });
+      await this.notifySessionChanged(withAssistantMessage);
       const pending: CaptureSession = {
         ...withAssistantMessage,
         state: 'pending',
@@ -260,16 +299,16 @@ export class CaptureAgent {
         risk,
         updatedAt: this.now()
       };
-      await this.dependencies.sessions.put(pending);
+      await this.persist(pending);
       return pending;
     } catch (error) {
       const failed: CaptureSession = {
-        ...withUserMessage,
+        ...failRunningActivities(currentSession, this.now()),
         state: 'failed',
         failure: failureFrom(error),
         updatedAt: this.now()
       };
-      await this.dependencies.sessions.put(failed);
+      await this.persist(failed);
       return failed;
     }
   }
@@ -278,27 +317,48 @@ export class CaptureAgent {
     session: CaptureSession,
     resolution: 'auto' | 'allowed'
   ): Promise<CaptureSession> {
-    const currentRisk = session.plan
-      ? await this.assess(session, session.plan)
-      : undefined;
-    if (!session.plan || !currentRisk?.canExecute)
-      throw new Error('书签或目录已发生变化，请重新分析');
-    const executing: CaptureSession = {
-      ...session,
-      state: 'executing',
-      risk: currentRisk,
-      updatedAt: this.now()
-    };
-    await this.dependencies.sessions.put(executing);
+    let currentSession = session;
     try {
-      const receipt = await this.dependencies.executor.execute(executing);
+      currentSession = await this.recordActivity(currentSession, {
+        id: 'execution',
+        kind: 'execution',
+        status: 'running',
+        label: '正在执行前安全复核'
+      });
+      const currentRisk = currentSession.plan
+        ? await this.assess(currentSession, currentSession.plan)
+        : undefined;
+      if (!currentSession.plan || !currentRisk?.canExecute)
+        throw new Error('书签或目录已发生变化，请重新分析');
+      const executing: CaptureSession = {
+        ...currentSession,
+        state: 'executing',
+        risk: currentRisk,
+        updatedAt: this.now()
+      };
+      currentSession = await this.persist(executing);
+      currentSession = await this.recordActivity(currentSession, {
+        id: 'execution',
+        kind: 'execution',
+        status: 'running',
+        label: '正在整理书签',
+        detail: '仅执行已通过风险检查的本地书签操作'
+      });
+      const receipt = await this.dependencies.executor.execute(currentSession);
       if (receipt.bookmarkId !== session.bookmarkId) {
-        await this.dependencies.sessions.put({
-          ...executing,
+        currentSession = await this.persist({
+          ...currentSession,
           bookmarkId: receipt.bookmarkId,
           updatedAt: this.now()
         });
       }
+      currentSession = await this.recordActivity(currentSession, {
+        id: 'execution',
+        kind: 'execution',
+        status: 'completed',
+        label: '书签整理完成',
+        detail: '标题与收藏位置已按最终方案更新'
+      });
       const applied = this.requireResolved(
         await this.dependencies.sessions.resolve(
           session.id,
@@ -307,6 +367,7 @@ export class CaptureAgent {
           receipt.batchId
         )
       );
+      await this.notifySessionChanged(applied);
       if (resolution === 'allowed') {
         const decision = session.messages.some(
           (message) => message.role === 'user'
@@ -318,12 +379,12 @@ export class CaptureAgent {
       return applied;
     } catch (error) {
       const failed: CaptureSession = {
-        ...session,
+        ...failRunningActivities(currentSession, this.now()),
         state: 'failed',
         failure: failureFrom(error),
         updatedAt: this.now()
       };
-      await this.dependencies.sessions.put(failed);
+      await this.persist(failed);
       return failed;
     }
   }
@@ -336,7 +397,7 @@ export class CaptureAgent {
     );
     if (result.failed > 0)
       throw new Error('部分书签已被其他操作修改，无法完整撤销');
-    return this.requireResolved(
+    const undone = this.requireResolved(
       await this.dependencies.sessions.resolve(
         session.id,
         'undone',
@@ -344,6 +405,47 @@ export class CaptureAgent {
         session.operationBatchId
       )
     );
+    await this.notifySessionChanged(undone);
+    return undone;
+  }
+
+  private async recordActivity(
+    session: CaptureSession,
+    draft: CaptureActivityDraft
+  ): Promise<CaptureSession> {
+    const timestamp = this.now();
+    const safeDraft = sanitizeActivityDraft(draft);
+    const existingIndex = session.activities.findIndex(
+      (activity) => activity.id === safeDraft.id
+    );
+    const existing = session.activities[existingIndex];
+    const activity: CaptureActivity = {
+      ...safeDraft,
+      createdAt: existing?.createdAt ?? timestamp,
+      updatedAt: timestamp
+    };
+    const activities = [...session.activities];
+    if (existingIndex >= 0) activities[existingIndex] = activity;
+    else activities.push(activity);
+    return this.persist({
+      ...session,
+      activities,
+      updatedAt: timestamp
+    });
+  }
+
+  private async persist(session: CaptureSession): Promise<CaptureSession> {
+    await this.dependencies.sessions.put(session);
+    await this.notifySessionChanged(session);
+    return session;
+  }
+
+  private async notifySessionChanged(session: CaptureSession): Promise<void> {
+    try {
+      await this.dependencies.onSessionChanged?.(session);
+    } catch {
+      // UI publication is best-effort and must not change the bookmark outcome.
+    }
   }
 
   private async assess(
@@ -441,17 +543,19 @@ function sameSource(
 ): boolean {
   return Boolean(
     current &&
-      current.id === source.id &&
-      current.parentId === source.parentId &&
-      current.index === source.index &&
-      current.title === source.title &&
-      current.url === source.url
+    current.id === source.id &&
+    current.parentId === source.parentId &&
+    current.index === source.index &&
+    current.title === source.title &&
+    current.url === source.url
   );
 }
 
 function failureFrom(error: unknown, retryCount = 0): CaptureFailure {
-  const message = error instanceof Error ? error.message : '收藏 Agent 处理失败';
-  const normalized = `${error instanceof Error ? error.name : ''} ${message}`.toLocaleLowerCase();
+  const message =
+    error instanceof Error ? error.message : '收藏 Agent 处理失败';
+  const normalized =
+    `${error instanceof Error ? error.name : ''} ${message}`.toLocaleLowerCase();
   if (/schema|json|parse|validation|结构/.test(normalized))
     return { kind: 'schema', message, retryable: false, retryCount };
   if (/profile|model|api key|配置|模型/.test(normalized))
@@ -471,7 +575,11 @@ function failureFrom(error: unknown, retryCount = 0): CaptureFailure {
 function hasPageInformation(
   page: CaptureAgentBeginInput['page'] | undefined
 ): boolean {
-  return Boolean(page?.description?.trim() || page?.text?.trim());
+  return Boolean(
+    page?.description?.trim() ||
+    page?.text?.trim() ||
+    validImageDataUrl(page?.imageDataUrl)
+  );
 }
 
 function sourceForPlanner(
@@ -503,7 +611,109 @@ function pageForPlanner(
   page: NonNullable<CaptureAgentBeginInput['page']>
 ): NonNullable<CaptureAgentBeginInput['page']> {
   return {
-    ...(page.description ? { description: page.description.slice(0, 500) } : {}),
-    ...(page.text ? { text: page.text.slice(0, 6_000) } : {})
+    ...(page.description
+      ? { description: page.description.slice(0, 500) }
+      : {}),
+    ...(page.text ? { text: page.text.slice(0, 6_000) } : {}),
+    ...(validImageDataUrl(page.imageDataUrl)
+      ? { imageDataUrl: page.imageDataUrl }
+      : {})
   };
+}
+
+function validImageDataUrl(value: string | undefined): boolean {
+  return Boolean(
+    value &&
+    value.length <= 3_000_000 &&
+    /^data:image\/(?:jpeg|png|webp);base64,[a-z0-9+/=]+$/i.test(value)
+  );
+}
+
+function initialActivities(
+  input: CaptureAgentBeginInput,
+  timestamp: number
+): CaptureActivity[] {
+  const hasPage = hasPageInformation(input.page);
+  return [
+    {
+      id: 'capture',
+      kind: 'capture',
+      status: 'completed',
+      label: '原生书签已保存',
+      detail: '收藏先保存在浏览器中，分析失败也不会丢失',
+      createdAt: timestamp,
+      updatedAt: timestamp
+    },
+    {
+      id: 'page-context',
+      kind: 'page',
+      status: hasPage ? 'completed' : 'skipped',
+      label: hasPage ? '页面上下文已准备' : '未读取到页面正文',
+      detail: hasPage
+        ? '已提取标题、描述与正文用于本次归类'
+        : '将仅根据书签标题与网址判断',
+      createdAt: timestamp,
+      updatedAt: timestamp
+    }
+  ];
+}
+
+function sanitizeActivityDraft(
+  draft: CaptureActivityDraft
+): CaptureActivityDraft {
+  const label = safeAuditText(draft.label, 120) || 'Agent 步骤';
+  const detail = draft.detail ? safeAuditText(draft.detail, 500) : undefined;
+  return {
+    id: draft.id.slice(0, 120),
+    kind: draft.kind,
+    status: draft.status,
+    label,
+    ...(detail ? { detail } : {})
+  };
+}
+
+function safeAuditText(value: string, limit: number): string {
+  const redacted = redactSensitiveText(value).replace(
+    /https?:\/\/[^\s<>"']+/gi,
+    (url) => redactUrlForModel(url)
+  );
+  return Array.from(redacted.trim()).slice(0, limit).join('');
+}
+
+function riskActivityDetail(reasonCount: number): string {
+  return reasonCount > 0
+    ? `发现 ${reasonCount} 项需要批准的风险`
+    : '未发现需要批准的风险';
+}
+
+function userMessageCount(session: CaptureSession): number {
+  return session.messages.filter((message) => message.role === 'user').length;
+}
+
+function failRunningActivities(
+  session: CaptureSession,
+  timestamp: number
+): CaptureSession {
+  return {
+    ...session,
+    activities: session.activities.map((activity) =>
+      activity.status === 'running'
+        ? {
+            ...activity,
+            status: 'failed',
+            label: failedActivityLabel(activity),
+            detail: '此步骤未完成，可在修复问题后重试',
+            updatedAt: timestamp
+          }
+        : activity
+    )
+  };
+}
+
+function failedActivityLabel(activity: CaptureActivity): string {
+  if (activity.kind === 'model') return 'AI 方案生成未完成';
+  if (activity.kind === 'folders') return '候选目录比较未完成';
+  if (activity.kind === 'risk') return '风险检查未完成';
+  if (activity.kind === 'execution') return '书签整理未完成';
+  return `${activity.label.replace(/^正在/, '')}未完成`;
 }

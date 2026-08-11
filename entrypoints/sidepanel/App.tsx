@@ -3,22 +3,28 @@ import {
   Bookmark,
   Bot,
   Check,
+  CheckCircle2,
   ChevronDown,
   ChevronRight,
+  CircleDashed,
   ExternalLink,
   Folder,
   FolderPlus,
   Globe2,
+  LoaderCircle,
   RotateCcw,
   RotateCw,
   Send,
   Settings,
+  ShieldCheck,
   Sparkles,
   Tag,
-  X
+  X,
+  XCircle
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
+  CaptureActivity,
   CapturePlan,
   CaptureRiskReason,
   CaptureSession
@@ -50,6 +56,65 @@ const riskLabels: Record<CaptureRiskReason, string> = {
   'insufficient-page-information': '页面信息不足',
   'stale-state': '书签状态已变化'
 };
+
+const activityKindLabels: Record<CaptureActivity['kind'], string> = {
+  capture: '收藏',
+  page: '页面读取',
+  folders: '目录比较',
+  model: 'AI 分析',
+  vision: '识图',
+  'web-search': '联网搜索',
+  risk: '风险检查',
+  execution: '本地执行'
+};
+
+function ActivityStatusIcon({ status }: { status: CaptureActivity['status'] }) {
+  if (status === 'completed') return <CheckCircle2 aria-hidden="true" />;
+  if (status === 'failed') return <XCircle aria-hidden="true" />;
+  if (status === 'running')
+    return <LoaderCircle className="trace-spinner" aria-hidden="true" />;
+  return <CircleDashed aria-hidden="true" />;
+}
+
+function AnalysisTrace({ activities }: { activities: CaptureActivity[] }) {
+  return (
+    <section className="analysis-trace" aria-labelledby="analysis-trace-title">
+      <header>
+        <div>
+          <Sparkles aria-hidden="true" />
+          <h2 id="analysis-trace-title">分析过程</h2>
+        </div>
+        <span>{activities.length} 步</span>
+      </header>
+
+      {activities.length ? (
+        <ol aria-live="polite">
+          {activities.map((activity) => (
+            <li key={activity.id} data-status={activity.status}>
+              <span className="trace-status-icon">
+                <ActivityStatusIcon status={activity.status} />
+              </span>
+              <div>
+                <span className="trace-kind">
+                  {activityKindLabels[activity.kind]}
+                </span>
+                <strong>{activity.label}</strong>
+                {activity.detail ? <p>{activity.detail}</p> : null}
+              </div>
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <p className="trace-empty">这个旧任务没有保存分析记录。</p>
+      )}
+
+      <p className="trace-privacy">
+        <ShieldCheck aria-hidden="true" />
+        展示操作记录与判断摘要，不包含模型的私密思维链。
+      </p>
+    </section>
+  );
+}
 
 export default function App() {
   const querySessionId = useMemo(
@@ -208,11 +273,7 @@ export default function App() {
           <p>{formatSourceUrl(session.sourceSnapshot.url)}</p>
         </section>
 
-        <div className="route-bridge" aria-hidden="true">
-          <span />
-          <small>Agent 整理</small>
-          <span />
-        </div>
+        <AnalysisTrace activities={session.activities ?? []} />
 
         <section className="proposal-card" aria-label="整理方案">
           <div className="proposal-header">

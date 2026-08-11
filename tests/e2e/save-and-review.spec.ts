@@ -39,6 +39,11 @@ test('saves first, requests approval for risk, applies locally, and supports und
   expect(Date.now() - savedAt).toBeLessThan(2_000);
   await expect.poll(() => findBookmarkId(manager, url)).toBe(bookmark.id);
 
+  const processing = article.getByRole('status');
+  await expect(processing).toContainText('分析过程');
+  await expect(processing).toContainText('原生书签已保存');
+  await expect(processing).toContainText('AI 正在生成归类方案');
+
   await expect
     .poll(async () => (await findCaptureSession(manager, bookmark.id))?.state)
     .toBe('pending');
@@ -54,7 +59,24 @@ test('saves first, requests approval for risk, applies locally, and supports und
       canExecute: true
     }
   });
+  expect(pending?.activities).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ kind: 'capture', status: 'completed' }),
+      expect.objectContaining({ kind: 'folders', status: 'completed' }),
+      expect.objectContaining({ kind: 'model', status: 'completed' }),
+      expect.objectContaining({ kind: 'risk', status: 'completed' })
+    ])
+  );
   await expect.poll(() => bookmarkParent(manager, bookmark.id)).toBe(inboxId);
+
+  const agent = await openExtensionPage(
+    context,
+    extensionId,
+    `sidepanel.html?session=${pending!.id}`
+  );
+  await expect(agent.getByText('分析过程')).toBeVisible();
+  await expect(agent.getByText('已比较候选目录')).toBeVisible();
+  await expect(agent.getByText('风险检查完成')).toBeVisible();
 
   const approval = article.getByRole('dialog');
   await expect(approval).toContainText('批准这次整理吗？');

@@ -1,6 +1,9 @@
 import { ruleSchema } from '../rules/rule-schema';
 import type { Rule } from '../rules/types';
-import type { DensityPreference, ThemePreference } from '../ui/theme/theme-store';
+import type {
+  DensityPreference,
+  ThemePreference
+} from '../ui/theme/theme-store';
 
 export const settingsKeys = {
   appearance: 'siftmark.settings.appearance.v1',
@@ -40,19 +43,37 @@ export interface SmartBookmarkSettings {
   folderCreationLevel: 'weak' | 'medium' | 'strong';
   maxNewFolderLevels: number;
   preferredFolderDepth: number;
+  enableWebSearch: boolean;
+  enableVision: boolean;
   smartRename: boolean;
   renameMaxLength: number;
   captureNativeBookmarks: boolean;
 }
-export type BookmarkSortField = 'manual' | 'title' | 'domain' | 'createdAt' | 'updatedAt' | 'visitedAt' | 'health' | 'confidence';
-export interface BookmarkSort { field: BookmarkSortField; direction: 'asc' | 'desc' }
+export type BookmarkSortField =
+  | 'manual'
+  | 'title'
+  | 'domain'
+  | 'createdAt'
+  | 'updatedAt'
+  | 'visitedAt'
+  | 'health'
+  | 'confidence';
+export interface BookmarkSort {
+  field: BookmarkSortField;
+  direction: 'asc' | 'desc';
+}
 
-const defaultAppearance: AppearanceSettings = { theme: 'system', density: 'comfortable' };
+const defaultAppearance: AppearanceSettings = {
+  theme: 'system',
+  density: 'comfortable'
+};
 export const defaultSmartBookmarkSettings: SmartBookmarkSettings = {
   allowNewFolders: true,
   folderCreationLevel: 'weak',
   maxNewFolderLevels: 1,
   preferredFolderDepth: 2,
+  enableWebSearch: false,
+  enableVision: false,
   smartRename: true,
   renameMaxLength: 12,
   captureNativeBookmarks: true
@@ -65,7 +86,12 @@ export class ChromeSettingsRepository {
     const value = await this.read(settingsKeys.appearance);
     if (!isRecord(value)) return defaultAppearance;
     return {
-      theme: value.theme === 'light' || value.theme === 'dark' || value.theme === 'system' ? value.theme : 'system',
+      theme:
+        value.theme === 'light' ||
+        value.theme === 'dark' ||
+        value.theme === 'system'
+          ? value.theme
+          : 'system',
       density: value.density === 'compact' ? 'compact' : 'comfortable'
     };
   }
@@ -84,7 +110,10 @@ export class ChromeSettingsRepository {
   }
 
   setRules(value: Rule[]): Promise<void> {
-    return this.write(settingsKeys.rules, value.map((rule) => ruleSchema.parse(rule)));
+    return this.write(
+      settingsKeys.rules,
+      value.map((rule) => ruleSchema.parse(rule))
+    );
   }
 
   async getPromptRules(): Promise<string> {
@@ -101,8 +130,12 @@ export class ChromeSettingsRepository {
     if (!isRecord(value)) return {};
     return {
       ...(typeof value.inboxId === 'string' ? { inboxId: value.inboxId } : {}),
-      ...(typeof value.archiveId === 'string' ? { archiveId: value.archiveId } : {}),
-      ...(typeof value.recycleBinId === 'string' ? { recycleBinId: value.recycleBinId } : {})
+      ...(typeof value.archiveId === 'string'
+        ? { archiveId: value.archiveId }
+        : {}),
+      ...(typeof value.recycleBinId === 'string'
+        ? { recycleBinId: value.recycleBinId }
+        : {})
     };
   }
 
@@ -121,7 +154,7 @@ export class ChromeSettingsRepository {
 
   async getProfileAssignments(): Promise<ProfileAssignments> {
     const value = await this.read(settingsKeys.profileAssignments);
-    return isRecord(value) ? value as ProfileAssignments : {};
+    return isRecord(value) ? (value as ProfileAssignments) : {};
   }
 
   setProfileAssignments(value: ProfileAssignments): Promise<void> {
@@ -143,15 +176,33 @@ export class ChromeSettingsRepository {
 
   async getFolderSort(folderId: string): Promise<BookmarkSort> {
     const value = await this.read(settingsKeys.folderSorts);
-    if (!isRecord(value) || !isRecord(value[folderId])) return { field: 'manual', direction: 'asc' };
+    if (!isRecord(value) || !isRecord(value[folderId]))
+      return { field: 'manual', direction: 'asc' };
     const sort = value[folderId];
-    const fields: BookmarkSortField[] = ['manual', 'title', 'domain', 'createdAt', 'updatedAt', 'visitedAt', 'health', 'confidence'];
-    return { field: fields.includes(sort.field as BookmarkSortField) ? sort.field as BookmarkSortField : 'manual', direction: sort.direction === 'desc' ? 'desc' : 'asc' };
+    const fields: BookmarkSortField[] = [
+      'manual',
+      'title',
+      'domain',
+      'createdAt',
+      'updatedAt',
+      'visitedAt',
+      'health',
+      'confidence'
+    ];
+    return {
+      field: fields.includes(sort.field as BookmarkSortField)
+        ? (sort.field as BookmarkSortField)
+        : 'manual',
+      direction: sort.direction === 'desc' ? 'desc' : 'asc'
+    };
   }
 
   async setFolderSort(folderId: string, sort: BookmarkSort): Promise<void> {
     const current = await this.read(settingsKeys.folderSorts);
-    await this.write(settingsKeys.folderSorts, { ...(isRecord(current) ? current : {}), [folderId]: sort });
+    await this.write(settingsKeys.folderSorts, {
+      ...(isRecord(current) ? current : {}),
+      [folderId]: sort
+    });
   }
 
   private async read(key: string): Promise<unknown> {
@@ -181,6 +232,8 @@ function normalizeSmartBookmarkSettings(
       value.preferredFolderDepth,
       defaultSmartBookmarkSettings.preferredFolderDepth
     ),
+    enableWebSearch: value.enableWebSearch === true,
+    enableVision: value.enableVision === true,
     smartRename: value.smartRename !== false,
     renameMaxLength:
       typeof value.renameMaxLength === 'number'

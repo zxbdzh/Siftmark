@@ -145,6 +145,119 @@ button {
   animation: siftmark-progress 1.2s ease-in-out infinite;
 }
 
+.siftmark-processing-trace {
+  padding: 11px 14px 13px;
+  border-bottom: 1px solid var(--siftmark-line);
+  background: #fff;
+}
+
+.siftmark-trace-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+  color: var(--siftmark-muted);
+  font-size: 10px;
+  font-weight: 650;
+  line-height: 1.2;
+}
+
+.siftmark-trace-heading span:last-child {
+  padding: 2px 6px;
+  border: 1px solid #dbe1ea;
+  border-radius: 999px;
+  background: var(--siftmark-paper);
+  color: #596171;
+  font-family: "Space Grotesk", "Noto Sans SC", system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+
+.siftmark-processing-trace ol {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.siftmark-processing-trace li {
+  position: relative;
+  display: grid;
+  grid-template-columns: 19px minmax(0, 1fr);
+  gap: 8px;
+  min-height: 30px;
+  padding: 3px 0;
+}
+
+.siftmark-processing-trace li:not(:last-child)::after {
+  position: absolute;
+  top: 19px;
+  bottom: -5px;
+  left: 8px;
+  width: 1px;
+  background: #d9e0ea;
+  content: "";
+}
+
+.siftmark-activity-icon {
+  z-index: 1;
+  display: grid;
+  width: 17px;
+  height: 17px;
+  place-items: center;
+  border-radius: 50%;
+  background: #fff;
+  color: #7c8798;
+}
+
+.siftmark-activity-icon svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 1.9;
+}
+
+[data-status="completed"] > .siftmark-activity-icon {
+  color: #2f8f5b;
+}
+
+[data-status="running"] > .siftmark-activity-icon {
+  color: var(--siftmark-blue);
+}
+
+[data-status="failed"] > .siftmark-activity-icon {
+  color: #c2413b;
+}
+
+.siftmark-activity-copy {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+
+.siftmark-activity-copy strong {
+  color: #353b46;
+  font-size: 11px;
+  font-weight: 610;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+[data-status="running"] .siftmark-activity-copy strong {
+  color: #2f4fc0;
+}
+
+.siftmark-activity-copy small {
+  display: -webkit-box;
+  overflow: hidden;
+  color: #707989;
+  font-size: 9px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
 .siftmark-overlay-field {
   display: grid;
   grid-template-columns: 62px minmax(0, 1fr);
@@ -323,6 +436,14 @@ button {
   to { transform: translateX(340%); }
 }
 
+@keyframes siftmark-spin {
+  to { transform: rotate(360deg); }
+}
+
+.siftmark-activity-spinner {
+  animation: siftmark-spin .9s linear infinite;
+}
+
 @media (max-width: 440px) {
   .siftmark-capture-overlay {
     top: max(10px, env(safe-area-inset-top));
@@ -343,7 +464,8 @@ button {
 
 @media (prefers-reduced-motion: reduce) {
   .siftmark-capture-overlay,
-  .siftmark-processing-line span {
+  .siftmark-processing-line span,
+  .siftmark-activity-spinner {
     animation: none;
   }
 }

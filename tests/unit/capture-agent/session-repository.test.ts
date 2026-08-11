@@ -12,7 +12,9 @@ const databaseNames: string[] = [];
 
 describe('DexieCaptureSessionRepository', () => {
   afterEach(async () => {
-    await Promise.all(databaseNames.splice(0).map((name) => Dexie.delete(name)));
+    await Promise.all(
+      databaseNames.splice(0).map((name) => Dexie.delete(name))
+    );
   });
 
   it('persists pending sessions and lists newest work first', async () => {
@@ -110,6 +112,7 @@ function session(patch: Partial<CaptureSession> = {}): CaptureSession {
     createdAt: 1,
     updatedAt: 1,
     expiresAt: 1 + CAPTURE_SESSION_TTL_MS,
-    ...patch
+    ...patch,
+    activities: patch.activities ?? []
   };
 }

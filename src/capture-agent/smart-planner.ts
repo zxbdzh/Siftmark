@@ -68,6 +68,15 @@ export class SmartCapturePlanner implements CapturePlanner {
       explicitUserCreation: boolean;
     }
   ): Promise<CapturePlan> {
+    const activitySuffix = revision
+      ? `-revision-${revision.conversation.filter((item) => item.role === 'user').length}`
+      : '';
+    await input.reportActivity?.({
+      id: `folder-candidates${activitySuffix}`,
+      kind: 'folders',
+      status: 'running',
+      label: '正在比较候选目录'
+    });
     const [nodes, profiles, assignments, settings, promptRules, rules] =
       await Promise.all([
         this.dependencies.bookmarks.getTree(),
@@ -113,16 +122,56 @@ export class SmartCapturePlanner implements CapturePlanner {
       nodes,
       settings.preferredFolderDepth
     ).map((entry) => entry.logicalPath.join('/'));
+    await input.reportActivity?.({
+      id: `folder-candidates${activitySuffix}`,
+      kind: 'folders',
+      status: 'completed',
+      label: '已比较候选目录',
+      detail: `比较了 ${availableFolderPaths.length} 个相关目录，并结合目录深度与本地偏好排序`
+    });
     const currentFolderPath = logicalPathForFolder(
       input.source.parentId,
       nodes
     );
+    const supportsOpenAiEnhancements =
+      profile.protocol === 'openai-chat' ||
+      profile.protocol === 'openai-responses';
+    const useVision = Boolean(
+      settings.enableVision &&
+      supportsOpenAiEnhancements &&
+      input.page?.imageDataUrl
+    );
+    const useWebSearch = settings.enableWebSearch && supportsOpenAiEnhancements;
+    if (settings.enableVision)
+      await input.reportActivity?.({
+        id: `vision${activitySuffix}`,
+        kind: 'vision',
+        status: useVision ? 'running' : 'skipped',
+        label: useVision ? '正在识别页面截图' : '本次未使用页面识图',
+        detail: !supportsOpenAiEnhancements
+          ? '当前模型协议尚未接入多模态图片输入'
+          : !input.page?.imageDataUrl
+            ? '页面策略、标签页状态或截图大小不允许发送截图'
+            : undefined
+      });
+    if (settings.enableWebSearch)
+      await input.reportActivity?.({
+        id: `web-search${activitySuffix}`,
+        kind: 'web-search',
+        status: useWebSearch ? 'running' : 'skipped',
+        label: useWebSearch ? '正在请求联网搜索' : '本次未使用联网搜索',
+        detail: supportsOpenAiEnhancements
+          ? undefined
+          : '当前模型协议尚未接入联网工具参数'
+      });
     const context: AiRequestContext = {
       title: input.source.title,
       url: stripPrivateUrlParts(input.source.url),
       currentFolderPath,
       description: redactSensitiveText(input.page?.description ?? ''),
       pageText: redactSensitiveText(input.page?.text ?? ''),
+      ...(useVision ? { imageDataUrl: input.page?.imageDataUrl } : {}),
+      ...(useWebSearch ? { webSearch: true } : {}),
       additionalRules: buildAgentRules(
         promptRules,
         input.preferences,
@@ -138,11 +187,59 @@ export class SmartCapturePlanner implements CapturePlanner {
       maxTitleLength: settings.renameMaxLength,
       taskType: 'classify'
     };
+    await input.reportActivity?.({
+      id: `model-analysis${activitySuffix}`,
+      kind: 'model',
+      status: 'running',
+      label: revision ? 'AI 正在重新规划方案' : 'AI 正在生成归类方案'
+    });
     const analysis = await adapter.analyze(
       profile,
       context,
       new AbortController().signal
     );
+    if (useVision)
+      await input.reportActivity?.({
+        id: `vision${activitySuffix}`,
+        kind: 'vision',
+        status: analysis.toolUsage?.vision ? 'completed' : 'skipped',
+        label: analysis.toolUsage?.vision
+          ? '页面截图识别完成'
+          : '模型服务未确认图片输入',
+        detail: analysis.toolUsage?.vision
+          ? '当前可见区域仅用于本次判断，未写入收藏会话'
+          : '中转服务可能忽略了图片输入'
+      });
+    if (useWebSearch) {
+      const webSearchUsage = analysis.toolUsage?.webSearch;
+      await input.reportActivity?.({
+        id: `web-search${activitySuffix}`,
+        kind: 'web-search',
+        status:
+          webSearchUsage === 'used' || webSearchUsage === 'requested'
+            ? 'completed'
+            : 'skipped',
+        label:
+          webSearchUsage === 'used'
+            ? '联网搜索完成'
+            : webSearchUsage === 'requested'
+              ? '已请求联网搜索'
+              : '模型未返回联网调用记录',
+        detail:
+          webSearchUsage === 'used'
+            ? '模型服务返回了标准 web_search 工具调用记录'
+            : webSearchUsage === 'requested'
+              ? '当前格式不提供可验证的标准搜索调用记录'
+              : '模型可能判断无需搜索，或中转未返回工具轨迹'
+      });
+    }
+    await input.reportActivity?.({
+      id: `model-analysis${activitySuffix}`,
+      kind: 'model',
+      status: 'completed',
+      label: revision ? 'AI 已生成调整方案' : 'AI 已生成归类方案',
+      detail: safeTraceDetail(analysis.reason)
+    });
     const resolvedDestination = resolveDestination(
       analysis.folderPath,
       catalog,
@@ -178,7 +275,11 @@ export class SmartCapturePlanner implements CapturePlanner {
     return {
       destination,
       title: settings.smartRename
-        ? clampTitle(analysis.title, settings.renameMaxLength, input.source.title)
+        ? clampTitle(
+            analysis.title,
+            settings.renameMaxLength,
+            input.source.title
+          )
         : input.source.title,
       tags: analysis.tags,
       summary: analysis.summary,
@@ -230,7 +331,9 @@ function rankFolderCandidates(
   preferredFolderDepth: number
 ): FolderCatalogEntry[] {
   const preferencePaths = new Set(
-    input.preferences.map((preference) => normalizePath(preference.destinationPath))
+    input.preferences.map((preference) =>
+      normalizePath(preference.destinationPath)
+    )
   );
   const currentPath = normalizePath(
     logicalPathForFolder(input.source.parentId, nodes)
@@ -243,7 +346,9 @@ function rankFolderCandidates(
     .map((entry) => {
       const normalized = normalizePath(entry.logicalPath);
       const title = entry.logicalPath.join(' ').toLocaleLowerCase();
-      const tokenScore = [...terms].filter((term) => title.includes(term)).length;
+      const tokenScore = [...terms].filter((term) =>
+        title.includes(term)
+      ).length;
       const depthDistance = Math.abs(
         entry.logicalPath.length - preferredFolderDepth
       );
@@ -257,10 +362,9 @@ function rankFolderCandidates(
     .sort(
       (left, right) =>
         right.score - left.score ||
-        left.entry.logicalPath.join('/').localeCompare(
-          right.entry.logicalPath.join('/'),
-          'zh-CN'
-        )
+        left.entry.logicalPath
+          .join('/')
+          .localeCompare(right.entry.logicalPath.join('/'), 'zh-CN')
     )
     .slice(0, MAX_FOLDER_CANDIDATES)
     .map(({ entry }) => entry);
@@ -282,7 +386,9 @@ function resolveDestination(
   };
   wasTruncated: boolean;
 } {
-  const requested = requestedPath.map((segment) => segment.trim()).filter(Boolean);
+  const requested = requestedPath
+    .map((segment) => segment.trim())
+    .filter(Boolean);
   const creationSource = explicitUserCreation
     ? ('explicit-user' as const)
     : ('automatic' as const);
@@ -301,10 +407,10 @@ function resolveDestination(
       wasTruncated: false
     };
   let base = [...catalog]
-    .filter((entry) =>
-      isPathPrefix(entry.logicalPath, requested)
-    )
-    .sort((left, right) => right.logicalPath.length - left.logicalPath.length)[0];
+    .filter((entry) => isPathPrefix(entry.logicalPath, requested))
+    .sort(
+      (left, right) => right.logicalPath.length - left.logicalPath.length
+    )[0];
   if (maxNewFolderLevels === 0 && (!base || base.logicalPath.length === 0))
     base = catalog.find((entry) => entry.node.id === currentFolderId) ?? base;
   const missingFolders = base
@@ -360,11 +466,11 @@ function findRelated(
       related.push({ ...node, relation: 'similar', score: titleScore });
   }
   return related.sort(
-      (left, right) =>
-        Number(right.relation === 'exact') - Number(left.relation === 'exact') ||
-        right.score - left.score ||
-        left.id.localeCompare(right.id)
-    );
+    (left, right) =>
+      Number(right.relation === 'exact') - Number(left.relation === 'exact') ||
+      right.score - left.score ||
+      left.id.localeCompare(right.id)
+  );
 }
 
 function pathRefsForFolder(
@@ -383,7 +489,8 @@ function pathRefsForFolder(
 
 function logicalPathForFolder(id: string, nodes: BookmarkNode[]): string[] {
   const refs = pathRefsForFolder(id, nodes);
-  return refs.length > 0 && nodes.find((node) => node.id === refs[0]!.id)?.parentId === '0'
+  return refs.length > 0 &&
+    nodes.find((node) => node.id === refs[0]!.id)?.parentId === '0'
     ? refs.slice(1).map((entry) => entry.title)
     : refs.map((entry) => entry.title);
 }
@@ -428,6 +535,14 @@ function stripPrivateUrlParts(value: string): string {
   }
 }
 
+function safeTraceDetail(value: string): string {
+  const redacted = redactSensitiveText(value).replace(
+    /https?:\/\/[^\s<>"']+/gi,
+    (url) => stripPrivateUrlParts(url)
+  );
+  return Array.from(redacted.trim()).slice(0, 300).join('');
+}
+
 function isPathPrefix(prefix: string[], full: string[]): boolean {
   return (
     prefix.length <= full.length &&
@@ -464,7 +579,9 @@ function titleSimilarity(left: string, right: string): number {
   if (left.length < 2 || right.length < 2) return 0;
   const leftPairs = bigrams(left);
   const rightPairs = bigrams(right);
-  const intersection = [...leftPairs].filter((pair) => rightPairs.has(pair)).length;
+  const intersection = [...leftPairs].filter((pair) =>
+    rightPairs.has(pair)
+  ).length;
   return (2 * intersection) / Math.max(1, leftPairs.size + rightPairs.size);
 }
 

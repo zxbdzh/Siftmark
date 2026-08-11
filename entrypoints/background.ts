@@ -25,6 +25,7 @@ import {
   type CaptureThumbnailInput
 } from '../src/tasks/handlers/capture-thumbnail';
 import type { PageCapture } from '../src/capture/types';
+import { captureAgentScreenshot } from '../src/capture/agent-screenshot';
 import { EmbeddingRepository } from '../src/search/embedding/embedding-repository';
 import { EmbeddingIndexer } from '../src/search/embedding/embedding-indexer';
 import {
@@ -132,6 +133,50 @@ export default defineBackground(() => {
   const adapters = createDefaultAiAdapterRegistry(usage);
   const captureSessions = new DexieCaptureSessionRepository(database);
   const capturePreferences = new DexieCapturePreferenceRepository(database);
+  const smartHistory = new ChromeSmartBookmarkHistoryRepository(
+    browser.storage.local
+  );
+  const publishCaptureSession = async (
+    session: CaptureSession,
+    tabId?: number
+  ) => {
+    await browser.storage.local
+      .set({ [ACTIVE_CAPTURE_SESSION_KEY]: session.id })
+      .catch(() => undefined);
+    if (session.state === 'applied' && session.plan) {
+      try {
+        const current = await bookmarks.get(session.bookmarkId);
+        await smartHistory.add({
+          id: session.id,
+          bookmarkId: session.bookmarkId,
+          title: session.plan.title,
+          url: current?.url ?? session.sourceSnapshot.url ?? '',
+          category: [
+            ...session.plan.destination.path.map((folder) => folder.title),
+            ...session.plan.destination.newFolders
+          ].join('/'),
+          timestamp: session.resolvedAt ?? session.updatedAt
+        });
+      } catch {
+        // History is auxiliary; session updates must still reach the UI.
+      }
+    }
+    if (tabId !== undefined)
+      await browser.tabs
+        .sendMessage(tabId, {
+          type: 'capture-agent-session-changed',
+          session
+        })
+        .catch(() => undefined);
+    void browser.runtime
+      .sendMessage({
+        type: 'capture-agent-sessions-changed',
+        sessionId: session.id
+      })
+      .catch(() => undefined);
+  };
+  const captureSessionTabs = new Map<string, number>();
+  const captureBookmarkTabs = new Map<string, number>();
   const capturePlanner = new SmartCapturePlanner({
     bookmarks,
     profiles,
@@ -152,6 +197,13 @@ export default defineBackground(() => {
     preferences: capturePreferences,
     planner: capturePlanner,
     executor: captureExecutor,
+    onSessionChanged: async (session) => {
+      const tabId =
+        captureSessionTabs.get(session.id) ??
+        captureBookmarkTabs.get(session.bookmarkId);
+      if (tabId !== undefined) captureSessionTabs.set(session.id, tabId);
+      await publishCaptureSession(session, tabId);
+    },
     getSpecialFolderIds: async () => {
       const configured = await settings.getSpecialFolders();
       return [
@@ -161,9 +213,6 @@ export default defineBackground(() => {
       ].filter((id): id is string => Boolean(id));
     }
   });
-  const smartHistory = new ChromeSmartBookmarkHistoryRepository(
-    browser.storage.local
-  );
   const smartBookmarks = new SmartBookmarkService(
     bookmarks,
     profiles,
@@ -341,42 +390,6 @@ export default defineBackground(() => {
         normalizeUrlConservatively(tab.url) === target
     );
   };
-  const publishCaptureSession = async (
-    session: CaptureSession,
-    tabId?: number
-  ) => {
-    if (session.state === 'pending' || session.state === 'adjusting')
-      await browser.storage.local.set({
-        [ACTIVE_CAPTURE_SESSION_KEY]: session.id
-      });
-    if (session.state === 'applied' && session.plan) {
-      const current = await bookmarks.get(session.bookmarkId);
-      await smartHistory.add({
-        id: session.id,
-        bookmarkId: session.bookmarkId,
-        title: session.plan.title,
-        url: current?.url ?? session.sourceSnapshot.url ?? '',
-        category: [
-          ...session.plan.destination.path.map((folder) => folder.title),
-          ...session.plan.destination.newFolders
-        ].join('/'),
-        timestamp: session.resolvedAt ?? session.updatedAt
-      });
-    }
-    if (tabId !== undefined)
-      await browser.tabs
-        .sendMessage(tabId, {
-          type: 'capture-agent-session-changed',
-          session
-        })
-        .catch(() => undefined);
-    void browser.runtime
-      .sendMessage({
-        type: 'capture-agent-sessions-changed',
-        sessionId: session.id
-      })
-      .catch(() => undefined);
-  };
   const pageCaptureForTab = async (tabId?: number) => {
     if (tabId === undefined) return undefined;
     const stored = await browser.storage.local.get(null);
@@ -390,12 +403,33 @@ export default defineBackground(() => {
       .sendMessage(tabId, { type: 'capture-page', blockedDomains })
       .catch(() => undefined)) as PageCapture | undefined;
   };
+  const screenshotForCapture = async (
+    tabId: number | undefined,
+    page: PageCapture | undefined
+  ) => {
+    if (tabId === undefined || page?.policy.screenshot !== 'allowed')
+      return undefined;
+    const smartSettings = await settings.getSmartBookmarkSettings();
+    if (!smartSettings.enableVision) return undefined;
+    return captureAgentScreenshot(
+      {
+        getTab: (id) => browser.tabs.get(id).catch(() => undefined),
+        getActiveTab: (windowId) =>
+          browser.tabs.query({ active: true, windowId }).then(([tab]) => tab),
+        captureVisibleTab: (windowId, options) =>
+          browser.tabs.captureVisibleTab(windowId, options)
+      },
+      { tabId, screenshotAllowed: true }
+    );
+  };
   const processCapturedBookmark = async (input: {
     bookmarkId: string;
     tabId?: number;
     trigger: CaptureTrigger;
     page?: PageCapture;
   }) => {
+    if (input.tabId !== undefined)
+      captureBookmarkTabs.set(input.bookmarkId, input.tabId);
     if (input.tabId !== undefined)
       await browser.tabs
         .sendMessage(input.tabId, {
@@ -405,19 +439,22 @@ export default defineBackground(() => {
         .catch(() => undefined);
     try {
       const page = input.page ?? (await pageCaptureForTab(input.tabId));
+      const imageDataUrl = await screenshotForCapture(input.tabId, page);
       const session = await captureAgent.begin({
         bookmarkId: input.bookmarkId,
         trigger: input.trigger,
-        ...(page
+        ...(page || imageDataUrl
           ? {
               page: {
-                description: page.description,
-                text: page.text
+                description: page?.description,
+                text: page?.text,
+                ...(imageDataUrl ? { imageDataUrl } : {})
               }
             }
           : {})
       });
-      await publishCaptureSession(session, input.tabId);
+      if (input.tabId !== undefined)
+        captureSessionTabs.set(session.id, input.tabId);
       return { success: session.state !== 'failed', session };
     } catch (error) {
       const message =
@@ -430,6 +467,8 @@ export default defineBackground(() => {
           })
           .catch(() => undefined);
       return { success: false, error: message };
+    } finally {
+      captureBookmarkTabs.delete(input.bookmarkId);
     }
   };
   const initialCaptureFolderId = async () => {
@@ -490,9 +529,8 @@ export default defineBackground(() => {
     });
     const targetTabId =
       tabId ??
-      (
-        await browser.tabs.query({ active: true, lastFocusedWindow: true })
-      )[0]?.id;
+      (await browser.tabs.query({ active: true, lastFocusedWindow: true }))[0]
+        ?.id;
     const sidePanel = (
       browser as unknown as {
         sidePanel?: {
@@ -537,16 +575,23 @@ export default defineBackground(() => {
       action = { type: 'message', message: input.message ?? '' };
     else if (input.action === 'retry') {
       const page = await pageCaptureForTab(tabId);
+      const imageDataUrl = await screenshotForCapture(tabId, page);
       action = {
         type: 'retry',
-        ...(page
-          ? { page: { description: page.description, text: page.text } }
+        ...(page || imageDataUrl
+          ? {
+              page: {
+                description: page?.description,
+                text: page?.text,
+                ...(imageDataUrl ? { imageDataUrl } : {})
+              }
+            }
           : {})
       };
     } else action = { type: input.action };
     try {
+      if (tabId !== undefined) captureSessionTabs.set(input.sessionId, tabId);
       const session = await captureAgent.respond(input.sessionId, action);
-      await publishCaptureSession(session, tabId);
       return { success: true, session };
     } catch (error) {
       return {
@@ -749,82 +794,80 @@ export default defineBackground(() => {
   registerBrowserCommands(browser.commands, () => void saveActiveTab());
   browser.runtime.onMessage.addListener(
     (message: unknown, sender: { tab?: { id?: number } }) => {
-    const value = message as {
-      type?: string;
-      input?: RuntimeMessageInput;
-    };
-    if (value.type === 'capture-agent-list')
-      return captureSessions.list(30);
-    if (value.type === 'capture-agent-list-pending')
-      return captureSessions.listPending(100);
-    if (value.type === 'capture-agent-get' && value.input?.sessionId)
-      return captureSessions.get(value.input.sessionId);
-    if (value.type === 'capture-agent-get-active')
-      return browser.storage.local
-        .get(ACTIVE_CAPTURE_SESSION_KEY)
-        .then(async (stored) => {
-          const sessionId = stored[ACTIVE_CAPTURE_SESSION_KEY];
-          return typeof sessionId === 'string'
-            ? captureSessions.get(sessionId)
-            : null;
+      const value = message as {
+        type?: string;
+        input?: RuntimeMessageInput;
+      };
+      if (value.type === 'capture-agent-list') return captureSessions.list(30);
+      if (value.type === 'capture-agent-list-pending')
+        return captureSessions.listPending(100);
+      if (value.type === 'capture-agent-get' && value.input?.sessionId)
+        return captureSessions.get(value.input.sessionId);
+      if (value.type === 'capture-agent-get-active')
+        return browser.storage.local
+          .get(ACTIVE_CAPTURE_SESSION_KEY)
+          .then(async (stored) => {
+            const sessionId = stored[ACTIVE_CAPTURE_SESSION_KEY];
+            return typeof sessionId === 'string'
+              ? captureSessions.get(sessionId)
+              : null;
+          });
+      if (value.type === 'capture-agent-action' && value.input)
+        return respondToCapture(value.input, sender.tab?.id);
+      if (value.type === 'queue-analysis' && value.input?.bookmarkId)
+        return enqueueAnalysis({
+          bookmarkId: value.input.bookmarkId,
+          tabId: value.input.tabId,
+          taskId: value.input.taskId
         });
-    if (value.type === 'capture-agent-action' && value.input)
-      return respondToCapture(value.input, sender.tab?.id);
-    if (value.type === 'queue-analysis' && value.input?.bookmarkId)
-      return enqueueAnalysis({
-        bookmarkId: value.input.bookmarkId,
-        tabId: value.input.tabId,
-        taskId: value.input.taskId
-      });
-    if (value.type === 'queue-thumbnail' && value.input?.bookmarkId)
-      return enqueueThumbnail({
-        bookmarkId: value.input.bookmarkId,
-        tabId: value.input.tabId,
-        windowId: value.input.windowId
-      });
-    if (value.type === 'queue-embeddings')
-      return enqueueConfiguredEmbeddings(
-        value.input?.bookmarkId ? [value.input.bookmarkId] : undefined
-      );
-    if (value.type === 'queue-health-scan')
-      return enqueueHealthScan(
-        value.input?.folderId ? { folderId: value.input.folderId } : {}
-      );
-    if (value.type === 'queue-recycle-purge') return enqueueRecyclePurge();
-    if (value.type === 'configure-health-schedule' && value.input)
-      return healthScheduler.configure(
-        value.input as unknown as HealthSchedule
-      );
-    if (value.type === 'save-current-page') return saveActiveTab();
-    if (value.type === 'smart-bookmark' && value.input?.url)
-      return saveUrlWithAgent({
-        tabId: value.input.tabId,
-        url: value.input.url,
-        title: value.input.title || value.input.url,
-        trigger: 'popup'
-      });
-    if (value.type === 'bulk-classify') {
-      return (async () => {
-        const results = [];
-        for (const bookmarkId of value.input?.bookmarkIds ?? []) {
-          const bookmark = await bookmarks.get(bookmarkId);
-          results.push(
-            bookmark?.url
-              ? await runLegacySmartBookmark({
-                  bookmarkId,
-                  url: bookmark.url,
-                  title: bookmark.title
-                })
-              : { success: false, error: '书签不存在' }
-          );
-        }
-        return results;
-      })();
-    }
-    if (value.type === 'bulk-rename')
-      return Promise.all(
-        (value.input?.bookmarkIds ?? []).map(
-          async (bookmarkId) => {
+      if (value.type === 'queue-thumbnail' && value.input?.bookmarkId)
+        return enqueueThumbnail({
+          bookmarkId: value.input.bookmarkId,
+          tabId: value.input.tabId,
+          windowId: value.input.windowId
+        });
+      if (value.type === 'queue-embeddings')
+        return enqueueConfiguredEmbeddings(
+          value.input?.bookmarkId ? [value.input.bookmarkId] : undefined
+        );
+      if (value.type === 'queue-health-scan')
+        return enqueueHealthScan(
+          value.input?.folderId ? { folderId: value.input.folderId } : {}
+        );
+      if (value.type === 'queue-recycle-purge') return enqueueRecyclePurge();
+      if (value.type === 'configure-health-schedule' && value.input)
+        return healthScheduler.configure(
+          value.input as unknown as HealthSchedule
+        );
+      if (value.type === 'save-current-page') return saveActiveTab();
+      if (value.type === 'smart-bookmark' && value.input?.url)
+        return saveUrlWithAgent({
+          tabId: value.input.tabId,
+          url: value.input.url,
+          title: value.input.title || value.input.url,
+          trigger: 'popup'
+        });
+      if (value.type === 'bulk-classify') {
+        return (async () => {
+          const results = [];
+          for (const bookmarkId of value.input?.bookmarkIds ?? []) {
+            const bookmark = await bookmarks.get(bookmarkId);
+            results.push(
+              bookmark?.url
+                ? await runLegacySmartBookmark({
+                    bookmarkId,
+                    url: bookmark.url,
+                    title: bookmark.title
+                  })
+                : { success: false, error: '书签不存在' }
+            );
+          }
+          return results;
+        })();
+      }
+      if (value.type === 'bulk-rename')
+        return Promise.all(
+          (value.input?.bookmarkIds ?? []).map(async (bookmarkId) => {
             try {
               return {
                 success: true,
@@ -837,37 +880,38 @@ export default defineBackground(() => {
                 error: error instanceof Error ? error.message : '智能重命名失败'
               };
             }
-          }
-        )
-      );
-    if (value.type === 'bulk-health')
-      return (async () => {
-        const bookmarkIds = value.input?.bookmarkIds ?? [];
-        const selected = (
-          await Promise.all(bookmarkIds.map((id) => bookmarks.get(id)))
-        ).filter((node): node is NonNullable<typeof node> => Boolean(node?.url));
-        const results = await new LinkChecker().checkMany(
-          selected.map((node) => node.url!)
+          })
         );
-        for (const [index, node] of selected.entries()) {
-          const current = await metadata.get(node.id);
-          await metadata.put({
+      if (value.type === 'bulk-health')
+        return (async () => {
+          const bookmarkIds = value.input?.bookmarkIds ?? [];
+          const selected = (
+            await Promise.all(bookmarkIds.map((id) => bookmarks.get(id)))
+          ).filter((node): node is NonNullable<typeof node> =>
+            Boolean(node?.url)
+          );
+          const results = await new LinkChecker().checkMany(
+            selected.map((node) => node.url!)
+          );
+          for (const [index, node] of selected.entries()) {
+            const current = await metadata.get(node.id);
+            await metadata.put({
+              bookmarkId: node.id,
+              summary: current?.summary ?? '',
+              tags: current?.tags ?? [],
+              note: current?.note ?? '',
+              confidence: current?.confidence ?? 'unknown',
+              reason: current?.reason ?? '',
+              health: results[index]?.status ?? 'unchecked',
+              updatedAt: Date.now()
+            });
+          }
+          return selected.map((node, index) => ({
+            success: true,
             bookmarkId: node.id,
-            summary: current?.summary ?? '',
-            tags: current?.tags ?? [],
-            note: current?.note ?? '',
-            confidence: current?.confidence ?? 'unknown',
-            reason: current?.reason ?? '',
-            health: results[index]?.status ?? 'unchecked',
-            updatedAt: Date.now()
-          });
-        }
-        return selected.map((node, index) => ({
-          success: true,
-          bookmarkId: node.id,
-          status: results[index]?.status ?? 'unchecked'
-        }));
-      })();
+            status: results[index]?.status ?? 'unchecked'
+          }));
+        })();
     }
   );
   browser.bookmarks.onCreated.addListener((id, bookmark) => {

@@ -93,27 +93,54 @@ export class OpenAiChatAdapter implements AiAdapter {
     signal: AbortSignal
   ): Promise<AiAnalysisResult> {
     const prompt = buildAnalysisPrompt(context);
-    const response = await this.post<ChatResponse>({
-      url: appendEndpointPath(profile.endpoint, 'chat/completions'),
-      headers: openAiHeaders(profile.apiKey),
-      signal,
-      timeoutMs: profile.timeoutMs,
-      body: {
-        model: profile.model,
-        messages: [
-          { role: 'system', content: prompt.system },
-          { role: 'user', content: prompt.user }
-        ],
-        response_format: {
-          type: 'json_schema',
-          json_schema: {
-            name: 'siftmark_analysis',
-            strict: true,
-            schema: analysisJsonSchema
+    const hasEnhancements = Boolean(context.imageDataUrl || context.webSearch);
+    const userContent = context.imageDataUrl
+      ? [
+          { type: 'text', text: prompt.user },
+          {
+            type: 'image_url',
+            image_url: { url: context.imageDataUrl, detail: 'low' }
+          }
+        ]
+      : prompt.user;
+    const request = (withEnhancements: boolean) =>
+      this.post<ChatResponse>({
+        url: appendEndpointPath(profile.endpoint, 'chat/completions'),
+        headers: openAiHeaders(profile.apiKey),
+        signal,
+        timeoutMs: profile.timeoutMs,
+        body: {
+          model: profile.model,
+          messages: [
+            { role: 'system', content: prompt.system },
+            {
+              role: 'user',
+              content: withEnhancements ? userContent : prompt.user
+            }
+          ],
+          ...(withEnhancements && context.webSearch
+            ? { web_search_options: { search_context_size: 'low' as const } }
+            : {}),
+          response_format: {
+            type: 'json_schema',
+            json_schema: {
+              name: 'siftmark_analysis',
+              strict: true,
+              schema: analysisJsonSchema
+            }
           }
         }
-      }
-    });
+      });
+    let enhancementsAccepted = true;
+    let response: ChatResponse;
+    try {
+      response = await request(true);
+    } catch (error) {
+      if (!hasEnhancements || !isEnhancementCompatibilityError(error))
+        throw error;
+      enhancementsAccepted = false;
+      response = await request(false);
+    }
     const text = response.choices?.[0]?.message?.content;
     if (!text)
       throw new ProviderError(
@@ -122,7 +149,21 @@ export class OpenAiChatAdapter implements AiAdapter {
       );
     return {
       ...parseAnalysisText(text),
-      usageTokens: response.usage?.total_tokens
+      usageTokens: response.usage?.total_tokens,
+      ...(context.imageDataUrl || context.webSearch
+        ? {
+            toolUsage: {
+              ...(context.imageDataUrl ? { vision: enhancementsAccepted } : {}),
+              ...(context.webSearch
+                ? {
+                    webSearch: enhancementsAccepted
+                      ? ('requested' as const)
+                      : ('not-used' as const)
+                  }
+                : {})
+            }
+          }
+        : {})
     };
   }
 
@@ -156,4 +197,12 @@ export class OpenAiChatAdapter implements AiAdapter {
       );
     return vectors as number[][];
   }
+}
+
+function isEnhancementCompatibilityError(error: unknown): boolean {
+  return (
+    error instanceof ProviderError &&
+    error.kind === 'validation' &&
+    (error.status === 400 || error.status === 422)
+  );
 }

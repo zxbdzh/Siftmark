@@ -59,6 +59,7 @@ function viewFromSession(session: CaptureSession): CaptureOverlayView {
     destinationPath: session.plan?.destination.path.map(({ title }) => title),
     newFolderName: session.plan?.destination.newFolders[0],
     message: session.failure?.message,
+    activities: session.activities,
     canAdjust: phase === 'approval' || phase === 'saved',
     canUndo: phase === 'saved' && Boolean(session.operationBatchId)
   };

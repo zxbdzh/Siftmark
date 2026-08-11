@@ -23,9 +23,7 @@ export interface CaptureSessionRepository {
   expirePending(now: number): Promise<number>;
 }
 
-export class DexieCaptureSessionRepository
-  implements CaptureSessionRepository
-{
+export class DexieCaptureSessionRepository implements CaptureSessionRepository {
   constructor(private readonly database: SiftmarkDatabase) {}
 
   async get(id: string): Promise<CaptureSession | null> {
@@ -153,7 +151,12 @@ function toRecord(session: CaptureSession): CaptureSessionRecord {
 }
 
 function fromRecord(record: CaptureSessionRecord): CaptureSession {
-  return record.payload as unknown as CaptureSession;
+  const session = record.payload as unknown as CaptureSession;
+  return {
+    ...session,
+    // Sessions created before analysis traces were introduced remain readable.
+    activities: Array.isArray(session.activities) ? session.activities : []
+  };
 }
 
 function stateForResolution(

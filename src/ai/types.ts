@@ -1,4 +1,8 @@
-export type AiProtocol = 'openai-chat' | 'openai-responses' | 'anthropic-messages' | 'gemini-generate-content';
+export type AiProtocol =
+  | 'openai-chat'
+  | 'openai-responses'
+  | 'anthropic-messages'
+  | 'gemini-generate-content';
 export type AiCapability = 'classify' | 'rename' | 'summarize' | 'embed';
 
 export interface ModelProfile {
@@ -23,6 +27,10 @@ export interface AiAnalysisResult {
   confidence: 'high' | 'medium' | 'low';
   reason: string;
   usageTokens?: number;
+  toolUsage?: {
+    vision?: boolean;
+    webSearch?: 'used' | 'requested' | 'not-used';
+  };
 }
 
 export interface AiRequestContext {
@@ -31,6 +39,9 @@ export interface AiRequestContext {
   currentFolderPath: string[];
   description?: string;
   pageText?: string;
+  /** Ephemeral current-viewport image. It is sent to the model but never persisted. */
+  imageDataUrl?: string;
+  webSearch?: boolean;
   additionalRules?: string;
   availableFolderPaths?: string[];
   relatedBookmarks?: Array<{

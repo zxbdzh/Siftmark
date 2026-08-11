@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import fixture from '../../fixtures/ai/openai-chat-success.json';
 import { OpenAiChatAdapter } from '../../../src/ai/adapters/openai-chat';
+import { ProviderError } from '../../../src/ai/network/errors';
 import type { ModelProfile } from '../../../src/ai/types';
 
 const profile: ModelProfile = {
@@ -69,11 +70,9 @@ describe('OpenAiChatAdapter', () => {
   });
 
   it('rejects a probe response that does not match the schema', async () => {
-    const post = vi
-      .fn()
-      .mockResolvedValue({
-        choices: [{ message: { content: '{"ok":false}' } }]
-      });
+    const post = vi.fn().mockResolvedValue({
+      choices: [{ message: { content: '{"ok":false}' } }]
+    });
     await expect(
       new OpenAiChatAdapter(post).testConnection(
         profile,
@@ -97,6 +96,79 @@ describe('OpenAiChatAdapter', () => {
       })
     );
     expect(result.confidence).toBe('high');
+  });
+
+  it('sends optional web search and vision inputs in Chat format', async () => {
+    const post = vi.fn().mockResolvedValue(fixture);
+    const result = await new OpenAiChatAdapter(post).analyze(
+      profile,
+      {
+        title: 'A',
+        url: 'https://a.test',
+        currentFolderPath: [],
+        imageDataUrl: 'data:image/jpeg;base64,AA==',
+        webSearch: true
+      },
+      new AbortController().signal
+    );
+
+    expect(post).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: expect.objectContaining({
+          web_search_options: { search_context_size: 'low' },
+          messages: expect.arrayContaining([
+            expect.objectContaining({
+              role: 'user',
+              content: expect.arrayContaining([
+                expect.objectContaining({ type: 'text' }),
+                {
+                  type: 'image_url',
+                  image_url: {
+                    url: 'data:image/jpeg;base64,AA==',
+                    detail: 'low'
+                  }
+                }
+              ])
+            })
+          ])
+        })
+      })
+    );
+    expect(result.toolUsage).toEqual({
+      vision: true,
+      webSearch: 'requested'
+    });
+  });
+
+  it('falls back to text analysis when Chat enhancements are rejected', async () => {
+    const post = vi
+      .fn()
+      .mockRejectedValueOnce(
+        new ProviderError('validation', 'unsupported input', 422)
+      )
+      .mockResolvedValueOnce(fixture);
+    const result = await new OpenAiChatAdapter(post).analyze(
+      profile,
+      {
+        title: 'A',
+        url: 'https://a.test',
+        currentFolderPath: [],
+        imageDataUrl: 'data:image/jpeg;base64,AA==',
+        webSearch: true
+      },
+      new AbortController().signal
+    );
+
+    const fallbackBody = post.mock.calls[1]![0].body as {
+      messages: Array<{ role: string; content: unknown }>;
+      web_search_options?: unknown;
+    };
+    expect(fallbackBody.web_search_options).toBeUndefined();
+    expect(fallbackBody.messages.at(-1)?.content).toEqual(expect.any(String));
+    expect(result.toolUsage).toEqual({
+      vision: false,
+      webSearch: 'not-used'
+    });
   });
 
   it('keeps working when a compatible provider ignores response_format', async () => {
@@ -129,11 +201,9 @@ describe('OpenAiChatAdapter', () => {
   });
 
   it('reports missing analysis fields without echoing provider content', async () => {
-    const post = vi
-      .fn()
-      .mockResolvedValue({
-        choices: [{ message: { content: '{"folderPath":["私密目录"]}' } }]
-      });
+    const post = vi.fn().mockResolvedValue({
+      choices: [{ message: { content: '{"folderPath":["私密目录"]}' } }]
+    });
     await expect(
       new OpenAiChatAdapter(post).analyze(
         profile,

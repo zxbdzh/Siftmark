@@ -173,6 +173,7 @@ describe('SmartCapturePlanner', () => {
           url: 'https://example.test/agent'
         },
         state: 'adjusting',
+        activities: [],
         messages: [],
         createdAt: 1,
         updatedAt: 1,
@@ -257,10 +258,12 @@ describe('SmartCapturePlanner', () => {
     });
     const planner = new SmartCapturePlanner({
       bookmarks: {
-        getTree: vi.fn().mockResolvedValue([
-          ...baseTree(),
-          { id: 'agent', parentId: 'ai', index: 0, title: 'Agent' }
-        ])
+        getTree: vi
+          .fn()
+          .mockResolvedValue([
+            ...baseTree(),
+            { id: 'agent', parentId: 'ai', index: 0, title: 'Agent' }
+          ])
       },
       profiles: { list: vi.fn().mockResolvedValue([profile]) },
       settings: settings({ preferredFolderDepth: 3 }),
@@ -279,6 +282,72 @@ describe('SmartCapturePlanner', () => {
     });
 
     expect(context?.availableFolderPaths?.[0]).toBe('开发/AI/Agent');
+  });
+
+  it('uses configured web search and vision and reports their auditable steps', async () => {
+    let context: AiRequestContext | undefined;
+    const registry = new AiAdapterRegistry();
+    registry.register({
+      protocol: 'openai-chat',
+      testConnection: vi.fn(),
+      analyze: vi.fn(async (_profile, nextContext: AiRequestContext) => {
+        context = nextContext;
+        return {
+          folderPath: ['开发', 'AI'],
+          title: '视觉 Agent 页面',
+          tags: ['AI'],
+          summary: '结合页面与搜索结果判断',
+          confidence: 'high' as const,
+          reason: '页面主题与 AI 工具相关',
+          toolUsage: {
+            vision: true,
+            webSearch: 'used' as const
+          }
+        };
+      })
+    });
+    const reportActivity = vi.fn().mockResolvedValue(undefined);
+    const planner = new SmartCapturePlanner({
+      bookmarks: { getTree: vi.fn().mockResolvedValue(baseTree()) },
+      profiles: { list: vi.fn().mockResolvedValue([profile]) },
+      settings: settings({ enableWebSearch: true, enableVision: true }),
+      adapters: registry
+    });
+
+    await planner.plan({
+      source: {
+        id: 'current',
+        parentId: 'inbox',
+        index: 0,
+        title: 'Agent 页面',
+        url: 'https://example.test/agent'
+      },
+      page: {
+        text: 'Agent browser design',
+        imageDataUrl: 'data:image/jpeg;base64,AA=='
+      },
+      preferences: [],
+      reportActivity
+    });
+
+    expect(context).toMatchObject({
+      imageDataUrl: 'data:image/jpeg;base64,AA==',
+      webSearch: true
+    });
+    expect(reportActivity).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'vision',
+        status: 'completed',
+        label: '页面截图识别完成'
+      })
+    );
+    expect(reportActivity).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'web-search',
+        status: 'completed',
+        label: '联网搜索完成'
+      })
+    );
   });
 });
 

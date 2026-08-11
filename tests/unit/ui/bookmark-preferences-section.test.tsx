@@ -1,10 +1,18 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor
+} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { defaultSmartBookmarkSettings } from '../../../src/settings/settings-repository';
 import { BookmarkPreferencesSection } from '../../../src/ui/options/BookmarkPreferencesSection';
 
 describe('BookmarkPreferencesSection', () => {
+  afterEach(cleanup);
+
   it('saves the maximum new-folder levels and preferred folder depth', async () => {
     const user = userEvent.setup();
     const repository = {
@@ -36,6 +44,38 @@ describe('BookmarkPreferencesSection', () => {
         expect.objectContaining({
           maxNewFolderLevels: 4,
           preferredFolderDepth: 2
+        })
+      )
+    );
+  });
+
+  it('keeps network search and screenshot recognition opt-in', async () => {
+    const user = userEvent.setup();
+    const repository = {
+      getSmartBookmarkSettings: vi
+        .fn()
+        .mockResolvedValue(defaultSmartBookmarkSettings),
+      setSmartBookmarkSettings: vi.fn().mockResolvedValue(undefined)
+    };
+
+    render(<BookmarkPreferencesSection repository={repository as never} />);
+
+    const webSearch = await screen.findByRole('checkbox', {
+      name: /AI 联网搜索/
+    });
+    const vision = screen.getByRole('checkbox', { name: /AI 页面识图/ });
+    expect(webSearch).not.toBeChecked();
+    expect(vision).not.toBeChecked();
+
+    await user.click(webSearch);
+    await user.click(vision);
+    await user.click(screen.getByRole('button', { name: '保存偏好' }));
+
+    await waitFor(() =>
+      expect(repository.setSmartBookmarkSettings).toHaveBeenCalledWith(
+        expect.objectContaining({
+          enableWebSearch: true,
+          enableVision: true
         })
       )
     );
