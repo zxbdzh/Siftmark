@@ -89,7 +89,12 @@ test('saves first, requests approval for risk, applies locally, and supports und
     extensionId,
     `sidepanel.html?session=${pending!.id}`
   );
-  await expect(agent.getByText('分析过程')).toBeVisible();
+  await expect(agent.getByRole('tab', { name: /对话/ })).toHaveAttribute(
+    'aria-selected',
+    'true'
+  );
+  await agent.getByRole('tab', { name: /过程/ }).click();
+  await expect(agent.getByRole('heading', { name: '分析过程' })).toBeVisible();
   await expect(agent.getByText('已比较候选目录')).toBeVisible();
   await expect(agent.getByText('风险检查完成')).toBeVisible();
 

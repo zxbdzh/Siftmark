@@ -283,6 +283,86 @@ describe('CaptureAgent', () => {
     );
   });
 
+  it('persists adjusting before revision and blocks concurrent actions', async () => {
+    const revision = deferred<CapturePlan>();
+    const dependencies = createDependencies({
+      plan: safePlan({ confidence: 'medium' })
+    });
+    dependencies.planner.revise.mockImplementationOnce(() => revision.promise);
+    const agent = new CaptureAgent(dependencies);
+    const pending = await agent.begin({
+      bookmarkId: source.id,
+      trigger: 'native-bookmark'
+    });
+
+    const response = agent.respond(pending.id, {
+      type: 'message',
+      message: 'Move this bookmark to the Agent folder'
+    });
+    const concurrentMessage = agent.respond(pending.id, {
+      type: 'message',
+      message: 'Use another folder instead'
+    });
+    const staleApproval = agent.respond(pending.id, { type: 'allow' });
+
+    await expect(concurrentMessage).rejects.toThrow();
+    await expect(staleApproval).rejects.toThrow();
+    await vi.waitFor(async () => {
+      expect((await dependencies.sessions.get(pending.id))?.state).toBe(
+        'adjusting'
+      );
+    });
+    await expect(
+      agent.respond(pending.id, { type: 'reject' })
+    ).rejects.toThrow();
+    expect(dependencies.planner.revise).toHaveBeenCalledOnce();
+    expect(dependencies.executor.execute).not.toHaveBeenCalled();
+
+    revision.resolve(safePlan({ reason: 'Moved to the requested folder' }));
+    await expect(response).resolves.toMatchObject({ state: 'pending' });
+  });
+
+  it('accepts messages only while pending, except for applied reopen', async () => {
+    const dependencies = createDependencies({
+      plan: safePlan({ confidence: 'medium' })
+    });
+    const agent = new CaptureAgent(dependencies);
+    const pending = await agent.begin({
+      bookmarkId: source.id,
+      trigger: 'native-bookmark'
+    });
+    await dependencies.sessions.put({ ...pending, state: 'ready' });
+
+    await expect(
+      agent.respond(pending.id, {
+        type: 'message',
+        message: 'Move this bookmark'
+      })
+    ).rejects.toThrow();
+    expect(dependencies.planner.revise).not.toHaveBeenCalled();
+  });
+
+  it.each(['allow', 'reject'] as const)(
+    'accepts %s only while pending',
+    async (type) => {
+      const dependencies = createDependencies({
+        plan: safePlan({ confidence: 'medium' })
+      });
+      const agent = new CaptureAgent(dependencies);
+      const pending = await agent.begin({
+        bookmarkId: source.id,
+        trigger: 'native-bookmark'
+      });
+      await dependencies.sessions.put({ ...pending, state: 'adjusting' });
+
+      await expect(agent.respond(pending.id, { type })).rejects.toThrow();
+      expect(dependencies.executor.execute).not.toHaveBeenCalled();
+      expect((await dependencies.sessions.get(pending.id))?.state).toBe(
+        'adjusting'
+      );
+    }
+  );
+
   it('keeps the bookmark unchanged when planning fails and allows retry', async () => {
     const dependencies = createDependencies({
       planningError: new TypeError('fetch failed')
@@ -530,4 +610,12 @@ class MemorySessions implements CaptureSessionRepository {
   async expirePending() {
     return 0;
   }
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((complete) => {
+    resolve = complete;
+  });
+  return { promise, resolve };
 }

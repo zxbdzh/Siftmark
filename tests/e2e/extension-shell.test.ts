@@ -248,7 +248,20 @@ test('supports the bookmark tree, Agent proposal, and in-page approval shell', a
           updatedAt: timestamp + 3184
         }
       ],
-      messages: [],
+      messages: [
+        {
+          id: 'shell-user-message',
+          role: 'user',
+          text: '这个收藏主要是 Agent 产品研究。',
+          createdAt: timestamp + 3_185
+        },
+        {
+          id: 'shell-assistant-message',
+          role: 'assistant',
+          text: '明白，我会保留当前标题，并优先选择最匹配的研究目录。',
+          createdAt: timestamp + 3_186
+        }
+      ],
       createdAt: timestamp,
       updatedAt: timestamp,
       expiresAt: timestamp + 60_000
@@ -269,6 +282,38 @@ test('supports the bookmark tree, Agent proposal, and in-page approval shell', a
   );
   await expect(sidePanel.getByText('将新建目录')).toBeVisible();
   await expect(sidePanel.getByText('当前网页')).toBeVisible();
+  await sidePanel.setViewportSize({ width: 390, height: 844 });
+  expect(
+    await sidePanel.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth + 1
+    )
+  ).toBe(true);
+  if (process.env.SIFTMARK_VISUAL_QA === '1')
+    await sidePanel.screenshot({
+      path: 'test-results/sidepanel-conversation-390x844.png'
+    });
+  const historicalReply = sidePanel.getByText(
+    '明白，我会保留当前标题，并优先选择最匹配的研究目录。'
+  );
+  await expect(historicalReply).toBeVisible();
+  expect(
+    await historicalReply
+      .locator('xpath=ancestor::article')
+      .getAttribute('data-arrival')
+  ).toBeNull();
+  await sidePanel.locator('.agent-conversation').scrollIntoViewIfNeeded();
+  if (process.env.SIFTMARK_VISUAL_QA === '1')
+    await sidePanel.screenshot({
+      path: 'test-results/sidepanel-chat-390x844.png'
+    });
+  await expect(sidePanel.getByRole('tab', { name: /对话/ })).toHaveAttribute(
+    'aria-selected',
+    'true'
+  );
+  await expect(
+    sidePanel.getByRole('heading', { name: '分析过程' })
+  ).not.toBeVisible();
+  await sidePanel.getByRole('tab', { name: /过程/ }).click();
   await expect(
     sidePanel.getByRole('heading', { name: '分析过程' })
   ).toBeVisible();
@@ -277,19 +322,27 @@ test('supports the bookmark tree, Agent proposal, and in-page approval shell', a
   await expect(sidePanel.getByText('联网搜索已完成')).toBeVisible();
   await expect(sidePanel.getByText('返回标准搜索调用记录')).toBeVisible();
   await expect(sidePanel.getByText('1.6 s')).toBeVisible();
-  await expect(sidePanel.getByText('查看 AI 分析')).toBeVisible();
+  await expect(
+    sidePanel.getByRole('heading', { name: 'AI 结论' })
+  ).toBeVisible();
+  await expect(sidePanel.getByText('用于验证 Side Panel。')).toBeVisible();
+  if (process.env.SIFTMARK_VISUAL_QA === '1')
+    await sidePanel.screenshot({
+      path: 'test-results/sidepanel-process-390x844.png'
+    });
   await expect(
     sidePanel.getByRole('button', { name: '不要新建目录' })
   ).toBeVisible();
   await expect(
-    sidePanel.getByRole('textbox', { name: '调整收藏方案' })
+    sidePanel.getByRole('textbox', { name: '告诉 Agent 怎么改' })
   ).toBeVisible();
   await expect(sidePanel.getByRole('button', { name: '允许' })).toBeVisible();
   await expect(sidePanel.getByRole('button', { name: '拒绝' })).toBeVisible();
 
   await sidePanel.setViewportSize({ width: 300, height: 600 });
+  await sidePanel.getByRole('tab', { name: /对话/ }).click();
   await expect(
-    sidePanel.getByRole('textbox', { name: '调整收藏方案' })
+    sidePanel.getByRole('textbox', { name: '告诉 Agent 怎么改' })
   ).toBeInViewport();
   await expect(
     sidePanel.getByRole('button', { name: '允许' })
@@ -297,11 +350,16 @@ test('supports the bookmark tree, Agent proposal, and in-page approval shell', a
   await expect(
     sidePanel.getByRole('button', { name: '拒绝' })
   ).toBeInViewport();
+  if (process.env.SIFTMARK_VISUAL_QA === '1')
+    await sidePanel.screenshot({
+      path: 'test-results/sidepanel-conversation-300x600.png'
+    });
   expect(
     await sidePanel.evaluate(
       () => document.documentElement.scrollWidth <= window.innerWidth + 1
     )
   ).toBe(true);
+  await sidePanel.getByRole('tab', { name: /过程/ }).click();
   await sidePanel.locator('.analysis-trace').scrollIntoViewIfNeeded();
   await expect(sidePanel.locator('.analysis-trace')).toBeInViewport();
   expect(
@@ -309,6 +367,19 @@ test('supports the bookmark tree, Agent proposal, and in-page approval shell', a
       .locator('.analysis-trace')
       .evaluate((element) => element.scrollWidth <= element.clientWidth + 1)
   ).toBe(true);
+
+  await sidePanel.getByRole('tab', { name: /对话/ }).click();
+  const standardMotion = await sidePanel.evaluate(messageMotionStyles);
+  expect(standardMotion.assistantProperties).toEqual(['opacity', 'transform']);
+  expect(standardMotion.assistantDurations).toEqual(['0.18s', '0.18s']);
+  expect(standardMotion.userDuration).toBe('0s');
+
+  await sidePanel.emulateMedia({ reducedMotion: 'reduce' });
+  const reducedMotion = await sidePanel.evaluate(messageMotionStyles);
+  expect(reducedMotion.assistantProperties).toEqual(['opacity']);
+  expect(reducedMotion.assistantDurations).toEqual(['0.14s']);
+  expect(reducedMotion.assistantTransform).toBe('none');
+  await sidePanel.emulateMedia({ reducedMotion: 'no-preference' });
 
   const article = await context.newPage();
   await article.route('http://127.0.0.1:43173/shell', (route) =>
@@ -389,3 +460,29 @@ test('supports the bookmark tree, Agent proposal, and in-page approval shell', a
   await expect(approval).toHaveCount(0);
   await expect(article.getByRole('button')).toHaveCount(0);
 });
+
+function messageMotionStyles() {
+  const messageList = document.querySelector('.message-list');
+  if (!messageList) throw new Error('Missing message list');
+  const assistant = document.createElement('article');
+  assistant.dataset.role = 'assistant';
+  assistant.dataset.arrival = 'remote';
+  const user = document.createElement('article');
+  user.dataset.role = 'user';
+  messageList.append(assistant, user);
+  const assistantStyle = getComputedStyle(assistant);
+  const userStyle = getComputedStyle(user);
+  const result = {
+    assistantProperties: assistantStyle.transitionProperty
+      .split(',')
+      .map((value) => value.trim()),
+    assistantDurations: assistantStyle.transitionDuration
+      .split(',')
+      .map((value) => value.trim()),
+    assistantTransform: assistantStyle.transform,
+    userDuration: userStyle.transitionDuration
+  };
+  assistant.remove();
+  user.remove();
+  return result;
+}

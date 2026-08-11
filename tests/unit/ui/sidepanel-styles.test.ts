@@ -26,15 +26,24 @@ describe('sidepanel motion styles', () => {
   it('keeps interaction motion focused and usable at 300px', () => {
     expect(sidepanelStyles).toContain('min-width: 280px');
     expect(sidepanelStyles).toContain('@media (max-width: 340px)');
+    expect(sidepanelStyles).toContain('@media (max-height: 680px)');
     expect(sidepanelStyles).toContain('--agent-motion-press: 100ms');
     expect(sidepanelStyles).toContain('--agent-motion-slow: 220ms');
     expect(sidepanelStyles).not.toContain('transition: all');
     expect(sidepanelStyles).toContain('button:not(:disabled):active');
     expect(sidepanelStyles).not.toContain('@keyframes message-enter');
     expect(sidepanelStyles).not.toContain('@keyframes status-enter');
-    expect(sidepanelStyles).toContain('.message-list article:last-of-type');
+    expect(sidepanelStyles).not.toContain('.message-list article:last-of-type');
+    expect(sidepanelStyles).toContain(
+      ".message-list article[data-role='assistant'][data-arrival='remote']"
+    );
     expect(sidepanelStyles).toContain('@starting-style');
     expect(sidepanelStyles).toContain('transform: translateY(4px)');
+    expect(sidepanelStyles).not.toContain('@keyframes agent-pulse');
+    expect(sidepanelStyles).not.toContain('@keyframes agent-state-halo');
+    expect(sidepanelStyles).not.toMatch(/font-size: (?:8|9|10)px/);
+    expect(sidepanelStyles).toContain('field-sizing: content');
+    expect(sidepanelStyles).toContain('resize: none');
 
     const hoverMedia = sidepanelStyles.indexOf(
       '@media (hover: hover) and (pointer: fine)'

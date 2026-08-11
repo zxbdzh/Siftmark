@@ -70,6 +70,7 @@ export interface CaptureAgentDependencies {
 export class CaptureAgent {
   private readonly now: () => number;
   private readonly createId: () => string;
+  private readonly activeDecisions = new Set<string>();
 
   constructor(private readonly dependencies: CaptureAgentDependencies) {
     this.now = dependencies.now ?? Date.now;
@@ -99,6 +100,27 @@ export class CaptureAgent {
   }
 
   async respond(
+    sessionId: string,
+    action: CaptureAgentAction
+  ): Promise<CaptureSession> {
+    const requiresDecisionLock =
+      action.type === 'message' ||
+      action.type === 'allow' ||
+      action.type === 'reject';
+    if (requiresDecisionLock) {
+      if (this.activeDecisions.has(sessionId))
+        throw new Error('当前收藏任务正在处理其他操作');
+      this.activeDecisions.add(sessionId);
+    }
+
+    try {
+      return await this.respondWithCurrentSession(sessionId, action);
+    } finally {
+      if (requiresDecisionLock) this.activeDecisions.delete(sessionId);
+    }
+  }
+
+  private async respondWithCurrentSession(
     sessionId: string,
     action: CaptureAgentAction
   ): Promise<CaptureSession> {
@@ -144,8 +166,7 @@ export class CaptureAgent {
       await this.persist(reopened);
       return this.revise(reopened, action.message);
     }
-    if (!['pending', 'adjusting', 'ready'].includes(session.state))
-      throw new Error('当前收藏任务不能再修改');
+    if (session.state !== 'pending') throw new Error('当前收藏任务不能再修改');
 
     if (action.type === 'reject') {
       const rejected = this.requireResolved(
