@@ -4,7 +4,10 @@ export default defineConfig({
   testDir: './tests/e2e',
   timeout: 30_000,
   workers: 1,
-  globalSetup: './tests/e2e/fixtures/chrome-state.ts',
+  globalSetup:
+    process.env.SIFTMARK_E2E_REUSE_BUILD === '1'
+      ? undefined
+      : './tests/e2e/fixtures/chrome-state.ts',
   webServer: {
     command:
       'node --experimental-strip-types tests/e2e/fixtures/provider-server.ts',

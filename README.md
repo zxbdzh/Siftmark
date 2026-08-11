@@ -2,7 +2,7 @@
 
 Siftmark 是面向 Chromium 的本地优先 AI 书签管理器。Chrome/Edge 原生书签始终是标题、URL、文件夹和顺序的唯一事实来源；Siftmark 只在本机保存标签、摘要、笔记、审核提案、索引和任务记录。
 
-当前版本为 `0.1.1`，提供开发者模式构建，不提交 Chrome Web Store 或 Edge Add-ons。
+当前版本为 `0.1.2`，提供开发者模式构建，不提交 Chrome Web Store 或 Edge Add-ons。
 
 ## 安装前须知
 
