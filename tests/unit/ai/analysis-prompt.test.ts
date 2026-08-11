@@ -35,6 +35,18 @@ describe('buildAnalysisPrompt', () => {
     expect(prompt.system).toContain('summary 最多 240');
   });
 
+  it('uses the bookmark bar directly instead of creating a folder by default', () => {
+    const prompt = buildAnalysisPrompt({
+      title: 'A',
+      url: 'https://a.test',
+      currentFolderPath: []
+    });
+
+    expect(prompt.system).toContain('书签栏本身默认视为可直接使用的目标位置');
+    expect(prompt.system).toContain('不要仅为分类而在书签栏下新建目录');
+    expect(prompt.user).not.toContain('不要仅为分类而在书签栏下新建目录');
+  });
+
   it('explains the maximum creation levels and preferred folder depth', () => {
     const prompt = buildAnalysisPrompt({
       title: 'A',

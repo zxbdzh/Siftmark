@@ -33,6 +33,7 @@ export function buildAnalysisPrompt(context: AiRequestContext): AnalysisPrompt {
     '不得修改 URL，也不得输出 schema 之外的字段。',
     `folderPath 最多 ${ANALYSIS_RESULT_LIMITS.folderPath.maxItems} 层；标签与摘要使用简体中文。`,
     'folderPath 必须是从书签栏开始的文件夹名称数组，不得输出文件夹 ID。',
+    '书签栏本身默认视为可直接使用的目标位置，不要仅为分类而在书签栏下新建目录；只有内容确实需要独立归档且目录创建策略允许时，才可建议新建目录。',
     ANALYSIS_OUTPUT_CONTRACT
   ].join('\n');
   const pageData = JSON.stringify({
