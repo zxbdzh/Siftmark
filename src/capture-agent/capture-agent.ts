@@ -106,7 +106,8 @@ export class CaptureAgent {
     const requiresDecisionLock =
       action.type === 'message' ||
       action.type === 'allow' ||
-      action.type === 'reject';
+      action.type === 'reject' ||
+      action.type === 'retry';
     if (requiresDecisionLock) {
       if (this.activeDecisions.has(sessionId))
         throw new Error('当前收藏任务正在处理其他操作');
@@ -129,12 +130,27 @@ export class CaptureAgent {
 
     if (action.type === 'undo') return this.undo(session);
     if (action.type === 'retry') {
-      if (
-        session.failure?.kind === 'network' &&
-        session.failure.retryCount >= 2
-      )
-        throw new Error('Network retry limit reached');
       if (session.state !== 'failed') throw new Error('当前任务无需重试');
+      const retryCount = (session.failure?.retryCount ?? 0) + 1;
+      const latestMessage = session.messages.at(-1);
+      if (latestMessage?.role === 'user') {
+        const retrying: CaptureSession = {
+          ...session,
+          state: 'adjusting',
+          failure: undefined,
+          pageInformation: hasPageInformation(action.page)
+            ? 'sufficient'
+            : 'insufficient',
+          updatedAt: this.now()
+        };
+        await this.persist(retrying);
+        return this.continueRevision(
+          retrying,
+          latestMessage.text,
+          action.page,
+          retryCount
+        );
+      }
       const retrying = {
         ...session,
         state: 'analyzing' as const,
@@ -145,11 +161,7 @@ export class CaptureAgent {
         updatedAt: this.now()
       };
       await this.persist(retrying);
-      return this.planAndRoute(
-        retrying,
-        action.page,
-        (session.failure?.retryCount ?? 0) + 1
-      );
+      return this.planAndRoute(retrying, action.page, retryCount);
     }
     if (action.type === 'message' && session.state === 'applied') {
       const current = await this.requireSource(session.bookmarkId);
@@ -166,6 +178,8 @@ export class CaptureAgent {
       await this.persist(reopened);
       return this.revise(reopened, action.message);
     }
+    if (action.type === 'message' && session.state === 'failed')
+      return this.revise(session, action.message);
     if (session.state !== 'pending') throw new Error('当前收藏任务不能再修改');
 
     if (action.type === 'reject') {
@@ -203,11 +217,14 @@ export class CaptureAgent {
         ...(page ? { page: pageForPlanner(page) } : {}),
         preferences,
         reportActivity: async (activity) => {
-          currentSession = await this.recordActivity(currentSession, activity);
+          currentSession = await this.recordActivity(
+            currentSession,
+            activityForRetry(activity, retryCount)
+          );
         }
       });
       currentSession = await this.recordActivity(currentSession, {
-        id: 'risk-check',
+        id: activityIdForRetry('risk-check', retryCount),
         kind: 'risk',
         status: 'running',
         label: '正在检查风险',
@@ -218,7 +235,7 @@ export class CaptureAgent {
       });
       const risk = await this.assess(currentSession, plan, page);
       currentSession = await this.recordActivity(currentSession, {
-        id: 'risk-check',
+        id: activityIdForRetry('risk-check', retryCount),
         kind: 'risk',
         status: 'completed',
         label: '风险检查完成',
@@ -286,17 +303,32 @@ export class CaptureAgent {
     const message = rawMessage.trim().slice(0, 2_000);
     if (!message) throw new Error('请输入要调整的内容');
     const timestamp = this.now();
-    const withUserMessage = await this.dependencies.sessions.appendMessage(
-      session.id,
-      {
+    const storedWithUserMessage =
+      await this.dependencies.sessions.appendMessage(session.id, {
         id: this.createId(),
         role: 'user',
         text: message,
         createdAt: timestamp
-      }
-    );
-    await this.notifySessionChanged(withUserMessage);
-    let currentSession = withUserMessage;
+      });
+    const withUserMessage = storedWithUserMessage.failure
+      ? await this.persist({
+          ...storedWithUserMessage,
+          failure: undefined,
+          updatedAt: timestamp
+        })
+      : storedWithUserMessage;
+    if (!storedWithUserMessage.failure)
+      await this.notifySessionChanged(withUserMessage);
+    return this.continueRevision(withUserMessage, message);
+  }
+
+  private async continueRevision(
+    session: CaptureSession,
+    message: string,
+    page?: CaptureAgentBeginInput['page'],
+    retryCount = 0
+  ): Promise<CaptureSession> {
+    let currentSession = session;
     try {
       const preferences = await this.dependencies.preferences.listMatching(
         session.sourceSnapshot.url ?? '',
@@ -304,16 +336,23 @@ export class CaptureAgent {
       );
       const plan = await this.dependencies.planner.revise({
         source: sourceForPlanner(session.sourceSnapshot),
-        session: sessionForPlanner(withUserMessage),
+        session: sessionForPlanner(session),
         message,
+        ...(page ? { page: pageForPlanner(page) } : {}),
         preferences,
         reportActivity: async (activity) => {
-          currentSession = await this.recordActivity(currentSession, activity);
+          currentSession = await this.recordActivity(
+            currentSession,
+            activityForRetry(activity, retryCount)
+          );
         }
       });
-      const revisionNumber = userMessageCount(withUserMessage);
+      const revisionNumber = userMessageCount(session);
       currentSession = await this.recordActivity(currentSession, {
-        id: `risk-check-revision-${revisionNumber}`,
+        id: activityIdForRetry(
+          `risk-check-revision-${revisionNumber}`,
+          retryCount
+        ),
         kind: 'risk',
         status: 'running',
         label: '正在复核调整后的风险',
@@ -321,7 +360,10 @@ export class CaptureAgent {
       });
       const risk = await this.assess(currentSession, plan);
       currentSession = await this.recordActivity(currentSession, {
-        id: `risk-check-revision-${revisionNumber}`,
+        id: activityIdForRetry(
+          `risk-check-revision-${revisionNumber}`,
+          retryCount
+        ),
         kind: 'risk',
         status: 'completed',
         label: '调整方案风险复核完成',
@@ -349,6 +391,7 @@ export class CaptureAgent {
         state: 'pending',
         plan,
         risk,
+        failure: undefined,
         updatedAt: this.now()
       };
       await this.persist(pending);
@@ -357,7 +400,7 @@ export class CaptureAgent {
       const failed: CaptureSession = {
         ...failRunningActivities(currentSession, this.now()),
         state: 'failed',
-        failure: failureFrom(error),
+        failure: failureFrom(error, retryCount),
         updatedAt: this.now()
       };
       await this.persist(failed);
@@ -870,6 +913,20 @@ function riskReasonLabel(reason: CaptureRiskAssessment['reasons'][number]): stri
 
 function userMessageCount(session: CaptureSession): number {
   return session.messages.filter((message) => message.role === 'user').length;
+}
+
+function activityForRetry(
+  activity: CaptureActivityDraft,
+  retryCount: number
+): CaptureActivityDraft {
+  return {
+    ...activity,
+    id: activityIdForRetry(activity.id, retryCount)
+  };
+}
+
+function activityIdForRetry(id: string, retryCount: number): string {
+  return retryCount > 0 ? `${id}-retry-${retryCount}` : id;
 }
 
 function failRunningActivities(

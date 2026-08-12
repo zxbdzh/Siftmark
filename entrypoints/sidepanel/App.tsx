@@ -370,6 +370,7 @@ export default function App() {
     const canFocus =
       currentState === 'pending' ||
       currentState === 'adjusting' ||
+      currentState === 'failed' ||
       currentState === 'applied';
     if (canFocus)
       globalThis.setTimeout(
@@ -528,6 +529,7 @@ export default function App() {
   const canChat =
     session.state === 'pending' ||
     session.state === 'adjusting' ||
+    session.state === 'failed' ||
     session.state === 'applied';
   const titleChanged = Boolean(
     plan && plan.title.trim() !== session.sourceSnapshot.title.trim()
@@ -928,7 +930,11 @@ export default function App() {
                 <div className="composer-heading">
                   <label htmlFor="agent-message">告诉 Agent 怎么改</label>
                   <span>
-                    {isAdjusting ? '回复后即可继续发送' : '仅影响本次收藏'}
+                    {isAdjusting
+                      ? '回复后即可继续发送'
+                      : session.state === 'failed'
+                        ? '补充要求后重新尝试'
+                        : '仅影响本次收藏'}
                   </span>
                 </div>
                 <div className="composer-input">
@@ -939,7 +945,11 @@ export default function App() {
                     value={message}
                     maxLength={2_000}
                     placeholder={
-                      isAdjusting ? '可以先写下一条…' : '例如：换到产品目录'
+                      isAdjusting
+                        ? '可以先写下一条…'
+                        : session.state === 'failed'
+                          ? '例如：不要新建目录，继续尝试'
+                          : '例如：换到产品目录'
                     }
                     disabled={Boolean(busy && busy !== 'message')}
                     onChange={(event) => setMessage(event.target.value)}
@@ -1052,7 +1062,7 @@ export default function App() {
               <button
                 type="button"
                 className="primary-action standalone-action"
-                disabled={Boolean(busy) || session.failure?.retryable === false}
+                disabled={Boolean(busy)}
                 onClick={() => void act('retry')}
               >
                 {busy === 'retry' ? (

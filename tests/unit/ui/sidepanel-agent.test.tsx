@@ -486,6 +486,66 @@ describe('Side panel Agent workspace', () => {
     ).toBeEnabled();
   });
 
+  it('keeps the composer available after a failed analysis', async () => {
+    const failed = cloneSession();
+    failed.state = 'failed';
+    failed.failure = {
+      kind: 'schema',
+      message: 'Provider returned no text result',
+      retryable: false,
+      retryCount: 2
+    };
+    failed.messages = [
+      { id: 'previous-user', role: 'user', text: '放到开发目录', createdAt: 1 }
+    ];
+    activeSession = failed;
+    sessions.set(failed.id, failed);
+    render(<App />);
+
+    const composer = await screen.findByRole('textbox', {
+      name: '告诉 Agent 怎么改'
+    });
+    expect(composer).toBeEnabled();
+    fireEvent.change(composer, {
+      target: { value: '不要新建目录，继续尝试' }
+    });
+    const send = screen.getByRole('button', { name: '发送' });
+    expect(send).toBeEnabled();
+    fireEvent.click(send);
+
+    await waitFor(() => expect(actionRequests()).toHaveLength(1));
+    expect(actionRequests()[0]).toMatchObject({
+      input: {
+        sessionId: failed.id,
+        action: 'message',
+        message: '不要新建目录，继续尝试'
+      }
+    });
+  });
+
+  it('keeps explicit retry available for non-automatic failures', async () => {
+    const failed = cloneSession();
+    failed.state = 'failed';
+    failed.failure = {
+      kind: 'configuration',
+      message: '模型配置需要更新',
+      retryable: false,
+      retryCount: 2
+    };
+    activeSession = failed;
+    sessions.set(failed.id, failed);
+    render(<App />);
+
+    const retry = await screen.findByRole('button', { name: '重试分析' });
+    expect(retry).toBeEnabled();
+    fireEvent.click(retry);
+
+    await waitFor(() => expect(actionRequests()).toHaveLength(1));
+    expect(actionRequests()[0]).toMatchObject({
+      input: { sessionId: failed.id, action: 'retry' }
+    });
+  });
+
   it('shows explicit empty and load-error states', async () => {
     activeSession = null;
     sessions.clear();

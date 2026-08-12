@@ -33,7 +33,9 @@ analyzing -> ready -> applied(auto)
                                 -> applied(allowed)
                                 -> rejected
 
-analyzing/pending -> failed -> retry -> analyzing
+analyzing/ready/pending/adjusting/executing -> failed
+failed -> retry -> analyzing/adjusting
+failed -> message -> adjusting -> pending
 applied -> adjusting -> pending
 applied -> undone
 pending/failed -> expired
@@ -82,7 +84,7 @@ pending/failed -> expired
 
 “以后/今后/下次……都/总是/一律……放/收藏/归类到……”被识别为未来意图，批准后保存为固定规则。固定规则包含域名、可选 URL/标题范围、偏好或避开目录及来源会话 ID，可在设置中删除。
 
-解决会话时清空完整消息。未解决会话 7 天过期；网络失败最多重试两次。
+解决会话时清空完整消息。未解决会话 7 天过期；网络失败最多自动重试两次，用户始终可以主动重试或在原会话中补充要求后继续。
 
 ## 可审计分析与睡眠回顾
 

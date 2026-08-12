@@ -322,7 +322,7 @@ describe('CaptureAgent', () => {
     await expect(response).resolves.toMatchObject({ state: 'pending' });
   });
 
-  it('accepts messages only while pending, except for applied reopen', async () => {
+  it('rejects messages while a proposal is not conversational', async () => {
     const dependencies = createDependencies({
       plan: safePlan({ confidence: 'medium' })
     });
@@ -382,6 +382,177 @@ describe('CaptureAgent', () => {
     expect(dependencies.executor.stageForApproval).not.toHaveBeenCalled();
   });
 
+  it('continues a failed conversation with its existing context', async () => {
+    const revisedPlan = safePlan({
+      confidence: 'medium',
+      reason: '已根据补充要求改用现有目录'
+    });
+    const dependencies = createDependencies({
+      planningError: new TypeError('fetch failed'),
+      revisedPlan
+    });
+    const agent = new CaptureAgent(dependencies);
+    const failed = await agent.begin({
+      bookmarkId: source.id,
+      trigger: 'native-bookmark'
+    });
+    const previousPlan = safePlan({
+      confidence: 'low',
+      reason: '上一次方案'
+    });
+    await dependencies.sessions.put({
+      ...failed,
+      plan: previousPlan,
+      messages: [
+        {
+          id: 'previous-user',
+          role: 'user',
+          text: '放到开发目录',
+          createdAt: 8
+        },
+        {
+          id: 'previous-assistant',
+          role: 'assistant',
+          text: '我会查找合适的目录',
+          createdAt: 9
+        }
+      ]
+    });
+
+    const recovered = await agent.respond(failed.id, {
+      type: 'message',
+      message: '不要新建目录，继续尝试'
+    });
+
+    expect(recovered).toMatchObject({
+      state: 'pending',
+      plan: revisedPlan,
+      failure: undefined,
+      messages: [
+        { role: 'user', text: '放到开发目录' },
+        { role: 'assistant', text: '我会查找合适的目录' },
+        { role: 'user', text: '不要新建目录，继续尝试' },
+        { role: 'assistant', text: '已根据补充要求改用现有目录' }
+      ]
+    });
+    expect(dependencies.planner.revise).toHaveBeenCalledWith(
+      expect.objectContaining({
+        session: expect.objectContaining({
+          plan: previousPlan,
+          messages: expect.arrayContaining([
+            expect.objectContaining({ text: '放到开发目录' }),
+            expect.objectContaining({ text: '不要新建目录，继续尝试' })
+          ])
+        }),
+        message: '不要新建目录，继续尝试'
+      })
+    );
+  });
+
+  it('retries a failed revision without duplicating the user message', async () => {
+    const recoveredPlan = safePlan({
+      confidence: 'medium',
+      reason: '已在原对话中完成重试'
+    });
+    const dependencies = createDependencies({
+      plan: safePlan({ confidence: 'medium' }),
+      revisedPlan: recoveredPlan
+    });
+    dependencies.planner.revise
+      .mockImplementationOnce(async (input) => {
+        await input.reportActivity?.({
+          id: 'model-analysis-revision-1',
+          kind: 'model',
+          status: 'running',
+          label: 'AI 正在重新规划方案'
+        });
+        throw new TypeError('fetch failed');
+      })
+      .mockImplementationOnce(async (input) => {
+        await input.reportActivity?.({
+          id: 'model-analysis-revision-1',
+          kind: 'model',
+          status: 'running',
+          label: 'AI 正在重新规划方案'
+        });
+        await input.reportActivity?.({
+          id: 'model-analysis-revision-1',
+          kind: 'model',
+          status: 'completed',
+          label: 'AI 已生成调整方案'
+        });
+        return recoveredPlan;
+      });
+    const agent = new CaptureAgent(dependencies);
+    const pending = await agent.begin({
+      bookmarkId: source.id,
+      trigger: 'native-bookmark'
+    });
+    const failed = await agent.respond(pending.id, {
+      type: 'message',
+      message: '不要新建目录'
+    });
+
+    const recovered = await agent.respond(failed.id, {
+      type: 'retry',
+      page: { text: 'Fresh page context' }
+    });
+
+    expect(recovered).toMatchObject({
+      state: 'pending',
+      plan: recoveredPlan,
+      failure: undefined,
+      messages: [
+        { role: 'user', text: '不要新建目录' },
+        { role: 'assistant', text: '已在原对话中完成重试' }
+      ],
+      activities: expect.arrayContaining([
+        expect.objectContaining({
+          id: 'model-analysis-revision-1',
+          status: 'failed'
+        }),
+        expect.objectContaining({
+          id: 'model-analysis-revision-1-retry-1',
+          status: 'completed'
+        })
+      ])
+    });
+    expect(dependencies.planner.plan).toHaveBeenCalledOnce();
+    expect(dependencies.planner.revise).toHaveBeenCalledTimes(2);
+    expect(dependencies.planner.revise).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        message: '不要新建目录',
+        page: { text: 'Fresh page context' },
+        session: expect.objectContaining({
+          messages: expect.arrayContaining([
+            expect.objectContaining({ role: 'user', text: '不要新建目录' })
+          ])
+        })
+      })
+    );
+  });
+
+  it('blocks concurrent retries for the same failed session', async () => {
+    const retryPlan = deferred<CapturePlan>();
+    const dependencies = createDependencies({
+      planningError: new TypeError('fetch failed')
+    });
+    const agent = new CaptureAgent(dependencies);
+    const failed = await agent.begin({
+      bookmarkId: source.id,
+      trigger: 'native-bookmark'
+    });
+    dependencies.planner.plan.mockImplementationOnce(() => retryPlan.promise);
+
+    const retry = agent.respond(failed.id, { type: 'retry' });
+    await expect(agent.respond(failed.id, { type: 'retry' })).rejects.toThrow(
+      /正在处理/
+    );
+
+    retryPlan.resolve(safePlan({ confidence: 'medium' }));
+    await expect(retry).resolves.toMatchObject({ state: 'pending' });
+  });
+
   it('undoes the complete local operation batch', async () => {
     const dependencies = createDependencies({ plan: safePlan() });
     const agent = new CaptureAgent(dependencies);
@@ -434,7 +605,7 @@ describe('CaptureAgent', () => {
     ).resolves.toMatchObject({ state: 'applied', resolution: 'allowed' });
   });
 
-  it('caps transient network retries at two', async () => {
+  it('allows user-triggered retries after repeated network failures', async () => {
     const dependencies = createDependencies({
       planningError: new TypeError('fetch failed')
     });
@@ -445,12 +616,14 @@ describe('CaptureAgent', () => {
     });
     const second = await agent.respond(first.id, { type: 'retry' });
     const third = await agent.respond(second.id, { type: 'retry' });
+    const fourth = await agent.respond(third.id, { type: 'retry' });
 
     expect(second.failure?.retryCount).toBe(1);
     expect(third.failure?.retryCount).toBe(2);
-    await expect(agent.respond(third.id, { type: 'retry' })).rejects.toThrow(
-      /retry limit/i
-    );
+    expect(fourth).toMatchObject({
+      state: 'failed',
+      failure: { kind: 'network', retryCount: 3 }
+    });
   });
 });
 

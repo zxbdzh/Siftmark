@@ -54,6 +54,38 @@ describe('DexieCaptureSessionRepository', () => {
     database.close();
   });
 
+  it('reopens a failed session when a new message is appended', async () => {
+    const { database, repository } = createRepository('failed-message');
+    await repository.put(
+      session({
+        state: 'failed',
+        failure: {
+          kind: 'schema',
+          message: 'Provider returned no text result',
+          retryable: false,
+          retryCount: 0
+        },
+        messages: [
+          { id: 'old', role: 'user', text: '放到开发目录', createdAt: 1 }
+        ]
+      })
+    );
+
+    await expect(
+      repository.appendMessage('session', {
+        id: 'new',
+        role: 'user',
+        text: '不要新建目录，继续尝试',
+        createdAt: 2
+      })
+    ).resolves.toMatchObject({
+      state: 'adjusting',
+      failure: { kind: 'schema' },
+      messages: [{ text: '放到开发目录' }, { text: '不要新建目录，继续尝试' }]
+    });
+    database.close();
+  });
+
   it('expires only unresolved sessions after seven days and erases dialogue', async () => {
     const { database, repository } = createRepository('expiry');
     const expiredAt = 1 + CAPTURE_SESSION_TTL_MS;
