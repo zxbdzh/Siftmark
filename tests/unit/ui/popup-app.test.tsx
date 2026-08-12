@@ -73,18 +73,32 @@ const appliedSession: CaptureSession = {
 describe('Popup Agent queue', () => {
   const sendMessage = vi.fn();
   const createTab = vi.fn();
+  const confirm = vi.fn();
   let sessions: CaptureSession[];
 
   beforeEach(() => {
     sessions = [pendingSession];
     sendMessage.mockReset();
     createTab.mockReset();
+    confirm.mockReset();
+    confirm.mockReturnValue(true);
     sendMessage.mockImplementation(
       async (request: {
         type: string;
         input?: { sessionId: string; action: string };
       }) => {
         if (request.type === 'capture-agent-list') return sessions;
+        if (request.type === 'capture-agent-count-ended')
+          return sessions.filter(
+            (session) => !['pending', 'failed'].includes(session.state)
+          ).length;
+        if (request.type === 'capture-agent-clear-ended') {
+          const previous = sessions.length;
+          sessions = sessions.filter((session) =>
+            ['pending', 'failed'].includes(session.state)
+          );
+          return { success: true, count: previous - sessions.length };
+        }
         if (request.type === 'capture-agent-action') {
           return {
             success: true,
@@ -108,6 +122,7 @@ describe('Popup Agent queue', () => {
       },
       tabs: { create: createTab }
     });
+    vi.stubGlobal('confirm', confirm);
   });
 
   afterEach(() => {
@@ -194,6 +209,51 @@ describe('Popup Agent queue', () => {
         day: 'numeric'
       }).format(olderDate)
     );
+  });
+
+  it('ends failed work and keeps it outside bulk record cleanup until then', async () => {
+    const failed: CaptureSession = {
+      ...pendingSession,
+      id: 'session-failed',
+      state: 'failed',
+      failure: {
+        kind: 'network',
+        message: 'Provider request aborted',
+        retryable: true,
+        retryCount: 1
+      }
+    };
+    sessions = [failed];
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole('button', { name: '结束任务' }));
+
+    await waitFor(() =>
+      expect(actionRequests()).toContainEqual(
+        expect.objectContaining({
+          input: { sessionId: failed.id, action: 'end' }
+        })
+      )
+    );
+  });
+
+  it('confirms the exact ended record count before bulk cleanup', async () => {
+    sessions = [appliedSession];
+    render(<App />);
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: '清理记录' })
+    );
+
+    await waitFor(() =>
+      expect(confirm).toHaveBeenCalledWith(
+        expect.stringContaining('清理 1 条已结束的 Agent 记录')
+      )
+    );
+    expect(sendMessage).toHaveBeenCalledWith({
+      type: 'capture-agent-clear-ended'
+    });
+    expect(await screen.findByText('已清理 1 条记录')).toBeVisible();
   });
 
   function actionRequests() {

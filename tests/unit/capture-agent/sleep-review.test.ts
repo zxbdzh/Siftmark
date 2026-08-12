@@ -15,12 +15,55 @@ describe('CaptureSleepReviewService', () => {
     const dependencies = dependenciesFor([resolvedSession('one'), resolvedSession('two')]);
     const service = new CaptureSleepReviewService(dependencies);
 
-    await expect(service.review()).resolves.toMatchObject({
+    await expect(
+      service.review({ trigger: 'idle' })
+    ).resolves.toMatchObject({
       outcome: 'waiting',
       reviewedSessions: 0
     });
     expect(dependencies.reviewer.review).not.toHaveBeenCalled();
     expect(dependencies.learning.commit).not.toHaveBeenCalled();
+    await expect(
+      dependencies.settings.getSleepReviewStatus()
+    ).resolves.toMatchObject({
+      state: 'waiting',
+      lastTrigger: 'idle',
+      lastAttemptAt: 100_000,
+      attempts: [
+        expect.objectContaining({
+          trigger: 'idle',
+          outcome: 'waiting',
+          summary: '已积累 2 / 3 个新结果'
+        })
+      ]
+    });
+  });
+
+  it('coalesces repeated compensation checks and keeps a bounded audit trail', async () => {
+    const dependencies = dependenciesFor([]);
+    let now = 100_000;
+    dependencies.now.mockImplementation(() => now);
+    const service = new CaptureSleepReviewService(dependencies);
+
+    await service.review({ trigger: 'alarm' });
+    now += 5 * 60_000;
+    await service.review({ trigger: 'alarm' });
+
+    const repeated = await dependencies.settings.getSleepReviewStatus();
+    expect(repeated.attempts).toHaveLength(1);
+    expect(repeated.attempts?.[0]).toMatchObject({
+      trigger: 'alarm',
+      attemptedAt: now,
+      outcome: 'waiting'
+    });
+
+    for (let index = 0; index < 10; index += 1) {
+      now += 1;
+      await service.review({ trigger: index % 2 ? 'idle' : 'startup' });
+    }
+
+    const bounded = await dependencies.settings.getSleepReviewStatus();
+    expect(bounded.attempts).toHaveLength(8);
   });
 
   it('reviews each resolved session once and commits learned memory atomically', async () => {

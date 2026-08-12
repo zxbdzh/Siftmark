@@ -6,7 +6,7 @@ import type {
   CaptureSession,
   CaptureSessionState
 } from './types';
-import { pendingCaptureStates } from './types';
+import { endedCaptureStates, pendingCaptureStates } from './types';
 
 export interface CaptureSessionRepository {
   get(id: string): Promise<CaptureSession | null>;
@@ -23,7 +23,17 @@ export interface CaptureSessionRepository {
   expirePending(now: number): Promise<number>;
 }
 
-export class DexieCaptureSessionRepository implements CaptureSessionRepository {
+export interface CaptureSessionHistoryRepository {
+  list(limit?: number, offset?: number): Promise<CaptureSession[]>;
+  count(): Promise<number>;
+  countEnded(): Promise<number>;
+  clearEnded(): Promise<number>;
+  removeEnded(id: string): Promise<boolean>;
+}
+
+export class DexieCaptureSessionRepository
+  implements CaptureSessionRepository, CaptureSessionHistoryRepository
+{
   constructor(private readonly database: SiftmarkDatabase) {}
 
   async get(id: string): Promise<CaptureSession | null> {
@@ -31,13 +41,43 @@ export class DexieCaptureSessionRepository implements CaptureSessionRepository {
     return record ? fromRecord(record) : null;
   }
 
-  async list(limit = 100): Promise<CaptureSession[]> {
+  async list(limit = 100, offset = 0): Promise<CaptureSession[]> {
     const rows = await this.database.captureSessions
       .orderBy('updatedAt')
       .reverse()
+      .offset(offset)
       .limit(limit)
       .toArray();
     return rows.map(fromRecord);
+  }
+
+  count(): Promise<number> {
+    return this.database.captureSessions.count();
+  }
+
+  countEnded(): Promise<number> {
+    return this.database.captureSessions
+      .where('state')
+      .anyOf([...endedCaptureStates])
+      .count();
+  }
+
+  clearEnded(): Promise<number> {
+    return this.database.captureSessions
+      .where('state')
+      .anyOf([...endedCaptureStates])
+      .delete();
+  }
+
+  async removeEnded(id: string): Promise<boolean> {
+    const record = await this.database.captureSessions.get(id);
+    if (
+      !record ||
+      !endedCaptureStates.includes(record.state as CaptureSessionState)
+    )
+      return false;
+    await this.database.captureSessions.delete(id);
+    return true;
   }
 
   async listPending(limit = 100): Promise<CaptureSession[]> {
@@ -94,8 +134,7 @@ export class DexieCaptureSessionRepository implements CaptureSessionRepository {
         const next: CaptureSession = {
           ...current,
           state: stateForResolution(resolution),
-          messages: [],
-          failure: undefined,
+          failure: resolution === 'ended' ? current.failure : undefined,
           resolution,
           resolvedAt,
           updatedAt: resolvedAt,
@@ -112,7 +151,9 @@ export class DexieCaptureSessionRepository implements CaptureSessionRepository {
       'rw',
       this.database.captureSessions,
       async () => {
-        const states = new Set<CaptureSessionState>(pendingCaptureStates);
+        const states = new Set<CaptureSessionState>(
+          pendingCaptureStates.filter((state) => state !== 'failed')
+        );
         const rows = await this.database.captureSessions
           .where('expiresAt')
           .belowOrEqual(now)
@@ -124,8 +165,6 @@ export class DexieCaptureSessionRepository implements CaptureSessionRepository {
             toRecord({
               ...fromRecord(record),
               state: 'expired',
-              messages: [],
-              failure: undefined,
               resolution: 'expired',
               resolvedAt: now,
               updatedAt: now
@@ -155,7 +194,8 @@ function fromRecord(record: CaptureSessionRecord): CaptureSession {
   return {
     ...session,
     // Sessions created before analysis traces were introduced remain readable.
-    activities: Array.isArray(session.activities) ? session.activities : []
+    activities: Array.isArray(session.activities) ? session.activities : [],
+    messages: Array.isArray(session.messages) ? session.messages : []
   };
 }
 
@@ -163,6 +203,7 @@ function stateForResolution(
   resolution: CaptureResolution
 ): CaptureSessionState {
   if (resolution === 'rejected') return 'rejected';
+  if (resolution === 'ended') return 'ended';
   if (resolution === 'expired') return 'expired';
   if (resolution === 'undone') return 'undone';
   return 'applied';

@@ -107,7 +107,8 @@ export class CaptureAgent {
       action.type === 'message' ||
       action.type === 'allow' ||
       action.type === 'reject' ||
-      action.type === 'retry';
+      action.type === 'retry' ||
+      action.type === 'end';
     if (requiresDecisionLock) {
       if (this.activeDecisions.has(sessionId))
         throw new Error('当前收藏任务正在处理其他操作');
@@ -129,6 +130,20 @@ export class CaptureAgent {
     if (!session) throw new Error('收藏任务不存在或已被清理');
 
     if (action.type === 'undo') return this.undo(session);
+    if (action.type === 'end') {
+      if (session.state !== 'failed')
+        throw new Error('只有整理失败的任务可以结束');
+      const ended = this.requireResolved(
+        await this.dependencies.sessions.resolve(
+          session.id,
+          'ended',
+          this.now(),
+          session.operationBatchId
+        )
+      );
+      await this.notifySessionChanged(ended);
+      return ended;
+    }
     if (action.type === 'retry') {
       if (session.state !== 'failed') throw new Error('当前任务无需重试');
       const retryCount = (session.failure?.retryCount ?? 0) + 1;
@@ -171,7 +186,6 @@ export class CaptureAgent {
         state: 'adjusting',
         resolution: undefined,
         resolvedAt: undefined,
-        messages: [],
         pageInformation: session.pageInformation ?? 'sufficient',
         updatedAt: this.now()
       };

@@ -29,7 +29,7 @@ describe('DexieCaptureSessionRepository', () => {
     database.close();
   });
 
-  it('keeps dialogue while pending and deletes it on resolution', async () => {
+  it('keeps the complete dialogue after resolution for the Agent record', async () => {
     const { database, repository } = createRepository('resolve');
     await repository.put(session());
     await repository.appendMessage('session', {
@@ -49,8 +49,56 @@ describe('DexieCaptureSessionRepository', () => {
       state: 'applied',
       resolution: 'allowed',
       operationBatchId: 'batch',
-      messages: []
+      messages: [{ text: '放到开发目录' }]
     });
+    database.close();
+  });
+
+  it('clears only ended records and preserves active or retryable work', async () => {
+    const { database, repository } = createRepository('clear-ended');
+    await repository.put(
+      session({ id: 'applied', state: 'applied', resolution: 'auto' })
+    );
+    await repository.put(
+      session({ id: 'rejected', state: 'rejected', resolution: 'rejected' })
+    );
+    await repository.put(
+      session({
+        id: 'failed',
+        state: 'failed',
+        failure: {
+          kind: 'network',
+          message: 'Provider request aborted',
+          retryable: true,
+          retryCount: 1
+        }
+      })
+    );
+    await repository.put(session({ id: 'pending', state: 'pending' }));
+
+    await expect(repository.clearEnded()).resolves.toBe(2);
+    await expect(repository.get('applied')).resolves.toBeNull();
+    await expect(repository.get('rejected')).resolves.toBeNull();
+    await expect(repository.get('failed')).resolves.toMatchObject({
+      state: 'failed'
+    });
+    await expect(repository.get('pending')).resolves.toMatchObject({
+      state: 'pending'
+    });
+    database.close();
+  });
+
+  it('refuses single-record deletion until the session has ended', async () => {
+    const { database, repository } = createRepository('remove-ended');
+    await repository.put(session({ id: 'failed', state: 'failed' }));
+    await repository.put(
+      session({ id: 'ended', state: 'ended', resolution: 'ended' })
+    );
+
+    await expect(repository.removeEnded('failed')).resolves.toBe(false);
+    await expect(repository.removeEnded('ended')).resolves.toBe(true);
+    await expect(repository.get('failed')).resolves.not.toBeNull();
+    await expect(repository.get('ended')).resolves.toBeNull();
     database.close();
   });
 
@@ -86,7 +134,7 @@ describe('DexieCaptureSessionRepository', () => {
     database.close();
   });
 
-  it('expires only unresolved sessions after seven days and erases dialogue', async () => {
+  it('expires only unresolved sessions after seven days and keeps dialogue', async () => {
     const { database, repository } = createRepository('expiry');
     const expiredAt = 1 + CAPTURE_SESSION_TTL_MS;
     await repository.put(
@@ -110,7 +158,7 @@ describe('DexieCaptureSessionRepository', () => {
     expect(await repository.get('session')).toMatchObject({
       state: 'expired',
       resolution: 'expired',
-      messages: []
+      messages: [{ text: 'private conversation' }]
     });
     expect((await repository.get('resolved'))?.state).toBe('applied');
     database.close();

@@ -48,8 +48,9 @@ function viewFromSession(session: CaptureSession): CaptureOverlayView {
     executing: 'processing',
     applied: 'saved',
     rejected: 'rejected',
-    failed: 'error',
-    expired: 'rejected',
+  failed: 'error',
+  ended: 'rejected',
+  expired: 'rejected',
     undone: 'rejected'
   };
   const phase = phaseByState[session.state];

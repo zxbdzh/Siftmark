@@ -38,7 +38,7 @@ interface CaptureActionResponse {
   error?: string;
 }
 
-type AgentAction = 'allow' | 'reject' | 'undo' | 'retry' | 'message';
+type AgentAction = 'allow' | 'reject' | 'undo' | 'retry' | 'end' | 'message';
 type AgentView = 'conversation' | 'process';
 type LoadState = 'loading' | 'ready' | 'empty' | 'error';
 
@@ -1059,19 +1059,33 @@ export default function App() {
               </button>
             ) : null}
             {session.state === 'failed' ? (
-              <button
-                type="button"
-                className="primary-action standalone-action"
-                disabled={Boolean(busy)}
-                onClick={() => void act('retry')}
-              >
-                {busy === 'retry' ? (
-                  <LoaderCircle className="inline-spinner" aria-hidden="true" />
-                ) : (
-                  <RotateCw aria-hidden="true" />
-                )}
-                {busy === 'retry' ? '重试中' : '重试分析'}
-              </button>
+              <div className="failed-actions">
+                <button
+                  type="button"
+                  className="secondary-action"
+                  disabled={Boolean(busy)}
+                  onClick={() => void act('end')}
+                >
+                  <X aria-hidden="true" />
+                  {busy === 'end' ? '结束中' : '结束任务'}
+                </button>
+                <button
+                  type="button"
+                  className="primary-action"
+                  disabled={Boolean(busy)}
+                  onClick={() => void act('retry')}
+                >
+                  {busy === 'retry' ? (
+                    <LoaderCircle
+                      className="inline-spinner"
+                      aria-hidden="true"
+                    />
+                  ) : (
+                    <RotateCw aria-hidden="true" />
+                  )}
+                  {busy === 'retry' ? '重试中' : '重试分析'}
+                </button>
+              </div>
             ) : null}
           </div>
         </footer>
@@ -1136,6 +1150,7 @@ function stateLabel(session: CaptureSession): string {
   if (session.state === 'rejected') return '已拒绝';
   if (session.state === 'failed') return '需要处理';
   if (session.state === 'undone') return '已撤销';
+  if (session.state === 'ended') return '已结束';
   if (session.state === 'expired') return '已过期';
   if (session.state === 'executing') return '正在执行';
   return '分析中';

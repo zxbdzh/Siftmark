@@ -329,6 +329,56 @@ section button {
   font-size: 11px;
   font-variant-numeric: tabular-nums;
 }
+.sleep-review-attempts {
+  margin-top: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.sleep-review-attempts > summary {
+  padding: 8px 2px;
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.sleep-review-attempts ol {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0 0 12px;
+  list-style: none;
+}
+.sleep-review-attempts li {
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr) auto;
+  gap: 9px;
+  align-items: start;
+}
+.sleep-review-attempts li > i {
+  width: 6px;
+  height: 6px;
+  margin-top: 5px;
+  border-radius: 50%;
+  background: var(--settings-accent);
+}
+.sleep-review-attempts li[data-outcome='failed'] > i {
+  background: var(--danger);
+}
+.sleep-review-attempts li > span {
+  display: grid;
+  gap: 2px;
+}
+.sleep-review-attempts li strong,
+.sleep-review-attempts li small,
+.sleep-review-attempts li time {
+  font-size: 11px;
+}
+.sleep-review-attempts li small,
+.sleep-review-attempts li time {
+  color: var(--text-2);
+}
+.sleep-review-attempts li time {
+  white-space: nowrap;
+}
 .learning-actions {
   flex-wrap: wrap;
   align-items: center;
@@ -1325,6 +1375,294 @@ input[type='range'] {
   gap: 6px;
 }
 
+.agent-history-section {
+  min-width: 0;
+}
+
+.agent-history-count {
+  flex: none;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--settings-accent);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.agent-history-message {
+  display: block;
+  min-height: 20px;
+  margin-top: 12px;
+  color: var(--settings-accent);
+  font-size: 12px;
+}
+
+.agent-record-list {
+  display: grid;
+  margin-top: 4px;
+  border-top: 1px solid var(--border);
+}
+
+.agent-record {
+  border-bottom: 1px solid var(--border);
+}
+
+.agent-record > summary {
+  display: grid;
+  min-height: 72px;
+  grid-template-columns: 34px minmax(0, 1fr) minmax(150px, 0.7fr);
+  align-items: center;
+  gap: 12px;
+  padding: 10px 2px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.agent-record > summary::-webkit-details-marker {
+  display: none;
+}
+
+.agent-record-mark {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--settings-accent);
+}
+
+.agent-record-mark svg {
+  width: 17px;
+  height: 17px;
+}
+
+.agent-record-summary,
+.agent-record-route {
+  min-width: 0;
+}
+
+.agent-record-summary {
+  display: grid;
+  gap: 4px;
+}
+
+.agent-record-summary strong,
+.agent-record-summary small,
+.agent-record-route {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-record-summary small,
+.agent-record-route {
+  color: var(--text-2);
+  font-size: 12px;
+}
+
+.agent-record-route {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.agent-record-route svg {
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+
+.agent-record-body {
+  display: grid;
+  gap: 18px;
+  padding: 4px 0 22px 46px;
+}
+
+.agent-record-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.agent-record-facts > div {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+  padding: 10px 12px;
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.agent-record-facts > div:nth-child(2n) {
+  border-right: 0;
+}
+
+.agent-record-facts > div:nth-last-child(-n + 2) {
+  border-bottom: 0;
+}
+
+.agent-record-facts dt,
+.agent-record-subsection h3,
+.agent-record-activities dt {
+  color: var(--text-2);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.agent-record-facts dd,
+.agent-record-activities dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.agent-record-failure {
+  margin: 0;
+  padding: 9px 11px;
+  border-left: 3px solid #c53128;
+  background: color-mix(in srgb, #c53128 8%, var(--surface-0));
+  color: #a3261f !important;
+  font-size: 12px;
+}
+
+.agent-record-subsection {
+  padding: 0 !important;
+  border: 0 !important;
+}
+
+.agent-record-subsection h3 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 9px;
+  color: var(--text-1);
+  font-size: 13px;
+}
+
+.agent-record-subsection h3 svg {
+  width: 15px;
+  height: 15px;
+  color: var(--settings-accent);
+}
+
+.agent-record-messages,
+.agent-record-activities {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.agent-record-messages li {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.agent-record-messages li[data-role='user'] {
+  border-left: 3px solid var(--settings-accent);
+}
+
+.agent-record-messages span {
+  color: var(--settings-accent);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.agent-record-messages p {
+  margin: 0;
+  color: var(--text-1) !important;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.agent-record-messages time,
+.agent-record-activities > li > span {
+  color: var(--text-2);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.agent-record-activities li {
+  display: grid;
+  grid-template-columns: 9px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
+}
+
+.agent-record-activities > li > i {
+  width: 7px;
+  height: 7px;
+  margin-top: 5px;
+  border-radius: 50%;
+  background: var(--settings-accent);
+}
+
+.agent-record-activities li[data-status='failed'] > i {
+  background: #c53128;
+}
+
+.agent-record-activities strong {
+  font-size: 12px;
+}
+
+.agent-record-activities p {
+  margin: 2px 0 0;
+  font-size: 12px;
+}
+
+.agent-record-activities dl {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 5px 0 0;
+}
+
+.agent-record-activities dl div {
+  display: flex;
+  gap: 4px;
+}
+
+.agent-record-empty {
+  margin: 0;
+  padding: 12px;
+  border: 1px dashed var(--border);
+  color: var(--text-2) !important;
+}
+
+.agent-record-actions,
+.agent-history-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.agent-record-actions small {
+  color: var(--text-2);
+}
+
+.agent-history-pagination {
+  margin-top: 16px;
+}
+
+.agent-history-pagination span {
+  min-width: 132px;
+  color: var(--text-2);
+  font-size: 12px;
+  text-align: center;
+}
+
 .icon-button {
   width: 34px;
   padding: 0 !important;
@@ -1484,6 +1822,42 @@ input[type='range'] {
   .history-main span,
   .history-main small {
     grid-column: 1;
+  }
+
+  .agent-record > summary {
+    grid-template-columns: 34px minmax(0, 1fr);
+  }
+
+  .agent-record-route {
+    grid-column: 2;
+    justify-content: flex-start;
+  }
+
+  .agent-record-body {
+    padding-left: 0;
+  }
+
+  .agent-record-facts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .agent-record-facts > div,
+  .agent-record-facts > div:nth-child(2n),
+  .agent-record-facts > div:nth-last-child(-n + 2) {
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .agent-record-facts > div:last-child {
+    border-bottom: 0;
+  }
+
+  .agent-record-messages li {
+    grid-template-columns: 36px minmax(0, 1fr);
+  }
+
+  .agent-record-messages time {
+    grid-column: 2;
   }
 }
 

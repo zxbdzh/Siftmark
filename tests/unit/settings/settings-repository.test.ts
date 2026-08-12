@@ -3,7 +3,8 @@ import {
   ChromeSettingsRepository,
   defaultSleepReviewSettings,
   defaultSmartBookmarkSettings,
-  settingsKeys
+  settingsKeys,
+  type SleepReviewAttempt
 } from '../../../src/settings/settings-repository';
 
 describe('ChromeSettingsRepository', () => {
@@ -111,6 +112,45 @@ describe('ChromeSettingsRepository', () => {
       enabled: true,
       idleMinutes: 5,
       batchSize: 12
+    });
+  });
+
+  it('normalizes and bounds the local sleep-review audit trail', async () => {
+    const values: Record<string, unknown> = {};
+    const repository = new ChromeSettingsRepository({
+      get: async (key) => ({ [key]: values[key] }),
+      set: async (items) => {
+        Object.assign(values, items);
+      }
+    });
+    const attempts: SleepReviewAttempt[] = Array.from(
+      { length: 10 },
+      (_, index) => ({
+        trigger: index % 2 ? 'idle' : 'alarm',
+        attemptedAt: index + 1,
+        outcome: 'waiting',
+        summary: `已积累 ${index} / 3 个新结果`,
+        reviewedSessions: -1,
+        learnedMemories: index
+      })
+    );
+
+    await repository.setSleepReviewStatus({
+      state: 'waiting',
+      lastTrigger: 'idle',
+      lastAttemptAt: 10,
+      attempts
+    });
+
+    const status = await repository.getSleepReviewStatus();
+    expect(status.attempts).toHaveLength(8);
+    expect(status.attempts?.[0]).toMatchObject({
+      attemptedAt: 3,
+      reviewedSessions: 0
+    });
+    expect(status.attempts?.at(-1)).toMatchObject({
+      attemptedAt: 10,
+      learnedMemories: 9
     });
   });
 });

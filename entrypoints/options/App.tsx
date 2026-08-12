@@ -5,6 +5,7 @@ import {
   BookOpen,
   Clock3,
   Info,
+  MessageSquareText,
   Settings2,
   ShieldOff,
   Sparkles
@@ -16,7 +17,10 @@ import type { RequestMetric } from '../../src/ai/network/request-metrics';
 import { UsageRepository } from '../../src/ai/network/usage-repository';
 import { ChromeProfileRepository } from '../../src/ai/profiles/profile-repository';
 import { ModelProfileService } from '../../src/ai/profiles/profile-service';
-import { DexieCapturePreferenceRepository } from '../../src/capture-agent';
+import {
+  DexieCapturePreferenceRepository,
+  DexieCaptureSessionRepository
+} from '../../src/capture-agent';
 import { ChromeSmartBookmarkHistoryRepository } from '../../src/bookmarks/history-repository';
 import { ChromeBookmarkRepository } from '../../src/platform/chrome/bookmarks-adapter';
 import type { ChromeBookmarkApi } from '../../src/platform/chrome/chrome-types';
@@ -30,6 +34,7 @@ import { BlockedDomainsSection } from '../../src/ui/options/BlockedDomainsSectio
 import { BookmarkPreferencesSection } from '../../src/ui/options/BookmarkPreferencesSection';
 import { CapturePreferencesSection } from '../../src/ui/options/CapturePreferencesSection';
 import { CaptureLearningSection } from '../../src/ui/options/CaptureLearningSection';
+import { AgentHistorySection } from '../../src/ui/options/AgentHistorySection';
 import { HealthAutomationSection } from '../../src/ui/options/HealthAutomationSection';
 import { IncognitoSection } from '../../src/ui/options/IncognitoSection';
 import { ModelProfilesSection } from '../../src/ui/options/ModelProfilesSection';
@@ -41,12 +46,20 @@ import { SmartBookmarkHistorySection } from '../../src/ui/options/SmartBookmarkH
 import { SpecialFoldersSection } from '../../src/ui/options/SpecialFoldersSection';
 import { hydrateTheme } from '../../src/ui/theme/theme-store';
 
-type PageId = 'settings' | 'backup' | 'blocked' | 'history' | 'usage' | 'about';
+type PageId =
+  | 'settings'
+  | 'backup'
+  | 'blocked'
+  | 'agent'
+  | 'history'
+  | 'usage'
+  | 'about';
 
 const navigation = [
   { id: 'settings', label: '设置', icon: Settings2 },
   { id: 'backup', label: '书签备份', icon: ArchiveRestore },
   { id: 'blocked', label: '屏蔽规则', icon: ShieldOff },
+  { id: 'agent', label: 'Agent 记录', icon: MessageSquareText },
   { id: 'history', label: '历史记录', icon: Clock3 },
   { id: 'usage', label: '使用统计', icon: BarChart3 },
   { id: 'about', label: '关于', icon: Info }
@@ -72,6 +85,10 @@ export default function App() {
   const usage = useMemo(() => new UsageRepository(database), [database]);
   const capturePreferences = useMemo(
     () => new DexieCapturePreferenceRepository(database),
+    [database]
+  );
+  const captureSessions = useMemo(
+    () => new DexieCaptureSessionRepository(database),
     [database]
   );
   const history = useMemo(
@@ -199,6 +216,9 @@ export default function App() {
           ) : null}
           {page === 'history' ? (
             <SmartBookmarkHistorySection repository={history} />
+          ) : null}
+          {page === 'agent' ? (
+            <AgentHistorySection repository={captureSessions} />
           ) : null}
           {page === 'usage' ? (
             <AiUsageSection

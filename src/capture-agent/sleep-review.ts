@@ -4,7 +4,12 @@ import type {
   AiCaptureReviewMemory,
   AiCaptureReviewResult
 } from '../ai/types';
-import type { ChromeSettingsRepository } from '../settings/settings-repository';
+import type {
+  ChromeSettingsRepository,
+  SleepReviewAttemptOutcome,
+  SleepReviewStatus,
+  SleepReviewTrigger
+} from '../settings/settings-repository';
 import type { Confidence } from '../storage/types';
 import type {
   CaptureLearningCommit,
@@ -61,7 +66,9 @@ export class CaptureSleepReviewService {
     this.now = dependencies.now ?? Date.now;
   }
 
-  review(options: { force?: boolean } = {}): Promise<CaptureSleepReviewResult> {
+  review(
+    options: { force?: boolean; trigger?: SleepReviewTrigger } = {}
+  ): Promise<CaptureSleepReviewResult> {
     if (this.running) return this.running;
     this.running = this.run(options).finally(() => {
       this.running = undefined;
@@ -71,22 +78,27 @@ export class CaptureSleepReviewService {
 
   private async run(options: {
     force?: boolean;
+    trigger?: SleepReviewTrigger;
   }): Promise<CaptureSleepReviewResult> {
     const configuration =
       await this.dependencies.settings.getSleepReviewSettings();
     if (!configuration.enabled)
       return skippedResult('睡眠回顾尚未启用');
+    const trigger = options.trigger ?? (options.force ? 'manual' : 'alarm');
+    const attempt = {
+      lastTrigger: trigger,
+      lastAttemptAt: this.now()
+    } as const;
     if (await this.dependencies.hasActiveCapture()) {
       const previous = await this.dependencies.settings.getSleepReviewStatus();
-      await this.dependencies.settings.setSleepReviewStatus({
-        ...previous,
-        state: 'skipped',
-        summary: '有收藏正在分析或执行，稍后再回顾'
-      });
-      return skippedResult('有收藏正在分析或执行，稍后再回顾');
+      const summary = '有收藏正在分析或执行，稍后再回顾';
+      await this.dependencies.settings.setSleepReviewStatus(
+        statusWithAttempt(previous, attempt, 'skipped', summary)
+      );
+      return skippedResult(summary);
     }
 
-    const now = this.now();
+    const now = attempt.lastAttemptAt;
     const previous = await this.dependencies.settings.getSleepReviewStatus();
     if (
       !options.force &&
@@ -94,21 +106,24 @@ export class CaptureSleepReviewService {
       now <
         (previous.nextEligibleAt ??
           (previous.lastCompletedAt ?? 0) + REVIEW_COOLDOWN_MS)
-    )
-      return skippedResult('距离上次回顾不足 12 小时');
+    ) {
+      const summary = '距离上次回顾不足 12 小时';
+      await this.dependencies.settings.setSleepReviewStatus(
+        statusWithAttempt(previous, attempt, 'skipped', summary)
+      );
+      return skippedResult(summary);
+    }
 
     const sessions = await this.dependencies.learning.listUnreviewed(
       configuration.batchSize
     );
     if (sessions.length < MIN_REVIEW_SESSIONS) {
       const summary = `已积累 ${sessions.length} / ${MIN_REVIEW_SESSIONS} 个新结果`;
-      await this.dependencies.settings.setSleepReviewStatus({
-        ...previous,
-        state: 'waiting',
-        pendingSessions: sessions.length,
-        summary,
-        error: undefined
-      });
+      await this.dependencies.settings.setSleepReviewStatus(
+        statusWithAttempt(previous, attempt, 'waiting', summary, {
+          pendingSessions: sessions.length
+        })
+      );
       return {
         outcome: 'waiting',
         reviewedSessions: 0,
@@ -118,7 +133,9 @@ export class CaptureSleepReviewService {
     }
 
     await this.dependencies.settings.setSleepReviewStatus({
+      ...previous,
       state: 'running',
+      ...attempt,
       lastStartedAt: now,
       pendingSessions: sessions.length,
       summary: `正在回顾 ${sessions.length} 个收藏结果`
@@ -144,16 +161,16 @@ export class CaptureSleepReviewService {
         (memories.length > 0
           ? `从 ${sessions.length} 个结果中整理出 ${memories.length} 条记忆`
           : `已回顾 ${sessions.length} 个结果，暂未发现稳定规律`);
-      await this.dependencies.settings.setSleepReviewStatus({
-        state: outcome,
-        lastStartedAt: now,
-        lastCompletedAt: now,
-        nextEligibleAt: now + REVIEW_COOLDOWN_MS,
-        pendingSessions: 0,
-        reviewedSessions: sessions.length,
-        learnedMemories: memories.length,
-        summary
-      });
+      await this.dependencies.settings.setSleepReviewStatus(
+        statusWithAttempt(previous, attempt, outcome, summary, {
+          lastStartedAt: now,
+          lastCompletedAt: now,
+          nextEligibleAt: now + REVIEW_COOLDOWN_MS,
+          pendingSessions: 0,
+          reviewedSessions: sessions.length,
+          learnedMemories: memories.length
+        })
+      );
       return {
         outcome,
         reviewedSessions: sessions.length,
@@ -165,17 +182,23 @@ export class CaptureSleepReviewService {
         error instanceof Error ? error.message : '睡眠回顾失败',
         240
       );
-      await this.dependencies.settings.setSleepReviewStatus({
-        state: 'failed',
-        lastStartedAt: now,
-        lastCompletedAt: now,
-        nextEligibleAt: now + 60 * 60 * 1_000,
-        pendingSessions: sessions.length,
-        reviewedSessions: 0,
-        learnedMemories: 0,
-        summary: '本次没有更新学习记忆，稍后可以重试',
-        error: message
-      });
+      await this.dependencies.settings.setSleepReviewStatus(
+        statusWithAttempt(
+          previous,
+          attempt,
+          'failed',
+          '本次没有更新学习记忆，稍后可以重试',
+          {
+            lastStartedAt: now,
+            lastCompletedAt: now,
+            nextEligibleAt: now + 60 * 60 * 1_000,
+            pendingSessions: sessions.length,
+            reviewedSessions: 0,
+            learnedMemories: 0,
+            error: message
+          }
+        )
+      );
       return {
         outcome: 'failed',
         reviewedSessions: 0,
@@ -243,6 +266,43 @@ export class CaptureSleepReviewService {
     }
     return accepted;
   }
+}
+
+function statusWithAttempt(
+  previous: SleepReviewStatus,
+  attempt: { lastTrigger: SleepReviewTrigger; lastAttemptAt: number },
+  outcome: SleepReviewAttemptOutcome,
+  summary: string,
+  details: Partial<SleepReviewStatus> = {}
+): SleepReviewStatus {
+  const nextAttempt = {
+    trigger: attempt.lastTrigger,
+    attemptedAt: attempt.lastAttemptAt,
+    outcome,
+    summary,
+    reviewedSessions: details.reviewedSessions ?? 0,
+    learnedMemories: details.learnedMemories ?? 0
+  };
+  const attempts = previous.attempts ?? [];
+  const last = attempts.at(-1);
+  const sameAsLast = Boolean(
+    last &&
+      last.trigger === nextAttempt.trigger &&
+      last.outcome === nextAttempt.outcome &&
+      last.summary === nextAttempt.summary
+  );
+  const nextAttempts = sameAsLast
+    ? [...attempts.slice(0, -1), nextAttempt]
+    : [...attempts, nextAttempt];
+  return {
+    ...previous,
+    ...details,
+    ...attempt,
+    state: outcome,
+    summary,
+    error: details.error,
+    attempts: nextAttempts.slice(-8)
+  };
 }
 
 function toReviewExample(session: CaptureSession) {

@@ -277,7 +277,13 @@ describe('CaptureAgent', () => {
         message: '以后这类都放到 Agent 目录'
       })
     );
-    expect(result).toMatchObject({ state: 'applied', messages: [] });
+    expect(result).toMatchObject({
+      state: 'applied',
+      messages: [
+        { role: 'user', text: '以后这类都放到 Agent 目录' },
+        { role: 'assistant', text: '已按你的要求调整' }
+      ]
+    });
     expect(dependencies.preferences.put).toHaveBeenCalledWith(
       expect.objectContaining({ kind: 'fixed-rule', source: 'explicit-rule' })
     );
@@ -625,6 +631,28 @@ describe('CaptureAgent', () => {
       failure: { kind: 'network', retryCount: 3 }
     });
   });
+
+  it('ends a failed task without changing its bookmark or erasing its record', async () => {
+    const dependencies = createDependencies({
+      planningError: new TypeError('fetch failed')
+    });
+    const agent = new CaptureAgent(dependencies);
+    const failed = await agent.begin({
+      bookmarkId: source.id,
+      trigger: 'native-bookmark'
+    });
+
+    const ended = await agent.respond(failed.id, { type: 'end' });
+
+    expect(ended).toMatchObject({
+      state: 'ended',
+      resolution: 'ended',
+      failure: { kind: 'network', message: 'fetch failed' }
+    });
+    expect(dependencies.executor.execute).not.toHaveBeenCalled();
+    expect(dependencies.executor.remove).not.toHaveBeenCalled();
+    expect(dependencies.bookmarks.get).toHaveBeenCalledTimes(1);
+  });
 });
 
 function safePlan(patch: Partial<CapturePlan> = {}): CapturePlan {
@@ -767,13 +795,14 @@ class MemorySessions implements CaptureSessionRepository {
       state:
         resolution === 'rejected'
           ? 'rejected'
+          : resolution === 'ended'
+            ? 'ended'
           : resolution === 'undone'
             ? 'undone'
             : 'applied',
       resolution,
       resolvedAt,
       updatedAt: resolvedAt,
-      messages: [],
       ...(operationBatchId ? { operationBatchId } : {})
     };
     await this.put(next);

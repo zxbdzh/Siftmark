@@ -15,6 +15,7 @@ export type CaptureSessionState =
   | 'applied'
   | 'rejected'
   | 'failed'
+  | 'ended'
   | 'expired'
   | 'undone';
 
@@ -132,7 +133,7 @@ export type CaptureActivityDraft = Omit<
 >;
 
 export type CaptureResolution =
-  'auto' | 'allowed' | 'rejected' | 'expired' | 'undone';
+  'auto' | 'allowed' | 'rejected' | 'ended' | 'expired' | 'undone';
 
 export interface CaptureSession {
   id: string;
@@ -204,6 +205,14 @@ export const pendingCaptureStates: readonly CaptureSessionState[] = [
   'failed'
 ];
 
+export const endedCaptureStates: readonly CaptureSessionState[] = [
+  'applied',
+  'rejected',
+  'ended',
+  'expired',
+  'undone'
+];
+
 export interface CapturePageContext {
   description?: string;
   text?: string;
@@ -222,4 +231,5 @@ export type CaptureAgentAction =
   | { type: 'reject' }
   | { type: 'message'; message: string }
   | { type: 'retry'; page?: CapturePageContext }
+  | { type: 'end' }
   | { type: 'undo' };

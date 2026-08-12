@@ -546,6 +546,29 @@ describe('Side panel Agent workspace', () => {
     });
   });
 
+  it('lets the user explicitly end a failed task', async () => {
+    const failed = cloneSession();
+    failed.state = 'failed';
+    failed.failure = {
+      kind: 'network',
+      message: 'Provider request aborted',
+      retryable: true,
+      retryCount: 1
+    };
+    activeSession = failed;
+    sessions.set(failed.id, failed);
+    render(<App />);
+
+    const end = await screen.findByRole('button', { name: '结束任务' });
+    expect(end).toBeEnabled();
+    fireEvent.click(end);
+
+    await waitFor(() => expect(actionRequests()).toHaveLength(1));
+    expect(actionRequests()[0]).toMatchObject({
+      input: { sessionId: failed.id, action: 'end' }
+    });
+  });
+
   it('shows explicit empty and load-error states', async () => {
     activeSession = null;
     sessions.clear();

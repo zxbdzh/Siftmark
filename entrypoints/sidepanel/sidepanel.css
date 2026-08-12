@@ -1404,6 +1404,10 @@ textarea:disabled {
   gap: 7px;
 }
 
+.agent-actions > .failed-actions {
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+}
+
 .agent-actions button,
 .agent-empty button {
   display: inline-flex;

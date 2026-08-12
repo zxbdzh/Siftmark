@@ -15,6 +15,7 @@ import {
   Settings,
   ShieldCheck,
   Sparkles,
+  Trash2,
   X
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -56,6 +57,7 @@ export default function App() {
   const [activeView, setActiveView] = useState<PopupView>('queue');
   const [busyId, setBusyId] = useState('');
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const initializedView = useRef(false);
 
   const refresh = useCallback(async () => {
@@ -116,11 +118,12 @@ export default function App() {
 
   const act = async (
     session: CaptureSession,
-    action: 'allow' | 'reject' | 'adjust' | 'undo' | 'retry'
+    action: 'allow' | 'reject' | 'adjust' | 'undo' | 'retry' | 'end'
   ) => {
     if (busyId) return;
     setBusyId(session.id);
     setError('');
+    setNotice('');
     try {
       const response = (await browser.runtime.sendMessage({
         type: 'capture-agent-action',
@@ -133,11 +136,42 @@ export default function App() {
             item.id === response.session!.id ? response.session! : item
           )
         );
-        if ((action === 'allow' || action === 'reject') && pending.length === 1)
+        if (
+          (action === 'allow' || action === 'reject' || action === 'end') &&
+          pending.length === 1
+        )
           setActiveView('receipts');
       }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : '操作未完成');
+    } finally {
+      setBusyId('');
+    }
+  };
+
+  const clearRecords = async () => {
+    const count = (await browser.runtime.sendMessage({
+      type: 'capture-agent-count-ended'
+    })) as number;
+    if (!count) return;
+    if (
+      !window.confirm(
+        `清理 ${count} 条已结束的 Agent 记录？当前任务和可重试的失败任务会保留，已学习的归类偏好不会删除。`
+      )
+    )
+      return;
+    setBusyId('clear-ended');
+    setError('');
+    setNotice('');
+    try {
+      const response = (await browser.runtime.sendMessage({
+        type: 'capture-agent-clear-ended'
+      })) as { success?: boolean; count?: number; error?: string };
+      if (!response?.success) throw new Error(response?.error || '清理未完成');
+      await refresh();
+      setNotice(`已清理 ${response.count ?? 0} 条记录`);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : '清理未完成');
     } finally {
       setBusyId('');
     }
@@ -171,11 +205,17 @@ export default function App() {
         </div>
       </header>
 
-      {error ? (
-        <p className="popup-error" role="alert">
-          {error}
-        </p>
-      ) : null}
+      <div className="popup-feedback" aria-live="polite">
+        {error ? (
+          <p className="popup-error" role="alert">
+            {error}
+          </p>
+        ) : notice ? (
+          <p className="popup-notice" role="status">
+            {notice}
+          </p>
+        ) : null}
+      </div>
 
       <section
         className="capture-lane"
@@ -307,16 +347,27 @@ export default function App() {
                         </button>
                       </>
                     ) : session.state === 'failed' ? (
-                      <button
-                        type="button"
-                        className="primary-action retry-action"
-                        aria-busy={busyId === session.id}
-                        disabled={Boolean(busyId)}
-                        onClick={() => void act(session, 'retry')}
-                      >
-                        <RotateCw aria-hidden="true" />
-                        重试整理
-                      </button>
+                      <>
+                        <button
+                          type="button"
+                          className="reject-action"
+                          disabled={Boolean(busyId)}
+                          onClick={() => void act(session, 'end')}
+                        >
+                          <X aria-hidden="true" />
+                          结束任务
+                        </button>
+                        <button
+                          type="button"
+                          className="primary-action retry-action"
+                          aria-busy={busyId === session.id}
+                          disabled={Boolean(busyId)}
+                          onClick={() => void act(session, 'retry')}
+                        >
+                          <RotateCw aria-hidden="true" />
+                          重试整理
+                        </button>
+                      </>
                     ) : (
                       <span className="working-indicator">
                         <i aria-hidden="true" />
@@ -344,6 +395,19 @@ export default function App() {
         aria-labelledby="receipts-tab"
         hidden={activeView !== 'receipts'}
       >
+        {recent.length ? (
+          <div className="receipt-toolbar">
+            <span>{recent.length} 条最近记录</span>
+            <button
+              type="button"
+              disabled={Boolean(busyId)}
+              onClick={() => void clearRecords()}
+            >
+              <Trash2 aria-hidden="true" />
+              {busyId === 'clear-ended' ? '清理中' : '清理记录'}
+            </button>
+          </div>
+        ) : null}
         {recent.length ? (
           <ul className="recent-list" aria-label="整理回执">
             {recent.map((session) => (
@@ -519,6 +583,14 @@ function laneFromSession(session?: CaptureSession): LaneView {
       finalLabel: '已撤销',
       steps: ['done', 'done', 'done']
     };
+  if (session.state === 'ended')
+    return {
+      stage: 'done',
+      title: '最近任务已结束',
+      detail: '书签保持在原位置',
+      finalLabel: '已结束',
+      steps: ['done', 'error', 'done']
+    };
   return {
     stage: 'done',
     title: session.state === 'expired' ? '最近任务已过期' : '最近收藏已保留',
@@ -541,6 +613,7 @@ function resultLabel(session: CaptureSession): string {
     return session.resolution === 'auto' ? '自动归位' : '已批准';
   if (session.state === 'rejected') return '已拒绝';
   if (session.state === 'undone') return '已撤销';
+  if (session.state === 'ended') return '已结束';
   return '已过期';
 }
 

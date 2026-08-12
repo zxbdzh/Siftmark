@@ -64,6 +64,14 @@ export interface SleepReviewSettings {
   batchSize: number;
 }
 
+export type SleepReviewTrigger =
+  | 'manual'
+  | 'startup'
+  | 'installed'
+  | 'settings'
+  | 'idle'
+  | 'alarm';
+
 export type SleepReviewState =
   | 'idle'
   | 'running'
@@ -73,8 +81,24 @@ export type SleepReviewState =
   | 'skipped'
   | 'failed';
 
+export type SleepReviewAttemptOutcome = Exclude<
+  SleepReviewState,
+  'idle' | 'running'
+>;
+
+export interface SleepReviewAttempt {
+  trigger: SleepReviewTrigger;
+  attemptedAt: number;
+  outcome: SleepReviewAttemptOutcome;
+  summary: string;
+  reviewedSessions: number;
+  learnedMemories: number;
+}
+
 export interface SleepReviewStatus {
   state: SleepReviewState;
+  lastTrigger?: SleepReviewTrigger;
+  lastAttemptAt?: number;
   lastStartedAt?: number;
   lastCompletedAt?: number;
   nextEligibleAt?: number;
@@ -83,6 +107,7 @@ export interface SleepReviewStatus {
   learnedMemories?: number;
   summary?: string;
   error?: string;
+  attempts?: SleepReviewAttempt[];
 }
 export type BookmarkSortField =
   | 'manual'
@@ -354,6 +379,10 @@ function normalizeSleepReviewStatus(
     : 'idle';
   return {
     state,
+    ...(isSleepReviewTrigger(record.lastTrigger)
+      ? { lastTrigger: record.lastTrigger }
+      : {}),
+    ...numberProperty(record, 'lastAttemptAt'),
     ...numberProperty(record, 'lastStartedAt'),
     ...numberProperty(record, 'lastCompletedAt'),
     ...numberProperty(record, 'nextEligibleAt'),
@@ -365,8 +394,63 @@ function normalizeSleepReviewStatus(
       : {}),
     ...(typeof record.error === 'string'
       ? { error: record.error.slice(0, 300) }
-      : {})
+      : {}),
+    ...attemptsProperty(record.attempts)
   };
+}
+
+function isSleepReviewTrigger(value: unknown): value is SleepReviewTrigger {
+  return [
+    'manual',
+    'startup',
+    'installed',
+    'settings',
+    'idle',
+    'alarm'
+  ].includes(value as SleepReviewTrigger);
+}
+
+function attemptsProperty(
+  value: unknown
+): Pick<SleepReviewStatus, 'attempts'> | Record<string, never> {
+  if (!Array.isArray(value)) return {};
+  const outcomes: SleepReviewAttemptOutcome[] = [
+    'waiting',
+    'learned',
+    'reviewed',
+    'skipped',
+    'failed'
+  ];
+  const attempts = value
+    .filter(isRecord)
+    .flatMap((attempt) => {
+      if (
+        !isSleepReviewTrigger(attempt.trigger) ||
+        typeof attempt.attemptedAt !== 'number' ||
+        !Number.isFinite(attempt.attemptedAt) ||
+        !outcomes.includes(attempt.outcome as SleepReviewAttemptOutcome) ||
+        typeof attempt.summary !== 'string'
+      )
+        return [];
+      return [
+        {
+          trigger: attempt.trigger,
+          attemptedAt: attempt.attemptedAt,
+          outcome: attempt.outcome as SleepReviewAttemptOutcome,
+          summary: attempt.summary.slice(0, 300),
+          reviewedSessions: finiteCount(attempt.reviewedSessions),
+          learnedMemories: finiteCount(attempt.learnedMemories)
+        }
+      ];
+    })
+    .slice(-8);
+  return attempts.length > 0 ? { attempts } : {};
+}
+
+function finiteCount(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.max(0, Math.round(value))
+    : 0;
 }
 
 function normalizeFolderLevel(value: unknown, fallback: number): number {

@@ -101,7 +101,8 @@ function fromSessionRecord(record: CaptureSessionRecord): CaptureSession {
   const session = record.payload as unknown as CaptureSession;
   return {
     ...session,
-    activities: Array.isArray(session.activities) ? session.activities : []
+    activities: Array.isArray(session.activities) ? session.activities : [],
+    messages: Array.isArray(session.messages) ? session.messages : []
   };
 }
 

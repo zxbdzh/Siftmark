@@ -140,6 +140,29 @@ export function CaptureLearningSection({
         <span className="learning-memory-count">{memories.length} 条记忆</span>
       </div>
 
+      {reviewStatus.attempts?.length ? (
+        <details className="sleep-review-attempts">
+          <summary>最近触发记录</summary>
+          <ol>
+            {[...reviewStatus.attempts].reverse().map((attempt) => (
+              <li
+                key={`${attempt.attemptedAt}-${attempt.trigger}-${attempt.outcome}`}
+                data-outcome={attempt.outcome}
+              >
+                <i aria-hidden="true" />
+                <span>
+                  <strong>{sleepReviewTriggerLabel(attempt.trigger)}</strong>
+                  <small>{attempt.summary}</small>
+                </span>
+                <time dateTime={new Date(attempt.attemptedAt).toISOString()}>
+                  {formatDate(attempt.attemptedAt)}
+                </time>
+              </li>
+            ))}
+          </ol>
+        </details>
+      ) : null}
+
       <div className="preference-list">
         <label className="preference-row">
           <span>
@@ -327,9 +350,23 @@ function statusTitle(status: SleepReviewStatus): string {
 }
 
 function statusDetail(status: SleepReviewStatus): string {
-  if (status.error) return status.error;
-  if (status.summary) return status.summary;
+  const trigger = status.lastTrigger
+    ? `${sleepReviewTriggerLabel(status.lastTrigger)} · `
+    : '';
+  if (status.error) return `${trigger}${status.error}`;
+  if (status.summary) return `${trigger}${status.summary}`;
   return '启用后仅在你空闲时整理结构化分析结果。';
+}
+
+function sleepReviewTriggerLabel(
+  trigger: NonNullable<SleepReviewStatus['lastTrigger']>
+): string {
+  if (trigger === 'manual') return '手动触发';
+  if (trigger === 'idle') return '进入空闲时自动触发';
+  if (trigger === 'alarm') return '空闲补偿检查自动触发';
+  if (trigger === 'settings') return '启用设置后自动触发';
+  if (trigger === 'installed') return '扩展更新后自动触发';
+  return '后台恢复后自动触发';
 }
 
 function confidenceLabel(confidence: CaptureLearningMemory['confidence']) {
