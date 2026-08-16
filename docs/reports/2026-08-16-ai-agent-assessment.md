@@ -132,6 +132,19 @@ Ctrl+D / 快捷键 / 右键 / Popup / 批量操作
 
 #### 5. 明显缺陷与文档漂移
 
+- `AnalysisCoordinator.analyze()` 在缺少可用分类档案或模型调用异常时，持久化并返回
+  `state: 'failed'` 的提案，而不是抛出异常：
+  `src/ai/analysis-coordinator.ts:67-76,103-125`。
+- 独立任务处理器忽略上述返回状态并固定报告成功：
+  `src/tasks/handlers/analyze-bookmark.ts:15-20`；后台注册的同类入口也有相同行为：
+  `entrypoints/background.ts:671-683`。
+- 对应集成测试把协调器结果模拟为空对象，只断言成功，未覆盖失败提案：
+  `tests/integration/ai-task-handler.test.ts:5-12`。
+
+因此模型不可用或分析失败时，提案记录为失败，但任务进度、UI 和后续重试判断会收到
+“成功”的相反结论。这是可复现的状态映射缺陷，应在任务边界修复，同时保留协调器现有
+“失败也持久化提案”的可观察性。
+
 - 代码与测试明确保留已解决/过期会话的完整 `messages`：
   `session-repository.ts:122-175`、`session-repository.test.ts:32-53,137-163`。
 - 设置页也把完整对话作为“Agent 记录”展示并支持删除：
@@ -153,13 +166,12 @@ Ctrl+D / 快捷键 / 右键 / Popup / 批量操作
 
 - `pnpm typecheck`：通过。
 - `pnpm lint`：通过。
-- `pnpm test -- --reporter=dot`：95 个文件通过、1 个文件出现焦点时序失败；
-  共 311/312 个测试通过。
+- `pnpm test -- --reporter=dot`：独立复跑 96 个文件、312/312 个测试通过。
 - `pnpm vitest run tests/unit/ui/sidepanel-agent.test.tsx --reporter=dot`：17/17 通过。
 
 ## 阶段一：Issue 清单
 
-只立以下四项，均由上面的代码证据直接推出。
+只立以下五项，均由上面的代码证据直接推出。
 
 | Issue                                             | 优先级 | 问题                                         | 验收标准                                                                                                                                                                                                  | 影响面                                                                 |
 | ------------------------------------------------- | ------ | -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
@@ -167,6 +179,7 @@ Ctrl+D / 快捷键 / 右键 / Popup / 批量操作
 | [#2](https://github.com/zxbdzh/Siftmark/issues/2) | P0     | Anthropic/Gemini 连接探针弱于真实六字段契约  | 两协议都发送代表性六字段探针；`{"ok":true}` 被拒绝；合法六字段结果才报告 structured output                                                                                                                | 两个协议适配器及其单测                                                 |
 | [#3](https://github.com/zxbdzh/Siftmark/issues/3) | P0     | 活跃 AI 请求路径存在 URL 凭据和敏感正文泄漏  | 建立统一 request-context 安全边界；当前/相关 URL 去掉 user/password/query/hash；描述/正文先脱敏且限制 500/6,000 字符；目录/相关项有界；Embedding 文本脱敏；固定测试捕获发给 adapter/embedding port 的内容 | AI 安全 helper、Planner、Coordinator、旧批量服务、Embedding 及对应测试 |
 | [#4](https://github.com/zxbdzh/Siftmark/issues/4) | P0     | Agent 对话保留与候选目录数量的隐私披露不真实 | 架构、用户指南、隐私与 Agent 设计统一说明实际本地保留/删除路径；候选目录上限写为生产值 24；不再声称解决后自动清空                                                                                         | 文档，不改变运行时行为                                                 |
+| [#5](https://github.com/zxbdzh/Siftmark/issues/5) | P0     | 失败分析提案被两个任务入口误报为成功         | 仅非 `failed` 提案报告任务成功；失败提案使失败计数递增且仍可观察；两个入口行为一致；回归测试同时覆盖成功、失败与正文清理                                                                           | 两个任务入口及对应测试；不改变协调器契约                               |
 
 ### 任务拆分
 
@@ -176,6 +189,8 @@ Ctrl+D / 快捷键 / 右键 / Popup / 批量操作
 | #2   | 无   | 是     | `src/ai/adapters/anthropic-messages.ts`、`gemini-generate-content.ts`、`openai-common.ts` 及两份现有测试                                                                    |
 | #3   | 无   | 是     | `src/ai/security/` 新 helper、`analysis-coordinator.ts`、`src/bookmarks/smart-bookmark-service.ts`、`src/capture-agent/smart-planner.ts`、`src/search/embedding/`、对应测试 |
 | #4   | 无   | 是     | `docs/architecture.md`、`docs/user-guide.md`、`docs/privacy-and-permissions.md`、`docs/design/2026-08-11-capture-agent.md`                                                  |
+| #5   | 无   | 是     | `src/tasks/handlers/analyze-bookmark.ts`、`entrypoints/background.ts`、任务处理器回归测试                                                                                    |
 
-四项无文件重叠，可以在独立 worktree/分支并行开发。合并顺序为 #1、#2、#3、#4；
-它们没有行为依赖，顺序只用于保持 review 与回归结果可定位。
+五项无文件重叠，可以在独立 worktree/分支并行开发。合并顺序为 #1、#2、#3、#4、#5；
+它们没有行为依赖，顺序只用于保持 review 与回归结果可定位。受并发槽位限制，#5 在首批任务
+完成后复用工作槽位开发。
