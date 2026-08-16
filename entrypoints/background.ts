@@ -27,6 +27,7 @@ import {
   createCaptureThumbnailHandler,
   type CaptureThumbnailInput
 } from '../src/tasks/handlers/capture-thumbnail';
+import { finishAnalyzeBookmarkTask } from '../src/tasks/handlers/analyze-bookmark';
 import type { PageCapture } from '../src/capture/types';
 import { captureAgentScreenshot } from '../src/capture/agent-screenshot';
 import { EmbeddingRepository } from '../src/search/embedding/embedding-repository';
@@ -668,7 +669,7 @@ export default defineBackground(() => {
       proposals,
       rules: new RuleEngine(rules)
     });
-    await coordinator.analyze(
+    const proposal = await coordinator.analyze(
       snapshot,
       {
         title: snapshot.title,
@@ -679,8 +680,7 @@ export default defineBackground(() => {
       },
       assignments
     );
-    await reportProgress({ completed: 1, failed: 0 });
-    return { state: 'succeeded', completed: 1 };
+    return finishAnalyzeBookmarkTask(proposal, task.failed, reportProgress);
   };
   runner.register('analyze-bookmark', analyzeHandler);
   runner.register(
