@@ -38,7 +38,7 @@ test('classifies a 21-bookmark selection and recovers durable work', async ({
   await expect(manager.locator('.selection-count')).toContainText('21');
   await manager.getByRole('button', { name: '批量归类', exact: true }).click();
   await expect(manager.locator('.bulk-toolbar output')).toContainText(
-    'AI 归类完成：20 成功，1 失败'
+    'AI 归类完成：21 成功'
   );
 
   await expect
@@ -53,37 +53,6 @@ test('classifies a 21-bookmark selection and recovers durable work', async ({
       },
       { timeout: 20_000 }
     )
-    .toBe(20);
-
-  const metadata = await readDatabaseStore<{ bookmarkId: string }>(
-    manager,
-    'bookmarkMetadata'
-  );
-  const completedIds = new Set(metadata.map((row) => row.bookmarkId));
-  const failedBookmarkId = bookmarkIds.find((id) => !completedIds.has(id));
-  expect(failedBookmarkId).toBeDefined();
-  const retryResults = await manager.evaluate(
-    (bookmarkId) =>
-      chrome.runtime.sendMessage({
-        type: 'bulk-classify',
-        input: { bookmarkIds: [bookmarkId] }
-      }),
-    failedBookmarkId!
-  );
-  expect(retryResults).toEqual([
-    expect.objectContaining({ success: true, bookmarkId: failedBookmarkId })
-  ]);
-  await expect
-    .poll(
-      async () => {
-        const rows = await readDatabaseStore<{ bookmarkId: string }>(
-          manager,
-          'bookmarkMetadata'
-        );
-        return rows.filter((row) => bookmarkIds.includes(row.bookmarkId)).length;
-      },
-      { timeout: 20_000 }
-    )
     .toBe(21);
   await expect
     .poll(() =>
@@ -94,6 +63,21 @@ test('classifies a 21-bookmark selection and recovers durable work', async ({
       })
     )
     .toBe(21);
+
+  const usage = await readDatabaseStore<{
+    profileId: string;
+    status: string;
+  }>(manager, 'aiUsageLog');
+  const classifierUsage = usage.filter(
+    (metric) => metric.profileId === 'e2e-batch-classifier'
+  );
+  expect(classifierUsage).toHaveLength(22);
+  expect(
+    classifierUsage.filter((metric) => metric.status === 'provider')
+  ).toHaveLength(1);
+  expect(
+    classifierUsage.filter((metric) => metric.status === 'success')
+  ).toHaveLength(21);
 
   const now = Date.now();
   await putDatabaseRecord(manager, 'tasks', {

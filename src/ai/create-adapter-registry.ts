@@ -7,18 +7,23 @@ import {
   MeteredAiAdapter,
   type AiUsageSink
 } from './adapters/metered-adapter';
+import { ProfileLimitedAiAdapter } from './adapters/profile-limited-adapter';
+import { ProfileLimiter } from './network/profile-limiter';
 
 export function createDefaultAiAdapterRegistry(
   usage?: AiUsageSink
 ): AiAdapterRegistry {
   const registry = new AiAdapterRegistry();
+  const limiter = new ProfileLimiter(2);
   const adapters = [
     new OpenAiChatAdapter(),
     new OpenAiResponsesAdapter(),
     new AnthropicMessagesAdapter(),
     new GeminiGenerateContentAdapter()
   ];
-  for (const adapter of adapters)
-    registry.register(usage ? new MeteredAiAdapter(adapter, usage) : adapter);
+  for (const adapter of adapters) {
+    const metered = usage ? new MeteredAiAdapter(adapter, usage) : adapter;
+    registry.register(new ProfileLimitedAiAdapter(metered, limiter));
+  }
   return registry;
 }

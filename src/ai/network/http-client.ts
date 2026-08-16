@@ -10,10 +10,17 @@ export interface ProviderJsonRequest {
 }
 
 export async function postProviderJson<T>(request: ProviderJsonRequest): Promise<T> {
+  if (request.signal.aborted)
+    throw new ProviderError('abort', 'Provider request aborted');
+
   const controller = new AbortController();
   const abort = () => controller.abort(request.signal.reason);
   request.signal.addEventListener('abort', abort, { once: true });
-  const timeout = setTimeout(() => controller.abort(new Error('timeout')), request.timeoutMs);
+  let timedOut = false;
+  const timeout = setTimeout(() => {
+    timedOut = true;
+    controller.abort(new Error('timeout'));
+  }, request.timeoutMs);
   try {
     const response = await (request.fetch ?? globalThis.fetch)(request.url, {
       method: 'POST',
@@ -32,7 +39,10 @@ export async function postProviderJson<T>(request: ProviderJsonRequest): Promise
     }
   } catch (error) {
     if (error instanceof ProviderError) throw error;
-    if (controller.signal.aborted) throw new ProviderError('abort', 'Provider request aborted');
+    if (request.signal.aborted)
+      throw new ProviderError('abort', 'Provider request aborted');
+    if (timedOut)
+      throw new ProviderError('network', 'Provider request timed out');
     throw new ProviderError('network', 'Provider network request failed');
   } finally {
     clearTimeout(timeout);
