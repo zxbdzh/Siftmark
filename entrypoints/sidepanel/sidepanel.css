@@ -100,20 +100,10 @@ textarea:disabled {
 }
 
 .agent-brand-icon {
-  display: grid;
+  display: block;
   width: 36px;
   height: 36px;
   flex: none;
-  place-items: center;
-  border: 1px solid #bdc8e8;
-  border-radius: 10px;
-  background: var(--agent-cobalt-soft);
-  color: var(--agent-cobalt);
-}
-
-.agent-brand-icon svg {
-  width: 19px;
-  height: 19px;
 }
 
 .agent-brand > div {

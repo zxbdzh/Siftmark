@@ -1,5 +1,4 @@
 import {
-  Bot,
   Check,
   CheckCircle2,
   ChevronDown,
@@ -15,6 +14,7 @@ import {
   XCircle
 } from 'lucide-react';
 import type { CaptureActivity } from '../../capture-agent/types';
+import { BrandMark } from '../components/BrandMark';
 
 export type CaptureOverlayPhase =
   'processing' | 'approval' | 'saved' | 'rejected' | 'error';
@@ -226,7 +226,7 @@ export function CaptureOverlay({
     >
       <header className="siftmark-overlay-header">
         <div className="siftmark-agent-mark" aria-hidden="true">
-          <Bot />
+          <BrandMark />
         </div>
         <div className="siftmark-overlay-heading-group">
           <span className="siftmark-overlay-eyebrow">{copy.eyebrow}</span>

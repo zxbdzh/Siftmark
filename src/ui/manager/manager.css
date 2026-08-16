@@ -27,8 +27,10 @@ body {
   gap: 8px;
   font-size: 19px;
 }
-.manager-topbar strong svg {
-  color: #0f766e;
+.manager-brand-mark {
+  width: 22px;
+  height: 22px;
+  flex: none;
 }
 .manager-topbar strong span {
   font-family: 'Noto Sans SC Variable', sans-serif;

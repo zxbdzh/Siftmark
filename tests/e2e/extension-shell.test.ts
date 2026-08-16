@@ -11,19 +11,50 @@ test('loads the current popup, manager, options, side panel, and worker', async 
 
   const popup = await openExtensionPage(context, extensionId, 'popup.html');
   await expect(popup.locator('.brand-type')).toHaveText('Siftmark');
+  await expect(popup.locator('.popup-brand-mark')).toBeVisible();
+  expect(
+    await popup.evaluate(() => {
+      const manifest = chrome.runtime.getManifest();
+      return {
+        icons: manifest.icons,
+        actionIcons: manifest.action?.default_icon
+      };
+    })
+  ).toEqual({
+    icons: {
+      16: 'icons/siftmark-16.png',
+      32: 'icons/siftmark-32.png',
+      48: 'icons/siftmark-48.png',
+      128: 'icons/siftmark-128.png'
+    },
+    actionIcons: {
+      16: 'icons/siftmark-16.png',
+      32: 'icons/siftmark-32.png',
+      48: 'icons/siftmark-48.png',
+      128: 'icons/siftmark-128.png'
+    }
+  });
   await expect(popup.getByRole('tab', { name: /任务/ })).toHaveAttribute(
     'aria-selected',
     'true'
   );
   await expect(popup.getByRole('tab', { name: /回执/ })).toBeVisible();
   await expect(popup.getByText('没有待确认的收藏')).toBeVisible();
+  if (process.env.SIFTMARK_VISUAL_QA === '1')
+    await popup.locator('.popup-shell').screenshot({
+      path: 'test-results/brand-popup.png'
+    });
 
   const manager = await openExtensionPage(context, extensionId, 'manager.html');
   await expect(manager.getByText('Siftmark · 书签树')).toBeVisible();
+  await expect(manager.locator('.manager-brand-mark')).toBeVisible();
   await expect(manager.getByPlaceholder('搜索书签…')).toBeVisible();
   await expect(manager.getByRole('button', { name: '批量排序' })).toBeVisible();
+  if (process.env.SIFTMARK_VISUAL_QA === '1')
+    await manager.screenshot({ path: 'test-results/brand-manager.png' });
 
   const options = await openExtensionPage(context, extensionId, 'options.html');
+  await expect(options.locator('.settings-brand-mark')).toBeVisible();
   await expect(
     options.getByRole('heading', { name: '设置', exact: true })
   ).toBeVisible();
@@ -39,6 +70,8 @@ test('loads the current popup, manager, options, side panel, and worker', async 
   await expect(
     options.getByRole('heading', { name: 'Agent 固定规则' })
   ).toBeVisible();
+  if (process.env.SIFTMARK_VISUAL_QA === '1')
+    await options.screenshot({ path: 'test-results/brand-options.png' });
 
   const sidePanel = await openExtensionPage(
     context,
@@ -274,6 +307,7 @@ test('supports the bookmark tree, Agent proposal, and in-page approval shell', a
     'sidepanel.html?session=shell-agent-session'
   );
   await expect(sidePanel.getByText('Siftmark Agent')).toBeVisible();
+  await expect(sidePanel.locator('.agent-brand-icon')).toBeVisible();
   await expect(
     sidePanel.getByRole('heading', { name: 'Agent 建议标题' })
   ).toBeVisible();

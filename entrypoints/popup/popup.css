@@ -110,35 +110,11 @@ button:not(:disabled) {
   gap: 10px;
 }
 
-.popup-agent-mark {
-  position: relative;
-  display: grid;
+.popup-brand-mark {
+  display: block;
   width: 34px;
   height: 34px;
   flex: none;
-  place-items: center;
-  border: 1px solid #46534f;
-  border-radius: 7px;
-  background: #212c29;
-  color: var(--popup-signal);
-}
-
-.popup-agent-mark::after {
-  position: absolute;
-  top: -3px;
-  right: -3px;
-  width: 8px;
-  height: 8px;
-  border: 2px solid var(--popup-header);
-  border-radius: 50%;
-  background: var(--popup-signal);
-  content: '';
-}
-
-.popup-agent-mark svg {
-  width: 18px;
-  height: 18px;
-  stroke-width: 1.8;
 }
 
 .popup-brand > div {

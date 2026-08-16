@@ -1048,16 +1048,11 @@ body {
   font-size: 11px;
 }
 
-.brand-mark,
-.about-brand {
-  display: grid;
-  place-items: center;
+.settings-brand-mark {
+  display: block;
   flex: none;
   width: 32px;
   height: 32px;
-  border-radius: 6px;
-  background: var(--settings-accent);
-  color: var(--settings-on-accent);
 }
 
 .settings-sidebar nav {
@@ -1698,6 +1693,7 @@ input[type='range'] {
 }
 
 .about-section .about-brand {
+  display: block;
   width: 42px;
   height: 42px;
   margin-bottom: 16px;

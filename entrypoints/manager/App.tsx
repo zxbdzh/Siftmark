@@ -9,7 +9,6 @@ import {
   Save,
   Search,
   Settings,
-  Sparkles,
   Trash2,
   X
 } from 'lucide-react';
@@ -17,6 +16,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChromeBookmarkRepository } from '../../src/platform/chrome/bookmarks-adapter';
 import type { ChromeBookmarkApi } from '../../src/platform/chrome/chrome-types';
 import { isBookmark, type BookmarkNode } from '../../src/bookmarks/types';
+import { BrandMark } from '../../src/ui/components/BrandMark';
 
 type BatchAction = 'sort' | 'rename' | 'classify' | 'health' | 'delete';
 const CONTEXT_EXIT_MS = 120;
@@ -314,7 +314,7 @@ export default function App() {
     <main className="manager-page" onClick={closeContext}>
       <header className="manager-topbar">
         <strong className="brand-type">
-          <Sparkles size={18} />
+          <BrandMark className="manager-brand-mark" />
           Siftmark <span>· 书签树</span>
         </strong>
         <button

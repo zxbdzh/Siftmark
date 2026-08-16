@@ -32,6 +32,7 @@ import type { ThumbnailRepository } from '../../storage/thumbnail-repository';
 import type { SearchService } from '../../search/search-service';
 import type { SearchResult } from '../../search/types';
 import { SearchBar } from '../search/SearchBar';
+import { BrandMark } from '../components/BrandMark';
 import type { ArchiveService } from '../../bookmarks/archive-service';
 import type {
   RecycleService,
@@ -381,7 +382,10 @@ export function ManagerLayout({
   return (
     <div className="manager-shell" onClick={() => setContext(undefined)}>
       <header className="manager-header">
-        <strong className="brand-type">Siftmark</strong>
+        <strong className="brand-type brand-lockup">
+          <BrandMark size={20} />
+          Siftmark
+        </strong>
         <div
           className="manager-view-switch"
           role="tablist"

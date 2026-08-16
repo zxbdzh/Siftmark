@@ -31,6 +31,7 @@ import type {
   CaptureRiskReason,
   CaptureSession
 } from '../../src/capture-agent';
+import { BrandMark } from '../../src/ui/components/BrandMark';
 
 interface CaptureActionResponse {
   success?: boolean;
@@ -616,9 +617,7 @@ export default function App() {
     <main className="agent-shell">
       <header className="agent-topbar">
         <div className="agent-brand">
-          <span className="agent-brand-icon">
-            <Bot aria-hidden="true" />
-          </span>
+          <BrandMark className="agent-brand-icon" />
           <div>
             <h1>Siftmark Agent</h1>
             <span

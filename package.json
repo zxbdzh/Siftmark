@@ -7,6 +7,7 @@
   "engines": { "node": ">=22 <23" },
   "scripts": {
     "postinstall": "wxt prepare",
+    "icons:generate": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/generate-icons.ps1",
     "dev": "wxt",
     "build": "wxt build",
     "zip": "wxt zip",

@@ -7,8 +7,7 @@ import {
   Info,
   MessageSquareText,
   Settings2,
-  ShieldOff,
-  Sparkles
+  ShieldOff
 } from 'lucide-react';
 import { liveQuery } from 'dexie';
 import { useEffect, useMemo, useState } from 'react';
@@ -28,6 +27,7 @@ import { ChromeSettingsRepository } from '../../src/settings/settings-repository
 import { ResetService } from '../../src/settings/reset-service';
 import { openSiftmarkDatabase } from '../../src/storage/database';
 import { BackupCenter } from '../../src/ui/backup/BackupCenter';
+import { BrandMark } from '../../src/ui/components/BrandMark';
 import { AiUsageSection } from '../../src/ui/options/AiUsageSection';
 import { AppearanceSection } from '../../src/ui/options/AppearanceSection';
 import { BlockedDomainsSection } from '../../src/ui/options/BlockedDomainsSection';
@@ -135,7 +135,7 @@ export default function App() {
     <div className="options-shell">
       <aside className="settings-sidebar">
         <div className="settings-brand">
-          <span className="brand-mark"><Sparkles size={18} /></span>
+          <BrandMark className="settings-brand-mark" />
           <div>
             <strong className="brand-type">Siftmark</strong>
             <small>智能书签助手</small>
@@ -244,7 +244,7 @@ function pageFromHash(): PageId {
 function AboutSection() {
   return (
     <section className="about-section">
-      <div className="about-brand"><Sparkles size={24} /></div>
+      <BrandMark className="about-brand" />
       <h2>Siftmark</h2>
       <p>版本 {browser.runtime.getManifest().version}</p>
       <p>

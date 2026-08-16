@@ -1,7 +1,6 @@
 import {
   ArrowUpRight,
   BookmarkCheck,
-  Bot,
   Check,
   CheckCircle2,
   ChevronRight,
@@ -20,6 +19,7 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CaptureSession } from '../../src/capture-agent';
+import { BrandMark } from '../../src/ui/components/BrandMark';
 
 interface CaptureActionResponse {
   success?: boolean;
@@ -181,9 +181,7 @@ export default function App() {
     <main className="popup-shell">
       <header className="popup-header">
         <div className="popup-brand">
-          <span className="popup-agent-mark">
-            <Bot aria-hidden="true" />
-          </span>
+          <BrandMark className="popup-brand-mark" />
           <div>
             <strong className="brand-type">Siftmark</strong>
             <small>收藏 Agent</small>
