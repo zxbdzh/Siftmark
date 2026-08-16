@@ -1,8 +1,8 @@
 # AI Agent 合并后验证证据
 
-日期：2026-08-17  
-最终功能提交：`f8574ab`（相对固定点 `51568f6`）  
-测试环境：Windows、Chrome for Testing `151.0.7922.34`、Siftmark `0.1.3`
+- 日期：2026-08-17
+- 最终功能提交：`f8574ab`（相对固定点 `51568f6`）
+- 测试环境：Windows、Chrome for Testing `151.0.7922.34`、Siftmark `0.1.3`
 
 ## 自动化门禁
 
