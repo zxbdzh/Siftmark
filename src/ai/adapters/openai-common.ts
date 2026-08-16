@@ -100,24 +100,4 @@ function describeFieldIssue(field: string, issue: ZodIssue): string {
   return `${field} 不符合约束`;
 }
 
-export function parseProbeText(text: string): void {
-  try {
-    const value = JSON.parse(text) as { ok?: unknown };
-    if (value.ok !== true || Object.keys(value).some((key) => key !== 'ok'))
-      throw new Error('invalid probe');
-  } catch {
-    throw new ProviderError(
-      'validation',
-      'Provider did not return the required structured probe result'
-    );
-  }
-}
-
-export const probeJsonSchema = {
-  type: 'object',
-  additionalProperties: false,
-  required: ['ok'],
-  properties: { ok: { type: 'boolean', const: true } }
-} as const;
-
 export { analysisJsonSchema };
