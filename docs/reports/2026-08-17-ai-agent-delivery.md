@@ -204,4 +204,4 @@ Ctrl+D / 原生收藏 / Popup / 右键 / 批量任务
 - `docs/testing/evidence/2026-08-17-ai-agent-validation.md`：自动化门禁、固定用例、Computer-Use UIA/provider 证据和逐 issue 验收矩阵。
 - `docs/reports/2026-08-17-ai-agent-delivery.md`：本报告。
 
-仓库主分支本地完成合并；未执行远端代码推送。GitHub issue 在最终报告提交并回写验收证据后关闭。
+仓库主分支本地完成合并；未执行远端代码推送。GitHub issue 已在最终报告提交并回写验收证据后关闭。
