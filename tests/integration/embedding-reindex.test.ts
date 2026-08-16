@@ -46,7 +46,15 @@ describe('EmbeddingIndexer', () => {
       })
     );
     const indexer = new EmbeddingIndexer(repository, () => 10);
-    const documents = [document('a'), document('b')];
+    const documents = [
+      document('a', {
+        title: 'Owner dev@example.test',
+        folderPath: 'password=private',
+        tags: ['Bearer abcdefghijklmnop'],
+        summary: 'sk-abcdefghijklmnop'
+      }),
+      document('b')
+    ];
     expect(
       await stage('mark old version stale', () =>
         repository.markOtherVersionsStale({
@@ -67,6 +75,13 @@ describe('EmbeddingIndexer', () => {
     const firstEmbed = vi.fn(async (texts: string[]) => {
       expect(texts[0]).not.toContain('secret=');
       expect(texts[0]).not.toContain('私人笔记');
+      expect(texts[0]).not.toContain('dev@example.test');
+      expect(texts[0]).not.toContain('password=private');
+      expect(texts[0]).not.toContain('abcdefghijklmnop');
+      expect(texts[0]).toContain('[REDACTED_EMAIL]');
+      expect(texts[0]).toContain('password=[REDACTED_PASSWORD]');
+      expect(texts[0]).toContain('Bearer [REDACTED_TOKEN]');
+      expect(texts[0]).toContain('[REDACTED_API_KEY]');
       controller.abort();
       return texts.map(() => [1, 0]);
     });

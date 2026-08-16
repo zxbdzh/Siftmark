@@ -2,6 +2,7 @@ import type { AiAdapterRegistry } from '../ai/adapter-registry';
 import type { AiRequestContext, ModelProfile } from '../ai/types';
 import type { ProfileRepository } from '../ai/profiles/profile-repository';
 import { selectProfileForCapability } from '../ai/profiles/profile-selector';
+import { sanitizeAiRequestContext } from '../ai/security/model-input-sanitizer';
 import type { ChromeSettingsRepository } from '../settings/settings-repository';
 import type { MetadataRepository } from '../storage/types';
 import type { BookmarkRepository } from './ports';
@@ -173,7 +174,11 @@ export class SmartBookmarkService {
   ) {
     const adapter = this.adapters.get(profile.protocol);
     if (!adapter) throw new Error('所选模型协议不可用');
-    return adapter.analyze(profile, context, new AbortController().signal);
+    return adapter.analyze(
+      profile,
+      sanitizeAiRequestContext(context),
+      new AbortController().signal
+    );
   }
 
   private async resolveDestination(

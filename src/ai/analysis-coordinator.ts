@@ -7,6 +7,7 @@ import type { AiRequestContext, AiAnalysisResult } from './types';
 import { AiAdapterRegistry } from './adapter-registry';
 import { selectProfileForCapability } from './profiles/profile-selector';
 import type { ProposalRepository, AnalysisProposal } from './proposal';
+import { sanitizeAiRequestContext } from './security/model-input-sanitizer';
 
 export interface AnalysisCoordinatorDeps {
   bookmarks: BookmarkRepository;
@@ -89,13 +90,18 @@ export class AnalysisCoordinator {
       usesExplicitAssignments
     );
     const results = new Map<string, Promise<AiAnalysisResult>>();
+    const sanitizedContext = sanitizeAiRequestContext(context);
     const analyzeWith = (profile: ModelProfile) => {
       const key = `${profile.id}@${profile.version}`;
       const existing = results.get(key);
       if (existing) return existing;
       const adapter = this.deps.adapters.get(profile.protocol);
       const request = adapter
-        ? adapter.analyze(profile, context, new AbortController().signal)
+        ? adapter.analyze(
+            profile,
+            sanitizedContext,
+            new AbortController().signal
+          )
         : Promise.reject(new Error('AI adapter unavailable'));
       results.set(key, request);
       return request;

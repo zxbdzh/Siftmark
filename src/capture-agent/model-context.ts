@@ -1,3 +1,7 @@
+import { redactUrlForModel } from '../ai/security/model-input-sanitizer';
+
+export { redactUrlForModel } from '../ai/security/model-input-sanitizer';
+
 const MAX_RELATED_BOOKMARKS = 5;
 const MAX_CANDIDATE_PATHS = 12;
 const MAX_PAGE_TEXT_LENGTH = 6_000;
@@ -65,17 +69,4 @@ export function buildCaptureModelContext(
         summary: bookmark.summary.slice(0, MAX_SUMMARY_LENGTH)
       }))
   };
-}
-
-export function redactUrlForModel(value: string): string {
-  try {
-    const url = new URL(value);
-    url.username = '';
-    url.password = '';
-    url.search = '';
-    url.hash = '';
-    return url.toString();
-  } catch {
-    return '';
-  }
 }

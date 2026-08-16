@@ -19,6 +19,51 @@ describe('AnalysisCoordinator', () => {
     expect(bookmarks.move).not.toHaveBeenCalled();
   });
 
+  it('sanitizes the context immediately before calling the adapter', async () => {
+    const bookmarks = {
+      get: vi.fn().mockResolvedValue(snapshot)
+    } as unknown as BookmarkRepository;
+    const proposals = { put: vi.fn() } as unknown as ProposalRepository;
+    const analyze = vi.fn().mockResolvedValue({
+      folderPath: ['技术'],
+      title: 'A',
+      tags: [],
+      summary: '摘要',
+      confidence: 'low',
+      reason: '复核'
+    });
+    const adapters = new AiAdapterRegistry();
+    adapters.register({
+      protocol: 'openai-chat',
+      testConnection: vi.fn(),
+      analyze
+    });
+
+    await new AnalysisCoordinator({
+      bookmarks,
+      profiles: [profile],
+      adapters,
+      proposals,
+      createId: () => 'proposal'
+    }).analyze(snapshot, {
+      title: 'Owner dev@example.test',
+      url: 'https://user:password@example.test/page?token=x#section',
+      currentFolderPath: ['dev@example.test'],
+      description: `Contact dev@example.test ${'d'.repeat(600)}`,
+      pageText: `Bearer abcdefghijklmnop ${'p'.repeat(7_000)}`
+    });
+
+    const sent = analyze.mock.calls[0]?.[1];
+    expect(sent).toMatchObject({
+      title: 'Owner [REDACTED_EMAIL]',
+      url: 'https://example.test/page',
+      currentFolderPath: ['[REDACTED_EMAIL]']
+    });
+    expect(sent?.description).toHaveLength(500);
+    expect(sent?.pageText).toHaveLength(6_000);
+    expect(sent?.pageText).toContain('Bearer [REDACTED_TOKEN]');
+  });
+
   it('marks a changed source as conflict', async () => {
     const proposals = { put: vi.fn() } as unknown as ProposalRepository;
     const result = await new AnalysisCoordinator({ bookmarks: { get: vi.fn().mockResolvedValue({ ...snapshot, title: 'Changed' }) } as unknown as BookmarkRepository, profiles: [], adapters: new AiAdapterRegistry(), proposals, createId: () => 'conflict' }).analyze(snapshot, { title: 'A', url: snapshot.url, currentFolderPath: [] });

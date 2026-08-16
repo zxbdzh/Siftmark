@@ -1,3 +1,4 @@
+import { sanitizeModelText } from '../../ai/security/model-input-sanitizer';
 import type { SearchDocument } from '../types';
 import type { EmbeddingCandidate, EmbeddingIndexProgress, EmbeddingPort, EmbeddingVersion } from './types';
 import { EmbeddingRepository } from './embedding-repository';
@@ -49,13 +50,15 @@ export class EmbeddingIndexer {
 }
 
 export function buildEmbeddingText(document: SearchDocument): string {
-  return [
-    `标题: ${document.title}`,
-    `域名: ${domainOf(document.url)}`,
-    `文件夹: ${document.folderPath}`,
-    `标签: ${document.tags.join('、')}`,
-    `摘要: ${document.summary}`
-  ].join('\n');
+  return sanitizeModelText(
+    [
+      `标题: ${document.title}`,
+      `域名: ${domainOf(document.url)}`,
+      `文件夹: ${document.folderPath}`,
+      `标签: ${document.tags.join('、')}`,
+      `摘要: ${document.summary}`
+    ].join('\n')
+  );
 }
 
 export function hashEmbeddingInput(value: string): string {
