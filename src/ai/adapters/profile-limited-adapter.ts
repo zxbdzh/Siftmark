@@ -1,5 +1,6 @@
 import { ProviderError } from '../network/errors';
 import { ProfileLimiter } from '../network/profile-limiter';
+import { modelProfileKey } from '../profiles/profile-key';
 import type {
   AiProtocol,
   ModelProfile
@@ -58,7 +59,7 @@ export class ProfileLimitedAiAdapter implements AiAdapter {
   ): Promise<T> {
     if (signal.aborted) return Promise.reject(abortError());
 
-    const scheduled = this.limiter.schedule(profileKey(profile), () => {
+    const scheduled = this.limiter.schedule(modelProfileKey(profile), () => {
       if (signal.aborted) throw abortError();
       return operation();
     });
@@ -67,12 +68,8 @@ export class ProfileLimitedAiAdapter implements AiAdapter {
   }
 }
 
-function profileKey(profile: ModelProfile): string {
-  return `${profile.id}@${profile.version}`;
-}
-
 function abortError(): ProviderError {
-  return new ProviderError('abort', 'Provider request aborted');
+  return new ProviderError('abort', '模型请求已取消');
 }
 
 function rejectOnAbort<T>(operation: Promise<T>, signal: AbortSignal): Promise<T> {

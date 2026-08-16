@@ -5,6 +5,7 @@ import type {
   ProfileAssignments
 } from '../../settings/settings-repository';
 import type { ProfileRepository } from './profile-repository';
+import { modelProfileKey } from './profile-key';
 
 export type ProfileAssignmentKey = AiCapability | 'agent';
 
@@ -52,7 +53,7 @@ export class ModelProfileService {
         capability === 'agent' ? 'classify' : capability;
       if (!profile.capabilities.includes(requiredCapability))
         throw new Error(`模型不支持 ${capability}`);
-      assignments[capability] = `${profile.id}@${profile.version}`;
+      assignments[capability] = modelProfileKey(profile);
     }
     await this.settings.setProfileAssignments(assignments);
   }

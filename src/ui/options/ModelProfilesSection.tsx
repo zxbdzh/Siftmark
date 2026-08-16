@@ -6,6 +6,7 @@ import type {
 } from '../../ai/profiles/profile-service';
 import { providerPresets } from '../../ai/profiles/presets';
 import type { ProfileRepository } from '../../ai/profiles/profile-repository';
+import { modelProfileKey } from '../../ai/profiles/profile-key';
 import type { AiCapability, AiProtocol, ModelProfile } from '../../ai/types';
 import type { ProfileAssignments } from '../../settings/settings-repository';
 
@@ -400,7 +401,7 @@ export function ModelProfilesSection({
 }
 
 function keyOf(profile: ModelProfile): string {
-  return `${profile.id}@${profile.version}`;
+  return modelProfileKey(profile);
 }
 
 function replaceProfile(

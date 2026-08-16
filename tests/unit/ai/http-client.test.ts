@@ -26,7 +26,7 @@ describe('postProviderJson', () => {
         timeoutMs: 1_000,
         fetch
       })
-    ).rejects.toMatchObject({ kind: 'abort' });
+    ).rejects.toMatchObject({ kind: 'abort', message: '模型请求已取消' });
     expect(fetch).not.toHaveBeenCalled();
   });
 
@@ -47,7 +47,8 @@ describe('postProviderJson', () => {
       fetch
     });
     const expectation = expect(operation).rejects.toMatchObject({
-      kind: 'network'
+      kind: 'network',
+      message: '模型请求超时'
     });
 
     await vi.advanceTimersByTimeAsync(100);
@@ -75,7 +76,10 @@ describe('postProviderJson', () => {
 
     controller.abort();
 
-    await expect(operation).rejects.toMatchObject({ kind: 'abort' });
+    await expect(operation).rejects.toMatchObject({
+      kind: 'abort',
+      message: '模型请求已取消'
+    });
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 });

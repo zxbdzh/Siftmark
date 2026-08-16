@@ -11,7 +11,7 @@ export interface ProviderJsonRequest {
 
 export async function postProviderJson<T>(request: ProviderJsonRequest): Promise<T> {
   if (request.signal.aborted)
-    throw new ProviderError('abort', 'Provider request aborted');
+    throw new ProviderError('abort', '模型请求已取消');
 
   const controller = new AbortController();
   const abort = () => controller.abort(request.signal.reason);
@@ -40,10 +40,10 @@ export async function postProviderJson<T>(request: ProviderJsonRequest): Promise
   } catch (error) {
     if (error instanceof ProviderError) throw error;
     if (request.signal.aborted)
-      throw new ProviderError('abort', 'Provider request aborted');
+      throw new ProviderError('abort', '模型请求已取消');
     if (timedOut)
-      throw new ProviderError('network', 'Provider request timed out');
-    throw new ProviderError('network', 'Provider network request failed');
+      throw new ProviderError('network', '模型请求超时');
+    throw new ProviderError('network', '模型网络请求失败');
   } finally {
     clearTimeout(timeout);
     request.signal.removeEventListener('abort', abort);

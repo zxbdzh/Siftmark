@@ -1,4 +1,5 @@
 import type { AiCapability, ModelProfile } from '../types';
+import { modelProfileKey } from './profile-key';
 
 export function selectProfileForCapability(
   profiles: ModelProfile[],
@@ -14,7 +15,7 @@ export function selectProfileForCapability(
       selectable.find(
         (profile) =>
           profile.id === preferredId ||
-          `${profile.id}@${profile.version}` === preferredId
+          modelProfileKey(profile) === preferredId
       ) ?? null
     );
   return selectable[0] ?? null;

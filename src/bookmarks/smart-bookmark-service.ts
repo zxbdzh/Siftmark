@@ -2,6 +2,7 @@ import type { AiAdapterRegistry } from '../ai/adapter-registry';
 import type { AiRequestContext, ModelProfile } from '../ai/types';
 import type { ProfileRepository } from '../ai/profiles/profile-repository';
 import { selectProfileForCapability } from '../ai/profiles/profile-selector';
+import { modelProfileKey } from '../ai/profiles/profile-key';
 import { sanitizeAiRequestContext } from '../ai/security/model-input-sanitizer';
 import type { ChromeSettingsRepository } from '../settings/settings-repository';
 import type { MetadataRepository } from '../storage/types';
@@ -77,7 +78,7 @@ export class SmartBookmarkService {
           : null;
       if (renameProfile) {
         const renamed =
-          profileKey(renameProfile) === profileKey(classifyProfile)
+          modelProfileKey(renameProfile) === modelProfileKey(classifyProfile)
             ? classification
             : await this.analyze(renameProfile, {
                 title: input.title,
@@ -212,10 +213,6 @@ export class SmartBookmarkService {
     }
     return parent;
   }
-}
-
-function profileKey(profile: ModelProfile): string {
-  return `${profile.id}@${profile.version}`;
 }
 
 function preferredRoot(nodes: BookmarkNode[]): BookmarkNode {

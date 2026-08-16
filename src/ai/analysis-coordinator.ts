@@ -6,6 +6,7 @@ import type { AiCapability, ModelProfile } from './types';
 import type { AiRequestContext, AiAnalysisResult } from './types';
 import { AiAdapterRegistry } from './adapter-registry';
 import { selectProfileForCapability } from './profiles/profile-selector';
+import { modelProfileKey } from './profiles/profile-key';
 import type { ProposalRepository, AnalysisProposal } from './proposal';
 import { sanitizeAiRequestContext } from './security/model-input-sanitizer';
 
@@ -92,7 +93,7 @@ export class AnalysisCoordinator {
     const results = new Map<string, Promise<AiAnalysisResult>>();
     const sanitizedContext = sanitizeAiRequestContext(context);
     const analyzeWith = (profile: ModelProfile) => {
-      const key = `${profile.id}@${profile.version}`;
+      const key = modelProfileKey(profile);
       const existing = results.get(key);
       if (existing) return existing;
       const adapter = this.deps.adapters.get(profile.protocol);

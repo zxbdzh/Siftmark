@@ -3,6 +3,7 @@ import type { ProfileRepository } from '../../ai/profiles/profile-repository';
 import type { SearchDocument } from '../../search/types';
 import { EmbeddingIndexer } from '../../search/embedding/embedding-indexer';
 import type { TaskHandler } from '../types';
+import { modelProfileKey } from '../../ai/profiles/profile-key';
 
 export interface IndexEmbeddingsInput {
   profileId: string;
@@ -25,7 +26,7 @@ export function createIndexEmbeddingsHandler(dependencies: {
     const documents = await dependencies.loadDocuments(task.input.bookmarkIds);
     const result = await dependencies.indexer.index(
       documents,
-      { profileId: `${profile.id}@${profile.version}`, vectorVersion: task.input.vectorVersion ?? `${profile.model}@${profile.version}` },
+      { profileId: modelProfileKey(profile), vectorVersion: task.input.vectorVersion ?? `${profile.model}@${profile.version}` },
       { embed: (texts, currentSignal) => adapter.embed!(profile, texts, currentSignal) },
       { signal, onProgress: (completed) => reportProgress({ completed, failed: task.failed }) }
     );
