@@ -15,4 +15,30 @@ describe('ProfileLimiter', () => {
     await expect(new ProfileLimiter(2, async () => undefined).schedule('p1', operation)).rejects.toMatchObject({ kind: 'authentication' });
     expect(operation).toHaveBeenCalledTimes(1);
   });
+
+  it.each(['authorization', 'validation', 'abort', 'unknown-result'] as const)(
+    'does not retry %s failures',
+    async (kind) => {
+      const operation = vi
+        .fn()
+        .mockRejectedValue(new ProviderError(kind, 'not retryable'));
+
+      await expect(
+        new ProfileLimiter(2, async () => undefined).schedule('p1', operation)
+      ).rejects.toMatchObject({ kind });
+      expect(operation).toHaveBeenCalledTimes(1);
+    }
+  );
+
+  it.each(['network', 'provider'] as const)(
+    'retries %s failures at most twice',
+    async (kind) => {
+      const operation = vi.fn().mockRejectedValue(new ProviderError(kind, 'retryable'));
+
+      await expect(
+        new ProfileLimiter(2, async () => undefined).schedule('p1', operation)
+      ).rejects.toMatchObject({ kind });
+      expect(operation).toHaveBeenCalledTimes(3);
+    }
+  );
 });
