@@ -1,4 +1,5 @@
 import type { AiAdapter } from '../../ai/adapters/adapter';
+import { sanitizeModelText } from '../../ai/security/model-input-sanitizer';
 import type { ModelProfile } from '../../ai/types';
 import { matchesSearchFilters } from '../local-search-index';
 import type { SemanticSearchPort } from '../search-service';
@@ -15,7 +16,11 @@ export class EmbeddingSemanticSearch implements SemanticSearchPort {
 
   async search(query: SearchQuery): Promise<SearchResult[]> {
     if (!this.adapter.embed) return [];
-    const [queryVector] = await this.adapter.embed(this.profile, [query.text], new AbortController().signal);
+    const [queryVector] = await this.adapter.embed(
+      this.profile,
+      [sanitizeModelText(query.text)],
+      new AbortController().signal
+    );
     if (!queryVector?.length) return [];
     const documents = new Map(this.getDocuments().filter((document) => matchesSearchFilters(document, query.filters)).map((document) => [document.bookmarkId, document]));
     const matches = await this.vectors.query(queryVector, {

@@ -46,7 +46,7 @@ describe('SmartCapturePlanner', () => {
       metadata: {
         get: vi.fn(async (id: string) => ({
           bookmarkId: id,
-          summary: `summary ${id}`,
+          summary: 'Bearer abcdefghijklmnop',
           tags: [],
           note: 'private note',
           confidence: 'high' as const,
@@ -63,20 +63,26 @@ describe('SmartCapturePlanner', () => {
         parentId: 'inbox',
         index: 0,
         title: 'Agent browser design',
-        url: 'https://example.test/agent?token=private#section'
+        url: 'https://user:password@example.test/agent?token=private#section'
       },
       page: {
-        description: 'Contact dev@example.test',
-        text: 'Bearer abcdefghijklmnop'
+        description: `Contact dev@example.test ${'d'.repeat(600)}`,
+        text: `Bearer abcdefghijklmnop ${'p'.repeat(7_000)}`
       },
       preferences: []
     });
 
     expect(context?.url).toBe('https://example.test/agent');
-    expect(context?.description).toBe('Contact [REDACTED_EMAIL]');
-    expect(context?.pageText).toBe('Bearer [REDACTED_TOKEN]');
+    expect(context?.description).toHaveLength(500);
+    expect(context?.description).toContain('Contact [REDACTED_EMAIL]');
+    expect(context?.pageText).toHaveLength(6_000);
+    expect(context?.pageText).toContain('Bearer [REDACTED_TOKEN]');
     expect(context?.availableFolderPaths?.length).toBeLessThanOrEqual(24);
     expect(context?.relatedBookmarks).toHaveLength(5);
+    expect(context?.relatedBookmarks?.[0]).toMatchObject({
+      url: 'https://example.test/agent/0',
+      summary: 'Bearer [REDACTED_TOKEN]'
+    });
     expect(JSON.stringify(context?.relatedBookmarks)).not.toContain(
       'private note'
     );
@@ -470,7 +476,7 @@ function treeWithRelatedBookmarks(count: number) {
       parentId: 'ai',
       index,
       title: `Agent browser design ${index}`,
-      url: `https://example.test/agent/${index}`
+      url: `https://user:password@example.test/agent/${index}?token=private#part`
     }))
   ];
 }

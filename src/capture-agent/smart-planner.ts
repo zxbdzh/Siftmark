@@ -1,6 +1,10 @@
 import type { AiAdapterRegistry } from '../ai/adapter-registry';
 import type { ProfileRepository } from '../ai/profiles/profile-repository';
 import { selectProfileForCapability } from '../ai/profiles/profile-selector';
+import {
+  redactUrlForModel,
+  sanitizeAiRequestContext
+} from '../ai/security/model-input-sanitizer';
 import { redactSensitiveText } from '../ai/security/redact-sensitive';
 import type { AiRequestContext } from '../ai/types';
 import type { BookmarkRepository } from '../bookmarks/ports';
@@ -103,7 +107,7 @@ export class SmartCapturePlanner implements CapturePlanner {
     const relatedContext = await Promise.all(
       related.map(async (bookmark) => ({
         title: bookmark.title,
-        url: stripPrivateUrlParts(bookmark.url),
+        url: bookmark.url,
         ...(this.dependencies.metadata
           ? {
               summary:
@@ -190,12 +194,12 @@ export class SmartCapturePlanner implements CapturePlanner {
             ]
           : undefined
       });
-    const context: AiRequestContext = {
+    const context: AiRequestContext = sanitizeAiRequestContext({
       title: input.source.title,
-      url: stripPrivateUrlParts(input.source.url),
+      url: input.source.url,
       currentFolderPath,
-      description: redactSensitiveText(input.page?.description ?? ''),
-      pageText: redactSensitiveText(input.page?.text ?? ''),
+      description: input.page?.description ?? '',
+      pageText: input.page?.text ?? '',
       ...(useVision ? { imageDataUrl: input.page?.imageDataUrl } : {}),
       ...(useWebSearch ? { webSearch: true } : {}),
       additionalRules: buildAgentRules(
@@ -212,7 +216,7 @@ export class SmartCapturePlanner implements CapturePlanner {
       preferredFolderDepth: settings.preferredFolderDepth,
       maxTitleLength: settings.renameMaxLength,
       taskType: 'classify'
-    };
+    });
     await input.reportActivity?.({
       id: `model-analysis${activitySuffix}`,
       kind: 'model',
@@ -619,21 +623,10 @@ function buildAgentRules(
   return parts.join('\n');
 }
 
-function stripPrivateUrlParts(value: string): string {
-  try {
-    const url = new URL(value);
-    url.search = '';
-    url.hash = '';
-    return url.toString().replace(/\/$/, url.pathname === '/' ? '/' : '');
-  } catch {
-    return value.split(/[?#]/, 1)[0] ?? value;
-  }
-}
-
 function safeTraceDetail(value: string): string {
   const redacted = redactSensitiveText(value).replace(
     /https?:\/\/[^\s<>"']+/gi,
-    (url) => stripPrivateUrlParts(url)
+    (url) => redactUrlForModel(url)
   );
   return Array.from(redacted.trim()).slice(0, 300).join('');
 }
