@@ -68,7 +68,7 @@ IndexedDB 数据库 `siftmark`（Schema v5）包含：
 | `analysisProposals`       | 来源快照、结构化建议和审核状态           | 不保存原始正文                      |
 | `importRecoveryPoints`    | 导入前原生节点与元数据快照               | 失败恢复                            |
 | `specialFolderPlacements` | 归档/回收原位置                          | 恢复原位置                          |
-| `captureSessions`         | 收藏快照、方案、风险、会话状态和操作批次 | 最长 7 天；解决后清空完整对话       |
+| `captureSessions`         | 收藏快照、方案、风险、消息、会话状态和操作批次 | 待处理会话通常在 7 天后转为过期；可重试失败、已解决和过期记录留在本机，可由用户删除 |
 | `capturePreferences`      | 普通偏好、睡眠回顾记忆与用户固定规则     | 本地结构化信号，不含完整对话        |
 
 ## 收藏 Agent 序列
