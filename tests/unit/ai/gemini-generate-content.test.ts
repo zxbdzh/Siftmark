@@ -1,17 +1,42 @@
 import { describe, expect, it, vi } from 'vitest';
 import fixture from '../../fixtures/ai/gemini-success.json';
 import { GeminiGenerateContentAdapter } from '../../../src/ai/adapters/gemini-generate-content';
+import { analysisJsonSchema } from '../../../src/ai/adapters/openai-common';
+import { buildAnalysisProbePrompt } from '../../../src/ai/prompts/analysis-prompt';
 import type { ModelProfile } from '../../../src/ai/types';
 
 const profile: ModelProfile = { id: 'p', version: 'v1', name: 'P', protocol: 'gemini-generate-content', endpoint: 'https://generativelanguage.googleapis.com/v1beta', model: 'gemini', apiKey: 'key', timeoutMs: 1000, capabilities: ['classify'], state: 'verified' };
 
 describe('GeminiGenerateContentAdapter', () => {
-  it('probes Gemini JSON schema output', async () => {
-    const post = vi.fn().mockResolvedValue({ candidates: [{ content: { parts: [{ text: '{"ok":true}' }] } }] });
+  it('probes Gemini with the full analysis JSON schema', async () => {
+    const prompt = buildAnalysisProbePrompt();
+    const post = vi.fn().mockResolvedValue(fixture);
     const result = await new GeminiGenerateContentAdapter(post).testConnection(profile, new AbortController().signal);
-    expect(post).toHaveBeenCalledWith(expect.objectContaining({ body: expect.objectContaining({ generationConfig: expect.objectContaining({ responseMimeType: 'application/json', responseJsonSchema: expect.any(Object) }) }) }));
+    expect(post).toHaveBeenCalledWith(expect.objectContaining({
+      body: expect.objectContaining({
+        systemInstruction: { parts: [{ text: prompt.system }] },
+        contents: [{ role: 'user', parts: [{ text: prompt.user }] }],
+        generationConfig: {
+          responseMimeType: 'application/json',
+          responseJsonSchema: analysisJsonSchema
+        }
+      })
+    }));
     expect(result.structuredOutput).toBe(true);
     expect(result.embedding).toBe(false);
+  });
+
+  it('rejects the obsolete single-field probe response', async () => {
+    const post = vi.fn().mockResolvedValue({
+      candidates: [{ content: { parts: [{ text: '{"ok":true}' }] } }]
+    });
+
+    await expect(
+      new GeminiGenerateContentAdapter(post).testConnection(
+        profile,
+        new AbortController().signal
+      )
+    ).rejects.toMatchObject({ kind: 'validation' });
   });
 
   it('uses model generateContent path and header authentication', async () => {

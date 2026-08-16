@@ -7,13 +7,20 @@ import type {
   CapabilityProbe,
   ModelProfile
 } from '../types';
-import { buildAnalysisPrompt } from '../prompts/analysis-prompt';
+import {
+  buildAnalysisProbePrompt,
+  buildAnalysisPrompt
+} from '../prompts/analysis-prompt';
 import { buildCaptureReviewPrompt } from '../prompts/capture-review-prompt';
 import { captureReviewJsonSchema } from '../schemas/capture-review-contract';
 import { parseCaptureReviewText } from '../schemas/capture-review-parser';
 import { postProviderJson, type ProviderJsonRequest } from '../network/http-client';
 import { ProviderError } from '../network/errors';
-import { analysisJsonSchema, appendEndpointPath, parseAnalysisText, parseProbeText, probeJsonSchema } from './openai-common';
+import {
+  analysisJsonSchema,
+  appendEndpointPath,
+  parseAnalysisText
+} from './openai-common';
 
 type Poster = <T>(request: ProviderJsonRequest) => Promise<T>;
 interface GeminiResponse { candidates?: Array<{ finishReason?: string; content?: { parts?: Array<{ text?: string }> } }>; promptFeedback?: { blockReason?: string }; usageMetadata?: { totalTokenCount?: number }; }
@@ -27,12 +34,26 @@ export class GeminiGenerateContentAdapter implements AiAdapter {
     const needsText = profile.capabilities.some((capability) => capability !== 'embed') || profile.capabilities.length === 0;
     let usageTokens: number | undefined;
     if (needsText) {
-      const response = await this.post<GeminiResponse>({ url: modelUrl(profile), headers: { 'x-goog-api-key': profile.apiKey }, body: { contents: [{ role: 'user', parts: [{ text: 'Return {"ok":true}.' }] }], generationConfig: { responseMimeType: 'application/json', responseJsonSchema: probeJsonSchema } }, signal, timeoutMs: profile.timeoutMs });
+      const prompt = buildAnalysisProbePrompt();
+      const response = await this.post<GeminiResponse>({
+        url: modelUrl(profile),
+        headers: { 'x-goog-api-key': profile.apiKey },
+        body: {
+          systemInstruction: { parts: [{ text: prompt.system }] },
+          contents: [{ role: 'user', parts: [{ text: prompt.user }] }],
+          generationConfig: {
+            responseMimeType: 'application/json',
+            responseJsonSchema: analysisJsonSchema
+          }
+        },
+        signal,
+        timeoutMs: profile.timeoutMs
+      });
       usageTokens = response.usageMetadata?.totalTokenCount;
       const candidate = response.candidates?.[0];
       const text = candidate?.content?.parts?.find((part) => part.text)?.text;
       if (!text) throw new ProviderError('unknown-result', 'Provider returned no probe result');
-      parseProbeText(text);
+      parseAnalysisText(text);
     }
     const embedding = profile.capabilities.includes('embed');
     if (embedding) await this.embed(profile, ['siftmark'], signal);

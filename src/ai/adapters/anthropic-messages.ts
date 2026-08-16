@@ -7,12 +7,15 @@ import type {
   CapabilityProbe,
   ModelProfile
 } from '../types';
-import { buildAnalysisPrompt } from '../prompts/analysis-prompt';
+import {
+  buildAnalysisProbePrompt,
+  buildAnalysisPrompt
+} from '../prompts/analysis-prompt';
 import { buildCaptureReviewPrompt } from '../prompts/capture-review-prompt';
 import { parseCaptureReviewText } from '../schemas/capture-review-parser';
 import { postProviderJson, type ProviderJsonRequest } from '../network/http-client';
 import { ProviderError } from '../network/errors';
-import { appendEndpointPath, parseAnalysisText, parseProbeText } from './openai-common';
+import { appendEndpointPath, parseAnalysisText } from './openai-common';
 
 type Poster = <T>(request: ProviderJsonRequest) => Promise<T>;
 interface AnthropicResponse { content?: Array<{ type?: string; text?: string }>; stop_reason?: string; usage?: { input_tokens?: number; output_tokens?: number }; }
@@ -22,10 +25,22 @@ export class AnthropicMessagesAdapter implements AiAdapter {
   constructor(private readonly post: Poster = postProviderJson) {}
 
   async testConnection(profile: ModelProfile, signal: AbortSignal): Promise<CapabilityProbe> {
-    const response = await this.post<AnthropicResponse>({ url: appendEndpointPath(profile.endpoint, 'messages'), headers: headers(profile.apiKey), body: { model: profile.model, max_tokens: 32, system: 'Return only valid JSON matching exactly {"ok":true}.', messages: [{ role: 'user', content: 'Run the connection probe.' }] }, signal, timeoutMs: profile.timeoutMs });
+    const prompt = buildAnalysisProbePrompt();
+    const response = await this.post<AnthropicResponse>({
+      url: appendEndpointPath(profile.endpoint, 'messages'),
+      headers: headers(profile.apiKey),
+      body: {
+        model: profile.model,
+        max_tokens: 256,
+        system: prompt.system,
+        messages: [{ role: 'user', content: prompt.user }]
+      },
+      signal,
+      timeoutMs: profile.timeoutMs
+    });
     const text = response.content?.find((block) => block.type === 'text')?.text;
     if (!text) throw new ProviderError('unknown-result', 'Provider returned no probe result');
-    parseProbeText(text);
+    parseAnalysisText(text);
     return { authentication: true, text: true, structuredOutput: true, embedding: false, usageTokens: totalTokens(response.usage) };
   }
 
