@@ -270,15 +270,20 @@ export function CaptureLearningSection({
           <h3>学到的弱偏好</h3>
         </div>
         {memories.length > 0 ? (
-          <button
-            type="button"
-            className="danger-text-button"
-            disabled={Boolean(busy)}
-            onClick={() => void clear()}
-          >
-            <Trash2 aria-hidden="true" />
-            {busy === 'clear' ? '正在清空' : '清空记忆'}
-          </button>
+          <div className="section-actions">
+            <a className="learning-history-link" href="#agent">
+              查看采用记录
+            </a>
+            <button
+              type="button"
+              className="danger-text-button"
+              disabled={Boolean(busy)}
+              onClick={() => void clear()}
+            >
+              <Trash2 aria-hidden="true" />
+              {busy === 'clear' ? '正在清空' : '清空记忆'}
+            </button>
+          </div>
         ) : null}
       </div>
 

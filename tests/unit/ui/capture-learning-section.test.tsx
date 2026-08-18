@@ -73,6 +73,10 @@ describe('CaptureLearningSection', () => {
     expect(
       screen.getByText(/使用你配置的 Agent 模型和额度/)
     ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '查看采用记录' })).toHaveAttribute(
+      'href',
+      '#agent'
+    );
 
     const toggle = screen.getByRole('checkbox', {
       name: /空闲时自动回顾/

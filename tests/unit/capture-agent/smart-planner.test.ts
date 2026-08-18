@@ -90,7 +90,6 @@ describe('SmartCapturePlanner', () => {
       folderId: 'ai',
       newFolders: [],
       path: [
-        { id: 'bar', title: '书签栏' },
         { id: 'dev', title: '开发' },
         { id: 'ai', title: 'AI' }
       ]
@@ -355,6 +354,143 @@ describe('SmartCapturePlanner', () => {
 
     expect(context?.availableFolderPaths?.[0]).toBe('研究');
     expect(context?.additionalRules).toContain('连续三次批准归入研究');
+  });
+
+  it('uses folder identity when reporting whether a learned memory was adopted', async () => {
+    const registry = new AiAdapterRegistry();
+    registry.register({
+      protocol: 'openai-chat',
+      testConnection: vi.fn(),
+      analyze: vi.fn().mockResolvedValue({
+        folderPath: ['Work'],
+        title: 'Example',
+        tags: [],
+        summary: '',
+        confidence: 'high',
+        reason: 'Ambiguous logical path'
+      })
+    });
+    const planner = new SmartCapturePlanner({
+      bookmarks: {
+        getTree: vi.fn().mockResolvedValue([
+          { id: 'bar', parentId: '0', index: 0, title: 'Bookmarks Bar' },
+          { id: 'other', parentId: '0', index: 1, title: 'Other Bookmarks' },
+          { id: 'work-bar', parentId: 'bar', index: 0, title: 'Work' },
+          { id: 'work-other', parentId: 'other', index: 0, title: 'Work' }
+        ])
+      },
+      profiles: { list: vi.fn().mockResolvedValue([profile]) },
+      settings: settings(),
+      adapters: registry
+    });
+
+    const result = await planner.plan({
+      source: {
+        id: 'current',
+        parentId: 'work-bar',
+        index: 0,
+        title: 'Example',
+        url: 'https://example.test'
+      },
+      preferences: [
+        {
+          id: 'memory',
+          kind: 'learned',
+          domain: 'example.test',
+          action: 'prefer-folder',
+          destinationFolderId: 'work-other',
+          destinationPath: ['Other Bookmarks', 'Work'],
+          source: 'sleep-review',
+          sourceSessionId: 'old',
+          evidenceCount: 3,
+          confidence: 'high',
+          reviewedAt: 1,
+          createdAt: 1,
+          updatedAt: 1
+        }
+      ]
+    });
+
+    expect(result.destination.folderId).toBe('work-bar');
+    expect(result.memoryInfluence).toMatchObject({
+      matched: [
+        expect.objectContaining({ destinationFolderId: 'work-other' })
+      ],
+      adoptedMemoryIds: []
+    });
+  });
+
+  it('does not strip a valid logical folder whose title matches a root title', async () => {
+    let context: AiRequestContext | undefined;
+    const registry = new AiAdapterRegistry();
+    registry.register({
+      protocol: 'openai-chat',
+      testConnection: vi.fn(),
+      analyze: vi.fn(async (_profile, nextContext: AiRequestContext) => {
+        context = nextContext;
+        return {
+          folderPath: ['Other Bookmarks', 'Project'],
+          title: 'Example',
+          tags: [],
+          summary: '',
+          confidence: 'high' as const,
+          reason: 'Uses the valid logical path'
+        };
+      })
+    });
+    const planner = new SmartCapturePlanner({
+      bookmarks: {
+        getTree: vi.fn().mockResolvedValue([
+          { id: 'bar', parentId: '0', index: 0, title: 'Bookmarks Bar' },
+          {
+            id: 'named-like-root',
+            parentId: 'bar',
+            index: 0,
+            title: 'Other Bookmarks'
+          },
+          {
+            id: 'project',
+            parentId: 'named-like-root',
+            index: 0,
+            title: 'Project'
+          }
+        ])
+      },
+      profiles: { list: vi.fn().mockResolvedValue([profile]) },
+      settings: settings(),
+      adapters: registry
+    });
+
+    const result = await planner.plan({
+      source: {
+        id: 'current',
+        parentId: 'named-like-root',
+        index: 0,
+        title: 'Example',
+        url: 'https://example.test'
+      },
+      preferences: [
+        {
+          id: 'memory',
+          kind: 'learned',
+          domain: 'example.test',
+          action: 'prefer-folder',
+          destinationPath: ['Other Bookmarks', 'Project'],
+          source: 'sleep-review',
+          sourceSessionId: 'old',
+          evidenceCount: 3,
+          confidence: 'high',
+          reviewedAt: 1,
+          createdAt: 1,
+          updatedAt: 1
+        }
+      ]
+    });
+
+    expect(context?.additionalRules).toContain(
+      '"Other Bookmarks","Project"'
+    );
+    expect(result.memoryInfluence?.adoptedMemoryIds).toEqual(['memory']);
   });
 
   it('uses configured web search and vision and reports their auditable steps', async () => {

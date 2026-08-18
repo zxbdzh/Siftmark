@@ -20,6 +20,7 @@ import type {
 } from './capture-agent';
 import type {
   CaptureFolderRef,
+  CaptureMemoryInfluence,
   CapturePlan,
   CapturePreference,
   CaptureRelatedBookmark
@@ -27,6 +28,7 @@ import type {
 
 const MAX_FOLDER_CANDIDATES = 24;
 const MAX_RELATED_BOOKMARKS = 5;
+const MAX_AGENT_PREFERENCES = 8;
 
 export interface SmartCapturePlannerDependencies {
   bookmarks: Pick<BookmarkRepository, 'getTree'>;
@@ -100,6 +102,12 @@ export class SmartCapturePlanner implements CapturePlanner {
     if (!adapter) throw new Error('所选模型协议不可用');
 
     const catalog = buildFolderCatalog(nodes);
+    const preferences = normalizePreferencePaths(
+      input.preferences,
+      nodes,
+      catalog
+    );
+    const effectivePreferences = preferences.slice(0, MAX_AGENT_PREFERENCES);
     const related = findRelated(input.source, nodes).slice(
       0,
       MAX_RELATED_BOOKMARKS
@@ -122,7 +130,7 @@ export class SmartCapturePlanner implements CapturePlanner {
       : 0;
     const availableFolderPaths = rankFolderCandidates(
       catalog,
-      input,
+      { ...input, preferences: effectivePreferences },
       nodes,
       settings.preferredFolderDepth
     ).map((entry) => entry.logicalPath.join('/'));
@@ -135,7 +143,10 @@ export class SmartCapturePlanner implements CapturePlanner {
       facts: [
         { label: '目录总数', value: `${catalog.length} 个` },
         { label: '送入模型', value: `${availableFolderPaths.length} 个候选` },
-        { label: '本地信号', value: `${input.preferences.length} 条偏好或记忆` },
+        {
+          label: '本地信号',
+          value: `${effectivePreferences.length} 条偏好或记忆`
+        },
         { label: '推荐深度', value: `${settings.preferredFolderDepth} 级` },
         {
           label: '优先候选',
@@ -204,7 +215,7 @@ export class SmartCapturePlanner implements CapturePlanner {
       ...(useWebSearch ? { webSearch: true } : {}),
       additionalRules: buildAgentRules(
         promptRules,
-        input.preferences,
+        effectivePreferences,
         revision
       ),
       availableFolderPaths,
@@ -230,9 +241,10 @@ export class SmartCapturePlanner implements CapturePlanner {
         },
         {
           label: '增强工具',
-          value: [useVision ? '页面识图' : '', useWebSearch ? '联网搜索' : '']
-            .filter(Boolean)
-            .join('、') || '未启用'
+          value:
+            [useVision ? '页面识图' : '', useWebSearch ? '联网搜索' : '']
+              .filter(Boolean)
+              .join('、') || '未启用'
         }
       ]
     });
@@ -326,12 +338,50 @@ export class SmartCapturePlanner implements CapturePlanner {
       input.source.parentId
     );
     const destination = resolvedDestination.destination;
+    const memoryInfluence = buildMemoryInfluence(
+      effectivePreferences,
+      destination
+    );
+    if (memoryInfluence)
+      await input.reportActivity?.({
+        id: `memory-influence${activitySuffix}`,
+        kind: 'folders',
+        status: 'completed',
+        label:
+          memoryInfluence.adoptedMemoryIds.length > 0
+            ? '已采用睡眠记忆'
+            : '已参考睡眠记忆，本次未采用',
+        detail: memoryInfluence.matched
+          .slice(0, 3)
+          .map(
+            (memory) =>
+              `${memory.action === 'prefer-folder' ? '偏好' : '避开'} ${memory.destinationPath.join(' / ') || '书签栏'}`
+          )
+          .join('；'),
+        facts: [
+          {
+            label: '命中记忆',
+            value: `${memoryInfluence.matched.length} 条`
+          },
+          {
+            label: '采用结果',
+            value:
+              memoryInfluence.adoptedMemoryIds.length > 0
+                ? `采用 ${memoryInfluence.adoptedMemoryIds.length} 条`
+                : '本次方案未采用'
+          },
+          {
+            label: '证据规模',
+            value: `${memoryInfluence.matched.reduce((total, memory) => total + memory.evidenceCount, 0)} 个结果`
+          }
+        ]
+      });
     const evaluation = new RuleEngine(rules).evaluate({
       url: input.source.url,
       title: input.source.title,
       sourceFolderId: input.source.parentId
     });
-    const fixedPreference = input.preferences.find(
+    const fixedPreference = preferences.find(
       (preference) =>
         preference.kind === 'fixed-rule' &&
         preference.action === 'prefer-folder' &&
@@ -377,7 +427,8 @@ export class SmartCapturePlanner implements CapturePlanner {
           input.page?.imageDataUrl
             ? 'sufficient'
             : 'insufficient'
-      }
+      },
+      ...(memoryInfluence ? { memoryInfluence } : {})
     };
   }
 }
@@ -397,11 +448,14 @@ interface RelatedNode extends BookmarkNode {
 function buildFolderCatalog(nodes: BookmarkNode[]): FolderCatalogEntry[] {
   return nodes
     .filter((node) => !isBookmark(node) && node.id !== '0')
-    .map((node) => ({
-      node,
-      path: pathRefsForFolder(node.id, nodes),
-      logicalPath: logicalPathForFolder(node.id, nodes)
-    }));
+    .map((node) => {
+      const path = logicalPathRefsForFolder(node.id, nodes);
+      return {
+        node,
+        path,
+        logicalPath: path.map((entry) => entry.title)
+      };
+    });
 }
 
 function rankFolderCandidates(
@@ -458,7 +512,9 @@ function preferenceScore(
         : preference.kind === 'learned'
           ? 110 + Math.min(20, preference.evidenceCount ?? 0)
           : 60;
-    return score + (preference.action === 'prefer-folder' ? strength : -strength);
+    return (
+      score + (preference.action === 'prefer-folder' ? strength : -strength)
+    );
   }, 0);
 }
 
@@ -580,11 +636,95 @@ function pathRefsForFolder(
 }
 
 function logicalPathForFolder(id: string, nodes: BookmarkNode[]): string[] {
+  return logicalPathRefsForFolder(id, nodes).map((entry) => entry.title);
+}
+
+function buildMemoryInfluence(
+  preferences: CapturePreference[],
+  destination: CapturePlan['destination']
+): CaptureMemoryInfluence | undefined {
+  const matched = preferences
+    .filter((preference) => preference.kind === 'learned')
+    .slice(0, 8)
+    .map((preference) => ({
+      id: preference.id,
+      domain: preference.domain,
+      action: preference.action,
+      ...(preference.destinationFolderId
+        ? { destinationFolderId: preference.destinationFolderId }
+        : {}),
+      destinationPath: preference.destinationPath,
+      evidenceCount: preference.evidenceCount ?? 0,
+      confidence: preference.confidence ?? 'low',
+      reviewSummary: preference.reviewSummary ?? ''
+    }));
+  if (matched.length === 0) return undefined;
+  const finalPath = normalizePath([
+    ...destination.path.map((folder) => folder.title),
+    ...destination.newFolders
+  ]);
+  const adoptedMemoryIds = matched
+    .filter((memory) => {
+      const sameDestination = memory.destinationFolderId
+        ? destination.newFolders.length === 0 &&
+          memory.destinationFolderId === destination.folderId
+        : normalizePath(memory.destinationPath) === finalPath;
+      return memory.action === 'prefer-folder'
+        ? sameDestination
+        : !sameDestination;
+    })
+    .map((memory) => memory.id);
+  return { matched, adoptedMemoryIds };
+}
+
+function logicalPathRefsForFolder(
+  id: string,
+  nodes: BookmarkNode[]
+): CaptureFolderRef[] {
   const refs = pathRefsForFolder(id, nodes);
   return refs.length > 0 &&
     nodes.find((node) => node.id === refs[0]!.id)?.parentId === '0'
-    ? refs.slice(1).map((entry) => entry.title)
-    : refs.map((entry) => entry.title);
+    ? refs.slice(1)
+    : refs;
+}
+
+function normalizePreferencePaths(
+  preferences: CapturePreference[],
+  nodes: BookmarkNode[],
+  catalog: FolderCatalogEntry[]
+): CapturePreference[] {
+  const rootTitles = new Set(
+    nodes
+      .filter((node) => node.parentId === '0' && !isBookmark(node))
+      .map((node) => node.title.trim().toLocaleLowerCase())
+  );
+  const logicalPaths = new Set(
+    catalog.map((entry) => normalizePath(entry.logicalPath))
+  );
+  return preferences.map((preference) => {
+    if (preference.destinationFolderId) {
+      const path = logicalPathForFolder(preference.destinationFolderId, nodes);
+      if (path.length > 0)
+        return {
+          ...preference,
+          destinationPath: path
+        };
+    }
+    const [first] = preference.destinationPath;
+    const currentPath = normalizePath(preference.destinationPath);
+    const legacyPath = preference.destinationPath.slice(1);
+    if (
+      !first ||
+      !rootTitles.has(first.trim().toLocaleLowerCase()) ||
+      logicalPaths.has(currentPath) ||
+      !logicalPaths.has(normalizePath(legacyPath))
+    )
+      return preference;
+    return {
+      ...preference,
+      destinationPath: legacyPath
+    };
+  });
 }
 
 function buildAgentRules(
@@ -712,7 +852,5 @@ function imagePayloadLabel(value: string | undefined): string {
   if (!value) return '未提供';
   const base64 = value.split(',', 2)[1] ?? '';
   const bytes = Math.max(0, Math.floor((base64.length * 3) / 4));
-  return bytes >= 1024
-    ? `约 ${(bytes / 1024).toFixed(0)} KB`
-    : `约 ${bytes} B`;
+  return bytes >= 1024 ? `约 ${(bytes / 1024).toFixed(0)} KB` : `约 ${bytes} B`;
 }

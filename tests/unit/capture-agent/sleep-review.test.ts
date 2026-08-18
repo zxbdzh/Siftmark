@@ -12,12 +12,13 @@ import type {
 
 describe('CaptureSleepReviewService', () => {
   it('waits for enough new resolved sessions without spending model quota', async () => {
-    const dependencies = dependenciesFor([resolvedSession('one'), resolvedSession('two')]);
+    const dependencies = dependenciesFor([
+      resolvedSession('one'),
+      resolvedSession('two')
+    ]);
     const service = new CaptureSleepReviewService(dependencies);
 
-    await expect(
-      service.review({ trigger: 'idle' })
-    ).resolves.toMatchObject({
+    await expect(service.review({ trigger: 'idle' })).resolves.toMatchObject({
       outcome: 'waiting',
       reviewedSessions: 0
     });
@@ -95,7 +96,11 @@ describe('CaptureSleepReviewService', () => {
     );
     expect(dependencies.learning.commit).toHaveBeenCalledWith(
       expect.objectContaining({
-        sessionIds: ['one', 'two', 'three'],
+        reviews: expect.arrayContaining([
+          expect.objectContaining({ sessionId: 'one', outcome: 'learned' }),
+          expect.objectContaining({ sessionId: 'two', outcome: 'learned' }),
+          expect.objectContaining({ sessionId: 'three', outcome: 'learned' })
+        ]),
         memories: [
           expect.objectContaining({
             id: 'sleep-review:example.test',
@@ -144,6 +149,166 @@ describe('CaptureSleepReviewService', () => {
     );
     expect(dependencies).not.toHaveProperty('bookmarks');
   });
+
+  it('keeps conflicting same-domain memories instead of overwriting the legacy one', async () => {
+    const sessions = [
+      resolvedSession('one'),
+      resolvedSession('two'),
+      resolvedSession('three')
+    ].map((session) => ({
+      ...session,
+      plan: {
+        ...session.plan!,
+        destination: {
+          ...session.plan!.destination,
+          folderId: 'research',
+          path: [{ id: 'research', title: '研究' }]
+        }
+      }
+    }));
+    const dependencies = dependenciesFor(sessions);
+    dependencies.learning.getMemory.mockImplementation(async (id: string) =>
+      id === 'sleep-review:example.test'
+        ? {
+            id,
+            kind: 'learned',
+            domain: 'example.test',
+            action: 'prefer-folder',
+            destinationPath: ['开发', 'AI'],
+            source: 'sleep-review',
+            sourceSessionId: 'old',
+            reviewSummary: '旧规律',
+            evidenceCount: 3,
+            confidence: 'high',
+            reviewedAt: 1,
+            createdAt: 1,
+            updatedAt: 1
+          }
+        : null
+    );
+    dependencies.reviewer.review.mockResolvedValueOnce({
+      memories: [
+        {
+          domain: 'example.test',
+          action: 'prefer-folder',
+          destinationPath: ['研究'],
+          confidence: 'high',
+          summary: '新的规律'
+        }
+      ],
+      reviewSummary: '发现新的规律'
+    });
+
+    await new CaptureSleepReviewService(dependencies).review();
+
+    expect(dependencies.learning.commit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        memories: [
+          expect.objectContaining({
+            destinationPath: ['研究'],
+            id: expect.stringMatching(
+              /^sleep-review:example\.test:prefer-folder:/
+            )
+          })
+        ]
+      })
+    );
+  });
+
+  it('continues a legacy root-qualified memory instead of creating a duplicate', async () => {
+    const sessions = [
+      resolvedSession('one'),
+      resolvedSession('two'),
+      resolvedSession('three')
+    ];
+    const dependencies = dependenciesFor(sessions);
+    dependencies.learning.getMemory.mockImplementation(async (id: string) =>
+      id === 'sleep-review:example.test'
+        ? {
+            id,
+            kind: 'learned',
+            domain: 'example.test',
+            action: 'prefer-folder',
+            destinationPath: ['书签栏', '开发', 'AI'],
+            source: 'sleep-review',
+            sourceSessionId: 'old',
+            reviewSummary: '旧规律',
+            evidenceCount: 2,
+            confidence: 'high',
+            reviewedAt: 1,
+            createdAt: 1,
+            updatedAt: 1
+          }
+        : null
+    );
+
+    await new CaptureSleepReviewService(dependencies).review();
+
+    expect(dependencies.learning.commit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        memories: [
+          expect.objectContaining({
+            id: 'sleep-review:example.test',
+            destinationPath: ['开发', 'AI'],
+            evidenceCount: 5
+          })
+        ]
+      })
+    );
+  });
+
+  it('keeps pending new sessions visible when old evidence uses batch capacity', async () => {
+    const stableNew = resolvedSession('stable-new');
+    const otherNewOne = {
+      ...resolvedSession('other-new-one'),
+      sourceSnapshot: {
+        ...resolvedSession('other-new-one').sourceSnapshot,
+        url: 'https://other-one.test'
+      }
+    };
+    const otherNewTwo = {
+      ...resolvedSession('other-new-two'),
+      sourceSnapshot: {
+        ...resolvedSession('other-new-two').sourceSnapshot,
+        url: 'https://other-two.test'
+      }
+    };
+    const oldOne = { ...resolvedSession('old-one'), updatedAt: 1 };
+    const oldTwo = { ...resolvedSession('old-two'), updatedAt: 2 };
+    const dependencies = dependenciesFor([
+      stableNew,
+      otherNewOne,
+      otherNewTwo
+    ]);
+    dependencies.learning.listReviewCandidates.mockResolvedValue([
+      oldOne,
+      oldTwo,
+      stableNew,
+      otherNewOne,
+      otherNewTwo
+    ]);
+    dependencies.settings.getSleepReviewSettings.mockResolvedValue({
+      enabled: true,
+      idleMinutes: 15,
+      batchSize: 3
+    });
+
+    await expect(
+      new CaptureSleepReviewService(dependencies).review()
+    ).resolves.toMatchObject({ outcome: 'learned', reviewedSessions: 3 });
+
+    expect(dependencies.learning.commit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reviews: expect.arrayContaining([
+          expect.objectContaining({ sessionId: 'stable-new' }),
+          expect.objectContaining({ sessionId: 'old-one' })
+        ])
+      })
+    );
+    await expect(
+      dependencies.settings.getSleepReviewStatus()
+    ).resolves.toMatchObject({ pendingSessions: 1 });
+  });
 });
 
 function dependenciesFor(sessions: CaptureSession[]) {
@@ -155,6 +320,7 @@ function dependenciesFor(sessions: CaptureSession[]) {
   let status: SleepReviewStatus = { state: 'idle' };
   const learning = {
     listUnreviewed: vi.fn().mockResolvedValue(sessions),
+    listReviewCandidates: vi.fn().mockResolvedValue(sessions),
     getMemory: vi.fn().mockResolvedValue(null),
     commit: vi.fn().mockResolvedValue(undefined)
   } satisfies CaptureLearningRepository;

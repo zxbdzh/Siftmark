@@ -1,4 +1,10 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor
+} from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CaptureSession } from '../../../src/capture-agent';
 import { AgentHistorySection } from '../../../src/ui/options/AgentHistorySection';
@@ -39,9 +45,12 @@ describe('AgentHistorySection', () => {
     expect(screen.getByText('已按你的要求调整')).toBeVisible();
     expect(screen.getByText('AI 已生成归类方案')).toBeVisible();
     expect(screen.getAllByText('开发 / AI').length).toBeGreaterThan(0);
+    expect(screen.getByText('已采用 开发 / AI（3 个结果）')).toBeVisible();
 
     fireEvent.click(screen.getByRole('button', { name: '删除记录' }));
-    await waitFor(() => expect(repository.removeEnded).toHaveBeenCalledWith(applied.id));
+    await waitFor(() =>
+      expect(repository.removeEnded).toHaveBeenCalledWith(applied.id)
+    );
   });
 
   it('keeps failed retryable sessions visible but not removable', async () => {
@@ -64,7 +73,47 @@ describe('AgentHistorySection', () => {
 
     expect(screen.getByText(/Provider request aborted/)).toBeVisible();
     expect(screen.getByText('进行中或可重试的任务不能清理')).toBeVisible();
-    expect(screen.queryByRole('button', { name: '删除记录' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: '删除记录' })
+    ).not.toBeInTheDocument();
+  });
+
+  it('explains avoided memories and keeps adopted entries visible after the first three', async () => {
+    const applied = session({
+      plan: {
+        ...session().plan!,
+        memoryInfluence: {
+          matched: [
+            ...Array.from({ length: 3 }, (_, index) => ({
+              id: `memory-${index}`,
+              domain: 'example.test',
+              action: 'prefer-folder' as const,
+              destinationPath: ['开发', `Folder ${index}`],
+              evidenceCount: 1,
+              confidence: 'medium' as const,
+              reviewSummary: ''
+            })),
+            {
+              id: 'avoided-memory',
+              domain: 'example.test',
+              action: 'avoid-folder' as const,
+              destinationPath: ['广告'],
+              evidenceCount: 4,
+              confidence: 'high' as const,
+              reviewSummary: ''
+            }
+          ],
+          adoptedMemoryIds: ['avoided-memory']
+        }
+      }
+    });
+    const repository = repositoryFor([applied]);
+    render(<AgentHistorySection repository={repository as never} />);
+
+    fireEvent.click((await screen.findByText('Agent 收藏记录')).closest('summary')!);
+
+    expect(screen.getByText(/已避开 广告（4 个结果）/)).toBeVisible();
+    expect(screen.getByText(/其余 1 条未展开/)).toBeVisible();
   });
 });
 
@@ -107,7 +156,21 @@ function session(patch: Partial<CaptureSession> = {}): CaptureSession {
       confidence: 'high',
       reason: '内容与 AI 开发相关',
       relatedBookmarks: [],
-      generatedAt: 1
+      generatedAt: 1,
+      memoryInfluence: {
+        matched: [
+          {
+            id: 'sleep-review:example.test',
+            domain: 'example.test',
+            action: 'prefer-folder',
+            destinationPath: ['开发', 'AI'],
+            evidenceCount: 3,
+            confidence: 'high',
+            reviewSummary: '连续归入开发 / AI'
+          }
+        ],
+        adoptedMemoryIds: ['sleep-review:example.test']
+      }
     },
     messages: [
       { id: 'user', role: 'user', text: '放到开发目录', createdAt: 2 },

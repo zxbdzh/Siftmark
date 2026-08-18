@@ -116,7 +116,10 @@ export default function App() {
     const usageSubscription = liveQuery(() => usage.list()).subscribe({
       next: setMetrics
     });
-    const handleHashChange = () => setPage(pageFromHash());
+    const handleHashChange = () => {
+      setPage(pageFromHash());
+      document.querySelector('.settings-main')?.scrollTo({ top: 0 });
+    };
     window.addEventListener('hashchange', handleHashChange);
     return () => {
       usageSubscription.unsubscribe();

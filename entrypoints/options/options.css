@@ -393,6 +393,7 @@ section button {
 }
 .learning-memory-heading {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
@@ -412,6 +413,22 @@ section button {
 }
 .learning-memory-heading h3 {
   font-size: 14px;
+}
+.learning-memory-heading > .section-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  margin-top: 0;
+}
+.learning-history-link {
+  color: var(--settings-accent);
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.learning-history-link:focus-visible {
+  outline: 2px solid var(--settings-accent);
+  outline-offset: 3px;
 }
 .learning-memory-list {
   display: grid;
@@ -1178,6 +1195,10 @@ main.settings-main {
 }
 
 @media (hover: hover) and (pointer: fine) {
+  .learning-history-link:hover {
+    text-decoration: underline;
+  }
+
   .settings-sidebar nav a:hover,
   .manager-link:hover {
     background: var(--surface-1);

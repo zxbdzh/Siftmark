@@ -31,11 +31,20 @@ describe('DexieCaptureLearningRepository', () => {
     ]);
     await learning.commit({
       memories: [memory()],
-      sessionIds: ['session'],
+      reviews: [
+        {
+          sessionId: 'session',
+          sourceUpdatedAt: 10,
+          outcome: 'learned',
+          memoryIds: ['sleep-review:example.test']
+        }
+      ],
       reviewedAt: 20
     });
 
-    await expect(learning.getMemory('sleep-review:example.test')).resolves.toMatchObject({
+    await expect(
+      learning.getMemory('sleep-review:example.test')
+    ).resolves.toMatchObject({
       evidenceCount: 3,
       reviewSummary: '连续批准归入开发目录'
     });
@@ -48,6 +57,35 @@ describe('DexieCaptureLearningRepository', () => {
         memoryIds: ['sleep-review:example.test']
       }
     });
+    database.close();
+  });
+
+  it('rejects a review when its source session changed during model analysis', async () => {
+    const name = `siftmark-learning-stale-${crypto.randomUUID()}`;
+    databaseNames.push(name);
+    const database = openSiftmarkDatabase(name);
+    const sessions = new DexieCaptureSessionRepository(database);
+    const learning = new DexieCaptureLearningRepository(database);
+    await sessions.put(resolvedSession());
+    await sessions.resolve('session', 'undone', 11);
+
+    await expect(
+      learning.commit({
+        memories: [memory()],
+        reviews: [
+          {
+            sessionId: 'session',
+            sourceUpdatedAt: 10,
+            outcome: 'learned',
+            memoryIds: ['sleep-review:example.test']
+          }
+        ],
+        reviewedAt: 20
+      })
+    ).rejects.toThrow('睡眠回顾来源已变化，请重新读取');
+    await expect(
+      learning.getMemory('sleep-review:example.test')
+    ).resolves.toBeNull();
     database.close();
   });
 });

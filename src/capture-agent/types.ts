@@ -75,6 +75,23 @@ export interface CapturePlan {
     titleMeaningPreserved?: boolean;
     pageInformation?: 'sufficient' | 'insufficient';
   };
+  memoryInfluence?: CaptureMemoryInfluence;
+}
+
+export interface CaptureMemoryInfluence {
+  matched: CaptureMemoryMatch[];
+  adoptedMemoryIds: string[];
+}
+
+export interface CaptureMemoryMatch {
+  id: string;
+  domain: string;
+  action: 'prefer-folder' | 'avoid-folder';
+  destinationFolderId?: string;
+  destinationPath: string[];
+  evidenceCount: number;
+  confidence: Confidence;
+  reviewSummary: string;
 }
 
 export interface CaptureMessage {
@@ -173,11 +190,7 @@ export interface CapturePreference {
   destinationFolderId?: string;
   destinationPath: string[];
   source:
-    | 'allow'
-    | 'reject'
-    | 'agent-adjustment'
-    | 'sleep-review'
-    | 'explicit-rule';
+    'allow' | 'reject' | 'agent-adjustment' | 'sleep-review' | 'explicit-rule';
   sourceSessionId: string;
   reviewSummary?: string;
   evidenceCount?: number;

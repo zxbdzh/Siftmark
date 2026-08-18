@@ -48,7 +48,9 @@ export function AgentHistorySection({
     void load();
     const handleFocus = () => void load();
     const handleMessage = (event: unknown) => {
-      if ((event as { type?: string }).type === 'capture-agent-sessions-changed')
+      if (
+        (event as { type?: string }).type === 'capture-agent-sessions-changed'
+      )
         void load();
     };
     window.addEventListener('focus', handleFocus);
@@ -68,7 +70,8 @@ export function AgentHistorySection({
 
   const remove = async (session: CaptureSession) => {
     if (!endedCaptureStates.includes(session.state)) return;
-    if (!window.confirm(`删除“${sessionTitle(session)}”的 Agent 记录？`)) return;
+    if (!window.confirm(`删除“${sessionTitle(session)}”的 Agent 记录？`))
+      return;
     const removed = await repository.removeEnded(session.id);
     if (!removed) {
       setMessage('记录状态已变化，未执行删除');
@@ -83,7 +86,11 @@ export function AgentHistorySection({
   };
 
   return (
-    <section className="agent-history-section" aria-labelledby="agent-history-title">
+    <section
+      className="agent-history-section"
+      id="agent"
+      aria-labelledby="agent-history-title"
+    >
       <div className="section-heading">
         <div>
           <h2 id="agent-history-title">Agent 记录</h2>
@@ -109,7 +116,9 @@ export function AgentHistorySection({
           ))}
         </div>
       ) : (
-        <div className="empty-state">使用 Ctrl+D 收藏网页后，Agent 过程会显示在这里</div>
+        <div className="empty-state">
+          使用 Ctrl+D 收藏网页后，Agent 过程会显示在这里
+        </div>
       )}
 
       {total > PAGE_SIZE ? (
@@ -191,6 +200,12 @@ function AgentRecord({
             <dt>最终结果</dt>
             <dd>{resultDetail(session)}</dd>
           </div>
+          {session.plan?.memoryInfluence ? (
+            <div>
+              <dt>睡眠记忆</dt>
+              <dd>{memoryInfluenceDetail(session)}</dd>
+            </div>
+          ) : null}
         </dl>
 
         {session.failure ? (
@@ -326,6 +341,36 @@ function resultDetail(session: CaptureSession): string {
   if (session.state === 'applied')
     return session.resolution === 'auto' ? '已自动归位' : '已按批准方案归位';
   return '任务尚未结束';
+}
+
+function memoryInfluenceDetail(session: CaptureSession): string {
+  const influence = session.plan?.memoryInfluence;
+  if (!influence) return '未命中';
+  const adopted = new Set(influence.adoptedMemoryIds);
+  const adoptedMatches = influence.matched.filter((memory) =>
+    adopted.has(memory.id)
+  );
+  const visible = [
+    ...adoptedMatches,
+    ...influence.matched.filter((memory) => !adopted.has(memory.id))
+  ].slice(0, Math.max(3, adoptedMatches.length));
+  const detail = visible
+    .map((memory) => {
+      const target = memory.destinationPath.join(' / ') || '书签栏';
+      const isAdopted = adopted.has(memory.id);
+      const status =
+        memory.action === 'avoid-folder'
+          ? isAdopted
+            ? '已避开'
+            : '未避开'
+          : isAdopted
+            ? '已采用'
+            : '未采用';
+      return `${status} ${target}（${memory.evidenceCount} 个结果）`;
+    })
+    .join('；');
+  const remaining = influence.matched.length - visible.length;
+  return remaining > 0 ? `${detail}；其余 ${remaining} 条未展开` : detail;
 }
 
 function triggerLabel(session: CaptureSession): string {

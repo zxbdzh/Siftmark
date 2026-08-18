@@ -80,6 +80,20 @@ test('shows a complete local Agent record without layout overflow', async ({
       confidence: 'high',
       reason: '内容与 Agent 开发相关。',
       relatedBookmarks: [],
+      memoryInfluence: {
+        matched: [
+          {
+            id: 'sleep-review:history.siftmark.test',
+            domain: 'history.siftmark.test',
+            action: 'prefer-folder',
+            destinationPath: ['开发', 'AI'],
+            evidenceCount: 4,
+            confidence: 'high',
+            reviewSummary: '连续采用开发 / AI'
+          }
+        ],
+        adoptedMemoryIds: ['sleep-review:history.siftmark.test']
+      },
       generatedAt: timestamp
     },
     messages: [
@@ -140,6 +154,7 @@ test('shows a complete local Agent record without layout overflow', async ({
   await expect(record.getByText('保留对话并放到开发目录。')).toBeVisible();
   await expect(record.getByText('模型服务已确认图片输入')).toBeVisible();
   await expect(record.getByText('联网搜索已完成')).toBeVisible();
+  await expect(record.getByText(/已采用 开发 \/ AI（4 个结果）/)).toBeVisible();
   await expect(record.getByRole('button', { name: '删除记录' })).toBeVisible();
   expect(
     await options.evaluate(
