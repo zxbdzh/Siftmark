@@ -35,7 +35,7 @@ describe('OpenAiChatAdapter', () => {
               content: expect.stringContaining('siftmark_analysis_probe')
             })
           ]),
-          max_tokens: 256,
+          max_tokens: 4096,
           response_format: {
             type: 'json_schema',
             json_schema: expect.objectContaining({

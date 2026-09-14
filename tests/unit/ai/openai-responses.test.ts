@@ -28,7 +28,7 @@ describe('OpenAiResponsesAdapter', () => {
       expect.objectContaining({
         body: expect.objectContaining({
           input: expect.stringContaining('siftmark_analysis_probe'),
-          max_output_tokens: 256,
+          max_output_tokens: 4096,
           text: {
             format: expect.objectContaining({
               type: 'json_schema',

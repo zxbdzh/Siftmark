@@ -75,7 +75,9 @@ export class OpenAiResponsesAdapter implements AiAdapter {
               model: profile.model,
               instructions: prompt.system,
               input: prompt.user,
-              max_output_tokens: 256,
+              // 思考类模型（如 DeepSeek V4）会先消耗 token 用于推理，
+              // 预算过小会导致 content 为空(since finish_reason=length)。
+              max_output_tokens: 4096,
               ...responsesTextObject(
                 STRUCTURED_OUTPUT_PREFERENCES[level] as 'json_schema',
                 { name: 'siftmark_analysis_probe', schema: analysisJsonSchema }
@@ -239,7 +241,8 @@ export class OpenAiResponsesAdapter implements AiAdapter {
             model: profile.model,
             instructions: prompt.system,
             input: prompt.user,
-            max_output_tokens: 1200,
+            // 思考类模型需要预留推理 token。
+            max_output_tokens: 4096,
             ...responsesTextObject(STRUCTURED_OUTPUT_PREFERENCES[level]!, {
               name: 'siftmark_capture_review',
               schema: captureReviewJsonSchema
