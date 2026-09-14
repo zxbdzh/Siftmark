@@ -1,5 +1,8 @@
 import { z } from 'zod';
-import type { ModelProfile } from '../types';
+import {
+  DEFAULT_STRUCTURED_OUTPUT,
+  type ModelProfile
+} from '../types';
 
 const endpointSchema = z.string().url().refine((value) => {
   const url = new URL(value);
@@ -17,12 +20,17 @@ export const modelProfileSchema = z.object({
   apiKey: z.string(),
   timeoutMs: z.number().int().transform((value) => Math.min(120_000, Math.max(5_000, value))),
   capabilities: z.array(z.enum(['classify', 'rename', 'summarize', 'embed'])),
+  structuredOutput: z.enum(['json_schema', 'json_object', 'prompt-only']).optional(),
   state: z.enum(['draft', 'verified', 'disabled']),
   verifiedAt: z.number().optional()
 }).strict();
 
 export function parseModelProfile(value: unknown): ModelProfile {
-  return modelProfileSchema.parse(value);
+  const parsed = modelProfileSchema.parse(value);
+  return {
+    ...parsed,
+    structuredOutput: parsed.structuredOutput ?? DEFAULT_STRUCTURED_OUTPUT
+  };
 }
 
 export type { ModelProfile } from '../types';

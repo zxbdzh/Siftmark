@@ -4,7 +4,12 @@ import {
   analysisJsonSchema
 } from '../schemas/analysis-contract';
 import { ProviderError } from '../network/errors';
-import type { AiAnalysisResult } from '../types';
+import {
+  DEFAULT_STRUCTURED_OUTPUT,
+  type AiAnalysisResult,
+  type AiStructuredOutput,
+  type ModelProfile
+} from '../types';
 import type { ZodIssue } from 'zod';
 
 export function appendEndpointPath(endpoint: string, path: string): string {
@@ -13,6 +18,93 @@ export function appendEndpointPath(endpoint: string, path: string): string {
 
 export function openAiHeaders(apiKey: string): Record<string, string> {
   return { authorization: `Bearer ${apiKey}` };
+}
+
+export const STRUCTURED_OUTPUT_PREFERENCES: AiStructuredOutput[] = [
+  'json_schema',
+  'json_object',
+  'prompt-only'
+];
+
+export function structuredOutputFor(
+  profile: Pick<ModelProfile, 'protocol' | 'structuredOutput'>
+): AiStructuredOutput {
+  return profile.structuredOutput ?? DEFAULT_STRUCTURED_OUTPUT;
+}
+
+export function isRejectableProviderError(error: unknown): boolean {
+  return (
+    error instanceof ProviderError &&
+    error.kind === 'validation' &&
+    (error.status === 400 || error.status === 422)
+  );
+}
+
+interface NamedStructuredSchema {
+  name: string;
+  schema: unknown;
+}
+
+/**
+ * OpenAI Chat Completions 的 response_format 值。
+ * prompt-only 返回 undefined（不发送该字段，完全靠提示词契约）。
+ */
+export function chatStructuredOutputFormat(
+  kind: AiStructuredOutput,
+  named: NamedStructuredSchema
+):
+  | {
+      type: 'json_schema';
+      json_schema: { name: string; strict: true; schema: unknown };
+    }
+  | { type: 'json_object' }
+  | undefined {
+  if (kind === 'json_schema') {
+    return {
+      type: 'json_schema',
+      json_schema: {
+        name: named.name,
+        strict: true,
+        schema: named.schema
+      }
+    };
+  }
+  if (kind === 'json_object') return { type: 'json_object' };
+  return undefined;
+}
+
+/** 把 Chat response_format 以可为空的 body 片段返回，便于展开进请求体。 */
+export function chatResponseFormatObject(
+  kind: AiStructuredOutput,
+  named: NamedStructuredSchema
+): Record<string, unknown> {
+  const format = chatStructuredOutputFormat(kind, named);
+  return format ? { response_format: format } : {};
+}
+
+/**
+ * OpenAI Responses 的 text.format 对象。prompt-only 返回 {}（省略 text 字段）。
+ */
+export function responsesTextObject(
+  kind: AiStructuredOutput,
+  named: NamedStructuredSchema
+): Record<string, unknown> {
+  if (kind === 'json_schema') {
+    return {
+      text: {
+        format: {
+          type: 'json_schema',
+          name: named.name,
+          strict: true,
+          schema: named.schema
+        }
+      }
+    };
+  }
+  if (kind === 'json_object') {
+    return { text: { format: { type: 'json_object' } } };
+  }
+  return {};
 }
 
 export function parseAnalysisText(text: string): AiAnalysisResult {

@@ -22,8 +22,12 @@ import { ProviderError } from '../network/errors';
 import {
   analysisJsonSchema,
   appendEndpointPath,
+  chatResponseFormatObject,
+  isRejectableProviderError,
   openAiHeaders,
-  parseAnalysisText
+  parseAnalysisText,
+  STRUCTURED_OUTPUT_PREFERENCES,
+  structuredOutputFor
 } from './openai-common';
 
 type Poster = <T>(request: ProviderJsonRequest) => Promise<T>;
@@ -50,28 +54,42 @@ export class OpenAiChatAdapter implements AiAdapter {
     let usageTokens: number | undefined;
     if (needsText) {
       const prompt = buildAnalysisProbePrompt();
-      const response = await this.post<ChatResponse>({
-        url: appendEndpointPath(profile.endpoint, 'chat/completions'),
-        headers: openAiHeaders(profile.apiKey),
-        body: {
-          model: profile.model,
-          messages: [
-            { role: 'system', content: prompt.system },
-            { role: 'user', content: prompt.user }
-          ],
-          max_tokens: 256,
-          response_format: {
-            type: 'json_schema',
-            json_schema: {
-              name: 'siftmark_analysis_probe',
-              strict: true,
-              schema: analysisJsonSchema
-            }
-          }
-        },
-        signal,
-        timeoutMs: profile.timeoutMs
-      });
+      const startLevel = STRUCTURED_OUTPUT_PREFERENCES.indexOf(
+        structuredOutputFor(profile)
+      );
+      let response: ChatResponse | undefined;
+      let lastError: unknown;
+      for (
+        let level = startLevel;
+        level < STRUCTURED_OUTPUT_PREFERENCES.length;
+        level += 1
+      ) {
+        try {
+          response = await this.post<ChatResponse>({
+            url: appendEndpointPath(profile.endpoint, 'chat/completions'),
+            headers: openAiHeaders(profile.apiKey),
+            body: {
+              model: profile.model,
+              messages: [
+                { role: 'system', content: prompt.system },
+                { role: 'user', content: prompt.user }
+              ],
+              max_tokens: 256,
+              ...chatResponseFormatObject(
+                STRUCTURED_OUTPUT_PREFERENCES[level] as 'json_schema',
+                { name: 'siftmark_analysis_probe', schema: analysisJsonSchema }
+              )
+            },
+            signal,
+            timeoutMs: profile.timeoutMs
+          });
+          if (response.choices?.[0]?.message?.content) break;
+        } catch (error) {
+          if (!isRejectableProviderError(error)) throw error;
+          lastError = error;
+        }
+      }
+      if (!response) throw lastError;
       usageTokens = response.usage?.total_tokens;
       const text = response.choices?.[0]?.message?.content;
       if (!text)
@@ -108,7 +126,10 @@ export class OpenAiChatAdapter implements AiAdapter {
           }
         ]
       : prompt.user;
-    const request = (withEnhancements: boolean) =>
+    const startLevel = STRUCTURED_OUTPUT_PREFERENCES.indexOf(
+      structuredOutputFor(profile)
+    );
+    const attempt = (level: number, withEnhancements: boolean) =>
       this.post<ChatResponse>({
         url: appendEndpointPath(profile.endpoint, 'chat/completions'),
         headers: openAiHeaders(profile.apiKey),
@@ -126,32 +147,44 @@ export class OpenAiChatAdapter implements AiAdapter {
           ...(withEnhancements && context.webSearch
             ? { web_search_options: { search_context_size: 'low' as const } }
             : {}),
-          response_format: {
-            type: 'json_schema',
-            json_schema: {
-              name: 'siftmark_analysis',
-              strict: true,
-              schema: analysisJsonSchema
-            }
-          }
+          ...chatResponseFormatObject(STRUCTURED_OUTPUT_PREFERENCES[level]!, {
+            name: 'siftmark_analysis',
+            schema: analysisJsonSchema
+          })
         }
       });
+
+    let response: ChatResponse | undefined;
     let enhancementsAccepted = true;
-    let response: ChatResponse;
-    try {
-      response = await request(true);
-    } catch (error) {
-      if (!hasEnhancements || !isEnhancementCompatibilityError(error))
-        throw error;
-      enhancementsAccepted = false;
-      response = await request(false);
+    let lastError: unknown;
+    for (
+      let level = startLevel;
+      level < STRUCTURED_OUTPUT_PREFERENCES.length;
+      level += 1
+    ) {
+      if (hasEnhancements) {
+        try {
+          const candidate = await attempt(level, true);
+          if (candidate.choices?.[0]?.message?.content) {
+            response = candidate;
+            break;
+          }
+        } catch (error) {
+          if (!isRejectableProviderError(error)) throw error;
+          lastError = error;
+        }
+      }
+      try {
+        response = await attempt(level, false);
+        enhancementsAccepted = false;
+        break;
+      } catch (error) {
+        if (!isRejectableProviderError(error)) throw error;
+        lastError = error;
+      }
     }
-    let text = response.choices?.[0]?.message?.content;
-    if (!text && hasEnhancements && enhancementsAccepted) {
-      enhancementsAccepted = false;
-      response = await request(false);
-      text = response.choices?.[0]?.message?.content;
-    }
+    if (!response) throw lastError;
+    const text = response.choices?.[0]?.message?.content;
     if (!text)
       throw new ProviderError(
         'unknown-result',
@@ -183,28 +216,43 @@ export class OpenAiChatAdapter implements AiAdapter {
     signal: AbortSignal
   ): Promise<AiCaptureReviewResult> {
     const prompt = buildCaptureReviewPrompt(context);
-    const response = await this.post<ChatResponse>({
-      url: appendEndpointPath(profile.endpoint, 'chat/completions'),
-      headers: openAiHeaders(profile.apiKey),
-      body: {
-        model: profile.model,
-        messages: [
-          { role: 'system', content: prompt.system },
-          { role: 'user', content: prompt.user }
-        ],
-        max_tokens: 1200,
-        response_format: {
-          type: 'json_schema',
-          json_schema: {
-            name: 'siftmark_capture_review',
-            strict: true,
-            schema: captureReviewJsonSchema
-          }
-        }
-      },
-      signal,
-      timeoutMs: profile.timeoutMs
-    });
+    const startLevel = STRUCTURED_OUTPUT_PREFERENCES.indexOf(
+      structuredOutputFor(profile)
+    );
+    let response: ChatResponse | undefined;
+    let lastError: unknown;
+    for (
+      let level = startLevel;
+      level < STRUCTURED_OUTPUT_PREFERENCES.length;
+      level += 1
+    ) {
+      try {
+        response = await this.post<ChatResponse>({
+          url: appendEndpointPath(profile.endpoint, 'chat/completions'),
+          headers: openAiHeaders(profile.apiKey),
+          body: {
+            model: profile.model,
+            messages: [
+              { role: 'system', content: prompt.system },
+              { role: 'user', content: prompt.user }
+            ],
+            max_tokens: 1200,
+            ...chatResponseFormatObject(STRUCTURED_OUTPUT_PREFERENCES[level]!, {
+              name: 'siftmark_capture_review',
+              schema: captureReviewJsonSchema
+            })
+          },
+          signal,
+          timeoutMs: profile.timeoutMs
+        });
+        const text = response.choices?.[0]?.message?.content;
+        if (text) break;
+      } catch (error) {
+        if (!isRejectableProviderError(error)) throw error;
+        lastError = error;
+      }
+    }
+    if (!response) throw lastError;
     const text = response.choices?.[0]?.message?.content;
     if (!text)
       throw new ProviderError(
@@ -247,12 +295,4 @@ export class OpenAiChatAdapter implements AiAdapter {
       );
     return vectors as number[][];
   }
-}
-
-function isEnhancementCompatibilityError(error: unknown): boolean {
-  return (
-    error instanceof ProviderError &&
-    error.kind === 'validation' &&
-    (error.status === 400 || error.status === 422)
-  );
 }

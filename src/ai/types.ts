@@ -5,6 +5,9 @@ export type AiProtocol =
   | 'gemini-generate-content';
 export type AiCapability = 'classify' | 'rename' | 'summarize' | 'embed';
 
+export type AiStructuredOutput = 'json_schema' | 'json_object' | 'prompt-only';
+export const DEFAULT_STRUCTURED_OUTPUT: AiStructuredOutput = 'json_schema';
+
 export interface ModelProfile {
   id: string;
   version: string;
@@ -15,6 +18,11 @@ export interface ModelProfile {
   apiKey: string;
   timeoutMs: number;
   capabilities: AiCapability[];
+  /**
+   * OpenAI 兼容协议如何要求结构化 JSON 输出。json_schema 最严格（其余网关可能拒绝）；
+   * json_object 要求合法 JSON；prompt-only 仅依赖提示词契约 + 本地 Zod 校验。非 OpenAI 协议忽略。
+   */
+  structuredOutput?: AiStructuredOutput;
   state: 'draft' | 'verified' | 'disabled';
   verifiedAt?: number;
 }

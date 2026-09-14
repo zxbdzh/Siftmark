@@ -7,7 +7,12 @@ import type {
 import { providerPresets } from '../../ai/profiles/presets';
 import type { ProfileRepository } from '../../ai/profiles/profile-repository';
 import { modelProfileKey } from '../../ai/profiles/profile-key';
-import type { AiCapability, AiProtocol, ModelProfile } from '../../ai/types';
+import type {
+  AiCapability,
+  AiProtocol,
+  AiStructuredOutput,
+  ModelProfile
+} from '../../ai/types';
 import type { ProfileAssignments } from '../../settings/settings-repository';
 
 const capabilities: Array<{ id: AiCapability; label: string }> = [
@@ -39,6 +44,7 @@ const blank: ModelProfile = {
   apiKey: '',
   timeoutMs: 30_000,
   capabilities: ['classify', 'rename', 'summarize'],
+  structuredOutput: 'json_schema',
   state: 'draft'
 };
 
@@ -158,6 +164,7 @@ export function ModelProfilesSection({
       protocol: preset.protocol,
       endpoint: preset.endpoint,
       model: preset.model,
+      structuredOutput: preset.structuredOutput,
       state: 'draft'
     }));
   };
@@ -293,6 +300,28 @@ export function ModelProfilesSection({
             }
           />
         </label>
+        {form.protocol === 'openai-chat' ||
+        form.protocol === 'openai-responses' ? (
+          <label>
+            结构化输出
+            <select
+              value={form.structuredOutput}
+              onChange={(event) =>
+                setForm({
+                  ...form,
+                  structuredOutput: event.target.value as AiStructuredOutput,
+                  state: 'draft'
+                })
+              }
+            >
+              <option value="json_schema">JSON Schema（最严格，OpenAI）</option>
+              <option value="json_object">
+                JSON 对象（DeepSeek/通义/智谱等）
+              </option>
+              <option value="prompt-only">仅提示词（Ollama 等）</option>
+            </select>
+          </label>
+        ) : null}
         <fieldset className="form-fieldset">
           <legend>能力</legend>
           {capabilities.map((capability) => (

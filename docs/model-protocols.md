@@ -20,11 +20,21 @@ Endpoint 填写协议根地址。适配器会去掉末尾 `/` 并追加下表路
 - 分析：`POST {endpoint}/chat/completions`
 - Embedding：`POST {endpoint}/embeddings`
 - 认证：`Authorization: Bearer <API Key>`
-- 分析请求：`model`、system/user `messages`、`response_format.type=json_schema` 与 strict Schema。
+- 分析请求：`model`、system/user `messages`，并按档案的 `structuredOutput` 构造 `response_format`（见下方「结构化输出」）。
 - 文本响应：`choices[0].message.content`，内容再经本地 JSON/Zod 校验；增强请求成功但无文本时，会移除联网与图片参数降级重试一次。
 - Embedding 请求：`model`、`input[]`、`encoding_format=float`。
 
 适用于 OpenAI Chat 兼容服务。DeepSeek、通义千问、智谱、豆包、MiniMax 和 Ollama 预置均复用此适配器；预置只是可编辑默认值，不保证服务商账号、模型可用性或长期兼容性。
+
+## 结构化输出
+
+OpenAI Chat 与 Responses 协议的档案可在「结构化输出」下拉选择三种方式（仅这两种协议显示该控件；其它协议忽略此字段并默认 `prompt-only` 语义）：
+
+- `json_schema`：发送 strict JSON Schema 约束（OpenAI 默认，最严格，仅支持 `response_format` 的服务商可用）。
+- `json_object`：发送 `response_format.type=json_object`，仅要求合法 JSON（DeepSeek、通义、智谱、豆包、MiniMax 等 OpenAI 兼容网关）。
+- `prompt-only`：不发送任何结构化字段，依赖提示词中的 JSON 契约 + 本地 Zod 严格校验（Ollama 等本地服务）。
+
+请求被服务商以 `400/422` 拒绝结构化字段时，适配器沿 `json_schema → json_object → prompt-only` 自动降级重试，保证分析不因网关不支持 strict Schema 而中断。所有模式的文本最终都经过同一套本地 JSON/Zod 校验兜底。
 
 ## OpenAI Responses
 
@@ -33,7 +43,7 @@ Endpoint 填写协议根地址。适配器会去掉末尾 `/` 并追加下表路
 - 分析：`POST {endpoint}/responses`
 - Embedding：`POST {endpoint}/embeddings`
 - 认证：`Authorization: Bearer <API Key>`
-- 分析请求：`model`、`instructions`、`input`、`text.format.type=json_schema`；启用识图时加入 Base64 JPEG `input_image`，启用联网时加入 `tools=[{type:web_search}]` 与 `tool_choice=required`。
+- 分析请求：`model`、`instructions`、`input`，并按 `structuredOutput` 构造 `text.format`（见上方「结构化输出」）；启用识图时加入 Base64 JPEG `input_image`，启用联网时加入 `tools=[{type:web_search}]` 与 `tool_choice=required`。
 - 文本响应：优先使用非空 `output_text`，否则查找 `output[].content[]` 的非空 `output_text`；增强请求成功但无文本时，会移除联网与图片参数降级重试一次。
 
 OpenAI 预置默认使用此协议。Embedding 与 Chat 协议共享 OpenAI 兼容形状。
@@ -102,9 +112,12 @@ Anthropic 原生 Messages 没有使用 OpenAI 的 `response_format`。Siftmark �
   name: 'Example',
   protocol: 'openai-chat',
   endpoint: 'https://api.example.com/v1',
-  model: 'example-model'
+  model: 'example-model',
+  structuredOutput: 'json_object'
 }
 ```
+
+`structuredOutput` 为必填预置字段，取值 `json_schema`、`json_object` 或 `prompt-only`（含义见上方「结构化输出」）；OpenAI 兼容网关若只支持 `json_object`（如 DeepSeek、通义、智谱、豆包、MiniMax）应设为 `json_object`，本地服务如 Ollama 建议 `prompt-only`。
 
 补充预置选择测试和本地夹具请求断言。不要添加服务商专用请求体、任意 Header 编辑器、JSONPath 或可执行脚本。只有 wire protocol 实质不同且能够维持固定安全边界时才新增适配器。
 

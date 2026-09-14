@@ -297,4 +297,56 @@ describe('OpenAiChatAdapter', () => {
       )
     ).rejects.not.toThrow('私密目录');
   });
+
+  it('uses json_object when the profile prefers it (e.g. DeepSeek)', async () => {
+    const post = vi.fn().mockResolvedValue(fixture);
+    await new OpenAiChatAdapter(post).analyze(
+      { ...profile, structuredOutput: 'json_object' },
+      { title: 'A', url: 'https://a.test', currentFolderPath: [] },
+      new AbortController().signal
+    );
+    expect(post).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: expect.objectContaining({
+          response_format: { type: 'json_object' }
+        })
+      })
+    );
+  });
+
+  it('omits response_format when prompt-only is preferred', async () => {
+    const post = vi.fn().mockResolvedValue(fixture);
+    await new OpenAiChatAdapter(post).analyze(
+      { ...profile, structuredOutput: 'prompt-only' },
+      { title: 'A', url: 'https://a.test', currentFolderPath: [] },
+      new AbortController().signal
+    );
+    const body = post.mock.calls[0]![0].body as Record<string, unknown>;
+    expect(body.response_format).toBeUndefined();
+  });
+
+  it('downgrades json_schema to json_object when the provider rejects it', async () => {
+    const post = vi
+      .fn()
+      .mockRejectedValueOnce(
+        new ProviderError('validation', 'invalid format', 400)
+      )
+      .mockResolvedValueOnce(fixture);
+    await expect(
+      new OpenAiChatAdapter(post).analyze(
+        { ...profile, structuredOutput: 'json_schema' },
+        { title: 'A', url: 'https://a.test', currentFolderPath: [] },
+        new AbortController().signal
+      )
+    ).resolves.toMatchObject({ title: '示例' });
+    expect(post).toHaveBeenCalledTimes(2);
+    const firstBody = post.mock.calls[0]![0].body as {
+      response_format: { type: string };
+    };
+    const secondBody = post.mock.calls[1]![0].body as {
+      response_format: { type: string };
+    };
+    expect(firstBody.response_format.type).toBe('json_schema');
+    expect(secondBody.response_format.type).toBe('json_object');
+  });
 });
