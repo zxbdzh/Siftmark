@@ -428,7 +428,15 @@ export default defineBackground(() => {
       lastFocusedWindow: true
     });
     const target = normalizeUrlConservatively(url);
-    return tabs.find(
+    const activeTab = tabs.find(
+      (tab) =>
+        tab.id !== undefined &&
+        tab.url !== undefined &&
+        normalizeUrlConservatively(tab.url) === target
+    );
+    if (activeTab) return activeTab;
+    const allTabs = await browser.tabs.query({});
+    return allTabs.find(
       (tab) =>
         tab.id !== undefined &&
         tab.url !== undefined &&
@@ -976,6 +984,15 @@ export default defineBackground(() => {
     void settings.getSmartBookmarkSettings().then(async (preference) => {
       if (!preference.captureNativeBookmarks) return;
       const tab = await findActiveTabForUrl(bookmark.url!);
+      if (tab?.id !== undefined) {
+        captureBookmarkTabs.set(id, tab.id);
+        await browser.tabs
+          .sendMessage(tab.id, {
+            type: 'capture-agent-overlay',
+            view: { phase: 'processing' }
+          })
+          .catch(() => undefined);
+      }
       await processCapturedBookmark({
         bookmarkId: id,
         tabId: tab?.id,

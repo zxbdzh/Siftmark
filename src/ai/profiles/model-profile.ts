@@ -23,7 +23,7 @@ export const modelProfileSchema = z.object({
   structuredOutput: z.enum(['json_schema', 'json_object', 'prompt-only']).optional(),
   state: z.enum(['draft', 'verified', 'disabled']),
   verifiedAt: z.number().optional()
-}).strict();
+}).passthrough();
 
 export function parseModelProfile(value: unknown): ModelProfile {
   const parsed = modelProfileSchema.parse(value);

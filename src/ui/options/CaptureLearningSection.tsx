@@ -323,7 +323,7 @@ export function CaptureLearningSection({
         </ul>
       ) : (
         <p className="agent-rule-empty">
-          暂无学习记忆，启用后会在积累 3 个新结果时开始回顾。
+          暂无学习记忆。收藏至少 1 个网页后，可点击上方「现在回顾」即时提炼，或开启空闲回顾自动运行。
         </p>
       )}
     </section>

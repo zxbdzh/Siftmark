@@ -74,5 +74,10 @@ export class ChromeBookmarkRepository implements BookmarkRepository {
 }
 
 function isMissingBookmarkError(error: unknown): boolean {
-  return error instanceof Error && /not found|does not exist|no bookmark/i.test(error.message);
+  return (
+    error instanceof Error &&
+    /not found|does not exist|no bookmark|can't find bookmark/i.test(
+      error.message
+    )
+  );
 }

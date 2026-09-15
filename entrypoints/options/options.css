@@ -1020,8 +1020,15 @@ body {
 }
 
 [data-theme='dark'] body {
-  --settings-accent: #76d6c2;
+  --settings-accent: #2dd4bf;
   --settings-on-accent: #111318;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) body {
+    --settings-accent: #2dd4bf;
+    --settings-on-accent: #111318;
+  }
 }
 
 .options-shell {

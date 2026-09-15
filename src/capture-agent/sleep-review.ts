@@ -108,8 +108,11 @@ export class CaptureSleepReviewService {
     const newSessions = await this.dependencies.learning.listUnreviewed(
       configuration.batchSize
     );
-    if (newSessions.length < MIN_REVIEW_SESSIONS) {
-      const summary = `已积累 ${newSessions.length} / ${MIN_REVIEW_SESSIONS} 个新结果`;
+    const minRequired = options.force ? 1 : MIN_REVIEW_SESSIONS;
+    if (newSessions.length < minRequired) {
+      const summary = options.force
+        ? '暂无可供回顾的收藏历史，进行至少一次收藏后再试'
+        : `已积累 ${newSessions.length} / ${MIN_REVIEW_SESSIONS} 个新结果`;
       await this.dependencies.settings.setSleepReviewStatus(
         statusWithAttempt(previous, attempt, 'waiting', summary, {
           pendingSessions: newSessions.length
@@ -131,7 +134,7 @@ export class CaptureSleepReviewService {
       new Set(newSessions.map((session) => session.id)),
       configuration.batchSize
     );
-    if (!hasStableEvidence(sessions)) {
+    if (!options.force && !hasStableEvidence(sessions)) {
       const reviews = reviewsForSessions(newSessions, []);
       await this.dependencies.learning.commit({
         memories: [],
@@ -172,7 +175,8 @@ export class CaptureSleepReviewService {
       const memories = await this.acceptMemories(
         reviewed.memories,
         sessions,
-        now
+        now,
+        options.force
       );
       const commit: CaptureLearningCommit = {
         memories,
@@ -242,11 +246,13 @@ export class CaptureSleepReviewService {
   private async acceptMemories(
     proposed: AiCaptureReviewMemory[],
     sessions: CaptureSession[],
-    now: number
+    now: number,
+    allowSingleEvidence = false
   ): Promise<CaptureLearningMemory[]> {
     const byDomain = groupSessionsByDomain(sessions);
     const accepted: CaptureLearningMemory[] = [];
     const seenDomains = new Set<string>();
+    const minMatching = allowSingleEvidence ? 1 : 2;
     for (const proposal of proposed.slice(0, 8)) {
       const domain = proposal.domain.trim().toLocaleLowerCase();
       const evidence = byDomain.get(domain);
@@ -259,7 +265,7 @@ export class CaptureSleepReviewService {
       const matching = supporting.filter(
         (session) => normalizePath(destinationPath(session)) === pathKey
       );
-      if (matching.length < 2) continue;
+      if (matching.length < minMatching) continue;
       seenDomains.add(domain);
       const legacyId = `sleep-review:${domain}`;
       const scopedId = memoryIdFor(domain, proposal.action, pathKey);

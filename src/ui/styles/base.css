@@ -5,9 +5,30 @@
 
 * { box-sizing: border-box; }
 html, body, #root { min-height: 100%; margin: 0; }
-body { background: var(--surface-0); color: var(--text-1); font-family: 'Noto Sans SC Variable', sans-serif; font-size: 14px; letter-spacing: 0; }
-button, input, select, textarea { font: inherit; }
+body {
+  background: var(--surface-0);
+  color: var(--text-1);
+  font-family: 'Noto Sans SC Variable', sans-serif;
+  font-size: var(--font-size-base, 14px);
+  line-height: 1.5;
+  letter-spacing: 0;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+button, input, select, textarea { font: inherit; color: inherit; }
 button { min-height: var(--control-height); }
 :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .brand-type { font-family: 'Space Grotesk Variable', sans-serif; font-weight: 650; }
 .brand-lockup { display: inline-flex; align-items: center; gap: 8px; }
+
+/* 减弱动效偏好通用降级 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -1,5 +1,6 @@
 import type { BookmarkRepository } from '../bookmarks/ports';
 import { isBookmark, type BookmarkNode } from '../bookmarks/types';
+import { normalizeUrlConservatively } from '../health/url-normalization';
 import { redactSensitiveText } from '../ai/security/redact-sensitive';
 import type { CapturePreferenceRepository } from './preference-repository';
 import {
@@ -696,14 +697,12 @@ function sameSource(
   current: BookmarkNode | null,
   source: BookmarkNode
 ): boolean {
-  return Boolean(
-    current &&
-    current.id === source.id &&
-    current.parentId === source.parentId &&
-    current.index === source.index &&
-    current.title === source.title &&
-    current.url === source.url
-  );
+  if (!current) return false;
+  if (current.id !== source.id) return false;
+  if (current.url && source.url) {
+    return normalizeUrlConservatively(current.url) === normalizeUrlConservatively(source.url);
+  }
+  return true;
 }
 
 function failureFrom(error: unknown, retryCount = 0): CaptureFailure {
