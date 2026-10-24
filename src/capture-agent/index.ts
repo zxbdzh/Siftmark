@@ -11,3 +11,4 @@ export * from './session-lifecycle';
 export * from './model-context';
 export * from './model-memory-reviewer';
 export * from './sleep-review';
+export * from './experience-service';

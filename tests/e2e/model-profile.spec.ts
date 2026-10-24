@@ -43,26 +43,27 @@ test('verifies all protocol shapes and rejects unsafe model output', async ({
   await resetProvider();
   const options = await openExtensionPage(context, extensionId, 'options.html');
   const section = options.locator('#model-profiles');
-  await expect(section.getByLabel('API Key')).toHaveAttribute(
-    'type',
-    'password'
-  );
   for (const protocol of protocols) {
+    await section.getByRole('button', { name: '新建' }).click();
+    await expect(section.getByLabel('API Key')).toHaveAttribute(
+      'type',
+      'password'
+    );
     await resetProvider();
     await section.getByLabel('名称').fill(`本地夹具 ${protocol.id}`);
     await section.getByLabel('协议').selectOption(protocol.id);
     await section.getByLabel('Endpoint').fill('http://127.0.0.1:43173/v1');
-    await section.getByLabel('模型').fill('fixture-model');
+    await section.getByLabel('模型', { exact: true }).fill('fixture-model');
     await section.getByLabel('API Key').fill('e2e-secret-key');
     await section.getByRole('button', { name: '保存草稿' }).click();
-    await expect(section.locator('output')).toHaveText(
-      '草稿已保存，测试连接后才能启用'
-    );
+    await expect(section.locator('output')).toHaveText('草稿已保存，尚未验证');
     await expect(
-      section.getByText(new RegExp(`本地夹具 ${protocol.id}.*Key ••••••`))
-    ).toBeVisible();
+      section
+        .locator('.model-profile-list li')
+        .filter({ hasText: `本地夹具 ${protocol.id}` })
+    ).toContainText('Key 已配置');
     await expect(options.getByText('e2e-secret-key')).toHaveCount(0);
-    await section.getByRole('button', { name: '测试连接' }).click();
+    await section.getByRole('button', { name: '验证并保存' }).click();
     await expect(section.locator('output')).toContainText('验证通过');
 
     const request = (await providerRequests())[0]!;
@@ -74,10 +75,13 @@ test('verifies all protocol shapes and rejects unsafe model output', async ({
       expect.arrayContaining([...protocol.bodyKeys])
     );
     expect(JSON.stringify(request)).not.toContain('e2e-secret-key');
+    if (protocol.id !== protocols.at(-1)!.id) {
+      await section.getByRole('button', { name: '关闭模型编辑' }).click();
+    }
   }
-  await section.getByRole('button', { name: '启用所选能力' }).click();
+  await section.getByRole('button', { name: '设为所选任务默认' }).click();
   await expect(section.locator('output')).toHaveText(
-    '此档案已用于全部所选能力'
+    '已设为所选任务的默认模型'
   );
 
   await options.evaluate(async () => {

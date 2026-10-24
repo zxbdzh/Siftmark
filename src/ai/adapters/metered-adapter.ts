@@ -10,6 +10,7 @@ import type {
   CapabilityProbe,
   ModelProfile
 } from '../types';
+import type { AiOrganizationContext } from '../organization-types';
 import type { AiAdapter } from './adapter';
 
 export interface AiUsageSink {
@@ -55,6 +56,22 @@ export class MeteredAiAdapter implements AiAdapter {
     );
   }
 
+  planOrganization(
+    profile: ModelProfile,
+    context: AiOrganizationContext,
+    signal: AbortSignal
+  ) {
+    if (!this.adapter.planOrganization)
+      return Promise.reject(new Error('所选协议不支持全量目录规划'));
+    return this.measure(
+      profile,
+      `organize-${context.mode}`,
+      signal,
+      () => this.adapter.planOrganization!(profile, context, signal),
+      (result) => result.usageTokens
+    );
+  }
+
   reviewCaptureHistory(
     profile: ModelProfile,
     context: AiCaptureReviewContext,
@@ -78,11 +95,8 @@ export class MeteredAiAdapter implements AiAdapter {
   ): Promise<number[][]> {
     if (!this.adapter.embed)
       return Promise.reject(new Error('所选协议不支持向量请求'));
-    return this.measure(
-      profile,
-      'embed',
-      signal,
-      () => this.adapter.embed!(profile, texts, signal)
+    return this.measure(profile, 'embed', signal, () =>
+      this.adapter.embed!(profile, texts, signal)
     );
   }
 

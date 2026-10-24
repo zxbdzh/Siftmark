@@ -1,14 +1,12 @@
 import { ProviderError } from '../network/errors';
 import { ProfileLimiter } from '../network/profile-limiter';
 import { modelProfileKey } from '../profiles/profile-key';
-import type {
-  AiProtocol,
-  ModelProfile
-} from '../types';
+import type { AiProtocol, ModelProfile } from '../types';
 import type { AiAdapter } from './adapter';
 
 export class ProfileLimitedAiAdapter implements AiAdapter {
   readonly protocol: AiProtocol;
+  readonly planOrganization?: AiAdapter['planOrganization'];
   readonly reviewCaptureHistory?: AiAdapter['reviewCaptureHistory'];
   readonly embed?: AiAdapter['embed'];
 
@@ -18,6 +16,16 @@ export class ProfileLimitedAiAdapter implements AiAdapter {
   ) {
     this.protocol = adapter.protocol;
 
+    if (adapter.planOrganization) {
+      const planOrganization = adapter.planOrganization.bind(adapter);
+      this.planOrganization = (profile, context, signal) =>
+        this.schedule(
+          profile,
+          signal,
+          () => planOrganization(profile, context, signal),
+          context.onRequestState
+        );
+    }
     if (adapter.reviewCaptureHistory) {
       const reviewCaptureHistory = adapter.reviewCaptureHistory.bind(adapter);
       this.reviewCaptureHistory = (profile, context, signal) =>
@@ -33,10 +41,7 @@ export class ProfileLimitedAiAdapter implements AiAdapter {
     }
   }
 
-  testConnection(
-    profile: ModelProfile,
-    signal: AbortSignal
-  ) {
+  testConnection(profile: ModelProfile, signal: AbortSignal) {
     return this.schedule(profile, signal, () =>
       this.adapter.testConnection(profile, signal)
     );
@@ -55,14 +60,19 @@ export class ProfileLimitedAiAdapter implements AiAdapter {
   private schedule<T>(
     profile: ModelProfile,
     signal: AbortSignal,
-    operation: () => Promise<T>
+    operation: () => Promise<T>,
+    report?: Parameters<ProfileLimiter['schedule']>[2]
   ): Promise<T> {
     if (signal.aborted) return Promise.reject(abortError());
 
-    const scheduled = this.limiter.schedule(modelProfileKey(profile), () => {
-      if (signal.aborted) throw abortError();
-      return operation();
-    });
+    const scheduled = this.limiter.schedule(
+      modelProfileKey(profile),
+      () => {
+        if (signal.aborted) throw abortError();
+        return operation();
+      },
+      report
+    );
 
     return rejectOnAbort(scheduled, signal);
   }
@@ -72,7 +82,10 @@ function abortError(): ProviderError {
   return new ProviderError('abort', '模型请求已取消');
 }
 
-function rejectOnAbort<T>(operation: Promise<T>, signal: AbortSignal): Promise<T> {
+function rejectOnAbort<T>(
+  operation: Promise<T>,
+  signal: AbortSignal
+): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     let settled = false;
     const finish = (callback: () => void) => {

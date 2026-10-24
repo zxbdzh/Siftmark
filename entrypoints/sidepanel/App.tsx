@@ -373,11 +373,13 @@ export default function App() {
       currentState === 'adjusting' ||
       currentState === 'failed' ||
       currentState === 'applied';
-    if (canFocus)
-      globalThis.setTimeout(
-        () => composerRef.current?.focus({ preventScroll: true }),
-        0
-      );
+    if (canFocus) {
+      const timer = globalThis.setTimeout(() => {
+        if (workspaceRef.current?.dataset.view === 'conversation')
+          composerRef.current?.focus({ preventScroll: true });
+      }, 0);
+      return () => globalThis.clearTimeout(timer);
+    }
   }, [activeSessionId]);
 
   useEffect(() => {

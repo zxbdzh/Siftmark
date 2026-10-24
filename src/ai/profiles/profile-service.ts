@@ -23,6 +23,8 @@ export class ModelProfileService {
     const adapter = this.adapters.get(profile.protocol);
     if (!adapter) throw new Error('所选协议不可用');
     const probe = await adapter.testConnection(profile, signal);
+    // 用户已关闭编辑器时，晚到的验证结果不能覆盖最后一份可用配置。
+    signal.throwIfAborted();
     const requiresText = profile.capabilities.some(
       (capability) => capability !== 'embed'
     );

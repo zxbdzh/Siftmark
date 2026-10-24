@@ -1721,7 +1721,7 @@ textarea:disabled {
 
   .message-list article[data-role='assistant'][data-arrival='remote'] {
     transform: none;
-    transition: opacity var(--agent-motion-fast) ease;
+    transition: opacity var(--agent-motion-fast) ease !important;
   }
 
   @starting-style {

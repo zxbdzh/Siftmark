@@ -176,6 +176,35 @@ describe('CaptureOverlay', () => {
     expect(onAction.mock.calls).toEqual([['allow'], ['reject'], ['adjust']]);
   });
 
+  it('lets Ctrl+D approval popup send a direct Agent message', () => {
+    const onMessage = vi.fn();
+    render(
+      <CaptureOverlay
+        view={{
+          sessionId: 'session-1',
+          phase: 'approval',
+          title: '测试收藏',
+          destinationPath: ['书签栏', '开发'],
+          canAdjust: true,
+          messages: [
+            { id: 'assistant-1', role: 'assistant', text: '当前建议放在开发目录。', createdAt: 1 }
+          ]
+        }}
+        onAction={vi.fn()}
+        onMessage={onMessage}
+        onDismiss={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText('当前建议放在开发目录。')).toBeVisible();
+    const composer = screen.getByRole('textbox', { name: '与 Agent 对话' });
+    fireEvent.change(composer, { target: { value: '请换到产品目录' } });
+    fireEvent.click(screen.getByRole('button', { name: '发送对话' }));
+
+    expect(onMessage).toHaveBeenCalledWith('请换到产品目录');
+    expect(composer).toHaveValue('');
+  });
+
   it('offers undo and adjustment after automatic organization', () => {
     const onAction = vi.fn();
     render(

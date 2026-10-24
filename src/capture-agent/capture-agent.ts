@@ -58,6 +58,7 @@ export interface CaptureAgentDependencies {
   planner: CapturePlanner;
   executor: CaptureExecutor;
   getSpecialFolderIds(): Promise<string[]>;
+  recordSoftPreferences?: boolean;
   onSessionChanged?: (session: CaptureSession) => void | Promise<void>;
   now?: () => number;
   createId?: () => string;
@@ -538,7 +539,7 @@ export class CaptureAgent {
   }
 
   private async undo(session: CaptureSession): Promise<CaptureSession> {
-    if (session.state !== 'applied' || !session.operationBatchId)
+    if ((session.state !== 'applied' && !(session.trigger === 'learning-review' && session.state === 'failed')) || !session.operationBatchId)
       throw new Error('当前收藏没有可撤销的操作');
     const result = await this.dependencies.executor.undo(
       session.operationBatchId
@@ -664,6 +665,7 @@ export class CaptureAgent {
       (message) =>
         message.role === 'user' && isFixedRuleInstruction(message.text)
     );
+    if (!explicitRule && this.dependencies.recordSoftPreferences === false) return;
     const preference = preferenceFromDecision({
       id: this.createId(),
       session,

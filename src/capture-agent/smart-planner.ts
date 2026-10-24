@@ -13,6 +13,7 @@ import { normalizeUrlConservatively } from '../health/url-normalization';
 import { RuleEngine } from '../rules/rule-engine';
 import type { ChromeSettingsRepository } from '../settings/settings-repository';
 import type { MetadataRepository } from '../storage/types';
+import { experienceScore } from './experience-service';
 import type {
   CapturePlanner,
   CapturePlannerInput,
@@ -108,7 +109,7 @@ export class SmartCapturePlanner implements CapturePlanner {
       catalog
     );
     const effectivePreferences = preferences.slice(0, MAX_AGENT_PREFERENCES);
-    const related = findRelated(input.source, nodes).slice(
+    const related = findRelated(input.source, nodes).sort((left, right) => Number(right.relation === 'exact') - Number(left.relation === 'exact') || experienceScore(right, effectivePreferences) - experienceScore(left, effectivePreferences) || right.score - left.score).slice(
       0,
       MAX_RELATED_BOOKMARKS
     );
@@ -215,7 +216,7 @@ export class SmartCapturePlanner implements CapturePlanner {
       ...(useWebSearch ? { webSearch: true } : {}),
       additionalRules: buildAgentRules(
         promptRules,
-        effectivePreferences,
+        effectivePreferences.filter((preference) => preference.kind === 'fixed-rule'),
         revision
       ),
       availableFolderPaths,
@@ -330,8 +331,22 @@ export class SmartCapturePlanner implements CapturePlanner {
         }
       ]
     });
+    const hasFixedPreferences = effectivePreferences.some((preference) => preference.kind === 'fixed-rule');
+    const preferred = !revision && !hasFixedPreferences
+      ? effectivePreferences.find((preference) => preference.kind === 'learned' && preference.action === 'prefer-folder' &&
+        catalog.some((entry) => entry.node.id === preference.destinationFolderId))
+      : undefined;
+    const avoided = effectivePreferences.filter((preference) => preference.action === 'avoid-folder' &&
+      (!hasFixedPreferences || preference.kind === 'fixed-rule'));
+    const analysisAvoided = avoided.some((preference) => normalizePath(preference.destinationPath) === normalizePath(analysis.folderPath));
+    // 经验仅在本地调整方案；不上传学习记录，也不绕过原有审批及当前用户指令。
+    const localPath = preferred?.destinationPath ?? (!revision && analysisAvoided
+      ? rankFolderCandidates(catalog, { ...input, preferences: effectivePreferences }, nodes, settings.preferredFolderDepth)
+        .find((entry) => !avoided.some((preference) => normalizePath(preference.destinationPath) === normalizePath(entry.logicalPath)))?.logicalPath
+      : undefined);
+    const usedLocalPath = localPath && normalizePath(localPath) !== normalizePath(analysis.folderPath);
     const resolvedDestination = resolveDestination(
-      analysis.folderPath,
+      localPath ?? analysis.folderPath,
       catalog,
       revision?.explicitUserCreation === true,
       maxNewFolderLevels,
@@ -411,15 +426,15 @@ export class SmartCapturePlanner implements CapturePlanner {
         : input.source.title,
       tags: analysis.tags,
       summary: analysis.summary,
-      confidence: analysis.confidence,
+      confidence: usedLocalPath ? 'medium' : analysis.confidence,
       reason: resolvedDestination.wasTruncated
         ? `${analysis.reason}；已按设置限制新建层级`
-        : analysis.reason,
+        : usedLocalPath ? `${analysis.reason}；本地经验调整了建议目录，等待确认` : analysis.reason,
       relatedBookmarks,
       generatedAt: this.now(),
       riskHints: {
         ruleConflict: Boolean(
-          terminalFolderId && terminalFolderId !== destination.folderId
+          usedLocalPath || (terminalFolderId && terminalFolderId !== destination.folderId)
         ),
         pageInformation:
           input.page?.description?.trim() ||
@@ -445,7 +460,9 @@ interface RelatedNode extends BookmarkNode {
   score: number;
 }
 
-function buildFolderCatalog(nodes: BookmarkNode[]): FolderCatalogEntry[] {
+export function buildFolderCatalog(
+  nodes: BookmarkNode[]
+): FolderCatalogEntry[] {
   return nodes
     .filter((node) => !isBookmark(node) && node.id !== '0')
     .map((node) => {
@@ -458,7 +475,7 @@ function buildFolderCatalog(nodes: BookmarkNode[]): FolderCatalogEntry[] {
     });
 }
 
-function rankFolderCandidates(
+export function rankFolderCandidates(
   catalog: FolderCatalogEntry[],
   input: CapturePlannerInput,
   nodes: BookmarkNode[],
@@ -470,6 +487,18 @@ function rankFolderCandidates(
   const terms = tokenize(
     `${input.source.title} ${input.page?.description ?? ''} ${domainOf(input.source.url)}`
   );
+  const byId = new Map(nodes.map((node) => [node.id, node]));
+  const relatedFolders = new Set<string>();
+  for (const bookmark of findRelated(input.source, nodes).slice(
+    0,
+    MAX_RELATED_BOOKMARKS
+  )) {
+    let parent = byId.get(bookmark.parentId);
+    while (parent && parent.id !== '0' && !relatedFolders.has(parent.id)) {
+      relatedFolders.add(parent.id);
+      parent = byId.get(parent.parentId);
+    }
+  }
   return [...catalog]
     .filter((entry) => entry.logicalPath.length > 0)
     .map((entry) => {
@@ -483,7 +512,8 @@ function rankFolderCandidates(
       );
       const score =
         preferenceScore(input.preferences, normalized) +
-        (normalized === currentPath ? 20 : 0) +
+        (normalized === currentPath ? 4 : 0) +
+        (relatedFolders.has(entry.node.id) ? 12 : 0) +
         tokenScore * 4 -
         depthDistance * 0.25;
       return { entry, score };
@@ -588,7 +618,7 @@ function resolveDestination(
   };
 }
 
-function findRelated(
+export function findRelated(
   source: BookmarkNode & { url: string },
   nodes: BookmarkNode[]
 ): RelatedNode[] {
@@ -607,9 +637,8 @@ function findRelated(
       normalizedTitle(node.title)
     );
     if (
-      sourceDomain &&
-      sourceDomain === domainOf(node.url) &&
-      titleScore >= 0.5
+      titleScore >= 0.6 ||
+      (sourceDomain && sourceDomain === domainOf(node.url) && titleScore >= 0.3)
     )
       related.push({ ...node, relation: 'similar', score: titleScore });
   }
@@ -791,6 +820,9 @@ function tokenize(value: string): Set<string> {
       .normalize('NFKC')
       .toLocaleLowerCase()
       .split(/[^\p{L}\p{N}]+/u)
+      .flatMap((term) =>
+        /\p{Script=Han}/u.test(term) ? [term, ...bigrams(term)] : [term]
+      )
       .filter((term) => term.length >= 2)
   );
 }

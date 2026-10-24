@@ -1,390 +1,147 @@
-import {
-  BrainCircuit,
-  FolderInput,
-  MoonStar,
-  Play,
-  Save,
-  ShieldCheck,
-  Trash2
-} from 'lucide-react';
+import { BrainCircuit, FolderInput, Play, Save, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useState, type CSSProperties } from 'react';
-import type {
-  CaptureLearningMemory,
-  CapturePreference,
-  CapturePreferenceRepository
-} from '../../capture-agent';
-import {
-  defaultSleepReviewSettings,
-  sleepReviewBounds,
-  type ChromeSettingsRepository,
-  type SleepReviewSettings,
-  type SleepReviewStatus
-} from '../../settings/settings-repository';
+import type { AgentExperienceService } from '../../capture-agent/experience-service';
+import type { CaptureLearningMemory, CapturePreference, CaptureSession } from '../../capture-agent';
+import { defaultSleepReviewSettings, type ChromeSettingsRepository, type SleepReviewSettings } from '../../settings/settings-repository';
 
-export function CaptureLearningSection({
-  repository,
-  settingsRepository
-}: {
-  repository: CapturePreferenceRepository;
+type LearningSnapshot = Awaited<ReturnType<AgentExperienceService['inspect']>>;
+
+export function CaptureLearningSection({ settingsRepository, experiences }: {
   settingsRepository: ChromeSettingsRepository;
+  experiences: AgentExperienceService;
 }) {
-  const [settings, setSettings] = useState<SleepReviewSettings>(
-    defaultSleepReviewSettings
-  );
-  const [reviewStatus, setReviewStatus] = useState<SleepReviewStatus>({
-    state: 'idle'
-  });
-  const [memories, setMemories] = useState<CaptureLearningMemory[]>([]);
-  const [busy, setBusy] = useState<'save' | 'review' | 'clear' | ''>('');
+  const [snapshot, setSnapshot] = useState<LearningSnapshot>();
+  const [reviewSettings, setReviewSettings] = useState<SleepReviewSettings>(defaultSleepReviewSettings);
+  const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
-
   const load = useCallback(async () => {
-    const [storedSettings, storedStatus, storedMemories] = await Promise.all([
-      settingsRepository.getSleepReviewSettings(),
-      settingsRepository.getSleepReviewStatus(),
-      repository.list('learned')
-    ]);
-    setSettings(storedSettings);
-    setReviewStatus(storedStatus);
-    setMemories(storedMemories.filter(isLearningMemory));
-  }, [repository, settingsRepository]);
-
+    const [next, review] = await Promise.all([experiences.inspect(), settingsRepository.getSleepReviewSettings()]);
+    setSnapshot(next); setReviewSettings(review);
+  }, [experiences, settingsRepository]);
   useEffect(() => {
-    void load();
-    const handleFocus = () => void load();
-    const handleMessage = (event: unknown) => {
-      if ((event as { type?: string }).type === 'capture-learning-changed')
-        void load();
+    const refresh = () => { void load().catch((error: unknown) => setMessage(error instanceof Error ? error.message : '学习数据读取失败')); };
+    refresh(); window.addEventListener('focus', refresh);
+    const onMessage = (event: unknown) => {
+      if (['capture-learning-changed', 'capture-agent-sessions-changed'].includes((event as { type?: string }).type ?? '')) refresh();
     };
-    window.addEventListener('focus', handleFocus);
-    browser.runtime.onMessage.addListener(handleMessage);
-    return () => {
-      window.removeEventListener('focus', handleFocus);
-      browser.runtime.onMessage.removeListener(handleMessage);
-    };
+    browser.runtime.onMessage.addListener(onMessage);
+    return () => { window.removeEventListener('focus', refresh); browser.runtime.onMessage.removeListener(onMessage); };
   }, [load]);
 
-  const save = async () => {
-    setBusy('save');
-    try {
-      await settingsRepository.setSleepReviewSettings(settings);
-      setMessage(
-        settings.enabled ? '睡眠回顾已启用，将在你空闲时运行' : '睡眠回顾已关闭'
-      );
-    } finally {
-      setBusy('');
-    }
+  const run = async (action: () => Promise<string>) => {
+    setBusy(true);
+    try { setMessage(await action()); await load(); }
+    catch (error) { setMessage(`操作未完成：${error instanceof Error ? error.message : '请重试'}`); }
+    finally { setBusy(false); }
   };
-
-  const reviewNow = async () => {
-    setBusy('review');
-    setMessage('');
-    try {
-      await settingsRepository.setSleepReviewSettings(settings);
-      const result = (await browser.runtime.sendMessage({
-        type: 'capture-learning-review-now'
-      })) as { summary?: string } | undefined;
-      setMessage(result?.summary ?? '回顾请求已完成');
-      await load();
-    } catch (error) {
-      setMessage(
-        `回顾未完成：${
-          error instanceof Error ? error.message : '无法连接后台 Agent'
-        }`
-      );
-    } finally {
-      setBusy('');
-    }
-  };
-
-  const remove = async (memory: CaptureLearningMemory) => {
-    await repository.remove(memory.id);
-    setMemories((current) =>
-      current.filter((candidate) => candidate.id !== memory.id)
-    );
-    setMessage(`已删除 ${memory.domain} 的学习记忆`);
-  };
-
-  const clear = async () => {
-    setBusy('clear');
-    try {
-      const count = await repository.clear('learned');
-      setMemories([]);
-      setMessage(`已清空 ${count} 条学习记忆`);
-    } finally {
-      setBusy('');
-    }
-  };
-
-  return (
-    <section
-      className="capture-learning-section"
-      aria-labelledby="capture-learning-title"
-    >
-      <div className="section-title-row">
-        <BrainCircuit aria-hidden="true" />
-        <div>
-          <h2 id="capture-learning-title">Agent 学习与睡眠回顾</h2>
-          <p>从允许、拒绝和最终目录中提炼本地记忆，改进以后的归类。</p>
-        </div>
-      </div>
-
-      <div className="learning-status" data-state={reviewStatus.state}>
-        <span className="learning-status-mark" aria-hidden="true">
-          <MoonStar />
-        </span>
-        <div>
-          <strong>{statusTitle(reviewStatus)}</strong>
-          <p>{statusDetail(reviewStatus)}</p>
-        </div>
-        <span className="learning-memory-count">{memories.length} 条记忆</span>
-      </div>
-
-      {reviewStatus.attempts?.length ? (
-        <details className="sleep-review-attempts">
-          <summary>最近触发记录</summary>
-          <ol>
-            {[...reviewStatus.attempts].reverse().map((attempt) => (
-              <li
-                key={`${attempt.attemptedAt}-${attempt.trigger}-${attempt.outcome}`}
-                data-outcome={attempt.outcome}
-              >
-                <i aria-hidden="true" />
-                <span>
-                  <strong>{sleepReviewTriggerLabel(attempt.trigger)}</strong>
-                  <small>{attempt.summary}</small>
-                </span>
-                <time dateTime={new Date(attempt.attemptedAt).toISOString()}>
-                  {formatDate(attempt.attemptedAt)}
-                </time>
-              </li>
-            ))}
-          </ol>
-        </details>
-      ) : null}
-
-      <div className="preference-list">
-        <label className="preference-row">
-          <span>
-            <strong>空闲时自动回顾</strong>
-            <small>
-              使用你配置的 Agent
-              模型和额度；只更新本地记忆，不会移动书签或创建目录。
-            </small>
-          </span>
-          <span className="learning-toggle">
-            <input
-              type="checkbox"
-              checked={settings.enabled}
-              onChange={(event) =>
-                setSettings({ ...settings, enabled: event.target.checked })
-              }
-            />
-            <span className="learning-toggle-track" aria-hidden="true" />
-          </span>
-        </label>
-        <label className="preference-row range-row">
-          <span>
-            <strong>空闲判定</strong>
-            <small>Chromium 连续无操作多久后可以开始回顾。</small>
-          </span>
-          <span className="range-control">
-            <input
-              type="range"
-              aria-label="睡眠回顾空闲判定"
-              min={sleepReviewBounds.idleMinutes.min}
-              max={sleepReviewBounds.idleMinutes.max}
-              step="5"
-              disabled={!settings.enabled}
-              value={settings.idleMinutes}
-              style={rangeProgressStyle(
-                settings.idleMinutes,
-                sleepReviewBounds.idleMinutes
-              )}
-              onChange={(event) =>
-                setSettings({
-                  ...settings,
-                  idleMinutes: Number(event.target.value)
-                })
-              }
-            />
-            <output>{settings.idleMinutes} 分</output>
-          </span>
-        </label>
-        <label className="preference-row range-row">
-          <span>
-            <strong>单批最多结果</strong>
-            <small>
-              至少积累 3 个新结果才运行，每 12 小时最多自动回顾一次。
-            </small>
-          </span>
-          <span className="range-control">
-            <input
-              type="range"
-              aria-label="睡眠回顾单批上限"
-              min={sleepReviewBounds.batchSize.min}
-              max={sleepReviewBounds.batchSize.max}
-              step="1"
-              disabled={!settings.enabled}
-              value={settings.batchSize}
-              style={rangeProgressStyle(
-                settings.batchSize,
-                sleepReviewBounds.batchSize
-              )}
-              onChange={(event) =>
-                setSettings({
-                  ...settings,
-                  batchSize: Number(event.target.value)
-                })
-              }
-            />
-            <output>{settings.batchSize} 条</output>
-          </span>
-        </label>
-      </div>
-
-      <div className="section-actions learning-actions">
-        <button
-          type="button"
-          className="primary-button"
-          disabled={Boolean(busy)}
-          onClick={() => void save()}
-        >
-          <Save aria-hidden="true" />
-          {busy === 'save' ? '正在保存' : '保存设置'}
-        </button>
-        <button
-          type="button"
-          disabled={!settings.enabled || Boolean(busy)}
-          onClick={() => void reviewNow()}
-        >
-          <Play aria-hidden="true" />
-          {busy === 'review' ? '正在回顾' : '现在回顾'}
-        </button>
-        <output aria-live="polite">{message}</output>
-      </div>
-
-      <div className="learning-memory-heading">
-        <div>
-          <ShieldCheck aria-hidden="true" />
-          <h3>学到的弱偏好</h3>
-        </div>
-        {memories.length > 0 ? (
-          <div className="section-actions">
-            <a className="learning-history-link" href="#agent">
-              查看采用记录
-            </a>
-            <button
-              type="button"
-              className="danger-text-button"
-              disabled={Boolean(busy)}
-              onClick={() => void clear()}
-            >
-              <Trash2 aria-hidden="true" />
-              {busy === 'clear' ? '正在清空' : '清空记忆'}
-            </button>
-          </div>
-        ) : null}
-      </div>
-
-      {memories.length > 0 ? (
-        <ul className="learning-memory-list">
-          {memories.map((memory) => (
-            <li key={memory.id}>
-              <span className="memory-icon" aria-hidden="true">
-                <FolderInput />
-              </span>
-              <div className="memory-main">
-                <div>
-                  <strong>{memory.domain}</strong>
-                  <span data-confidence={memory.confidence}>
-                    {confidenceLabel(memory.confidence)}置信度
-                  </span>
-                </div>
-                <p>{memory.reviewSummary}</p>
-                <small>
-                  {memory.action === 'prefer-folder' ? '偏好' : '避开'}：
-                  {memory.destinationPath.join(' / ') || '书签栏'} · 来自{' '}
-                  {memory.evidenceCount} 个结果 ·{' '}
-                  {formatDate(memory.reviewedAt)}
-                </small>
-              </div>
-              <button
-                type="button"
-                className="icon-button"
-                title="删除记忆"
-                aria-label={`删除 ${memory.domain} 的学习记忆`}
-                onClick={() => void remove(memory)}
-              >
-                <Trash2 aria-hidden="true" />
-              </button>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="agent-rule-empty">
-          暂无学习记忆。收藏至少 1 个网页后，可点击上方「现在回顾」即时提炼，或开启空闲回顾自动运行。
-        </p>
-      )}
-    </section>
-  );
-}
-
-function rangeProgressStyle(
-  value: number,
-  bounds: { min: number; max: number }
-): CSSProperties {
-  const progress = ((value - bounds.min) / (bounds.max - bounds.min)) * 100;
-  return { '--range-progress': `${progress}%` } as CSSProperties;
-}
-
-function isLearningMemory(
-  preference: CapturePreference
-): preference is CaptureLearningMemory {
-  return preference.kind === 'learned' && preference.source === 'sleep-review';
-}
-
-function statusTitle(status: SleepReviewStatus): string {
-  if (status.state === 'running') return '正在进行睡眠回顾';
-  if (status.state === 'learned') return '最近一次回顾学到了新偏好';
-  if (status.state === 'reviewed') return '最近一次回顾没有发现稳定规律';
-  if (status.state === 'waiting') return '正在积累新的收藏结果';
-  if (status.state === 'failed') return '最近一次回顾未完成';
-  if (status.state === 'skipped') return '本次回顾已跳过';
-  return '睡眠回顾待机中';
-}
-
-function statusDetail(status: SleepReviewStatus): string {
-  const trigger = status.lastTrigger
-    ? `${sleepReviewTriggerLabel(status.lastTrigger)} · `
-    : '';
-  if (status.error) return `${trigger}${status.error}`;
-  if (status.summary) return `${trigger}${status.summary}`;
-  return '启用后仅在你空闲时整理结构化分析结果。';
-}
-
-function sleepReviewTriggerLabel(
-  trigger: NonNullable<SleepReviewStatus['lastTrigger']>
-): string {
-  if (trigger === 'manual') return '手动触发';
-  if (trigger === 'idle') return '进入空闲时自动触发';
-  if (trigger === 'alarm') return '空闲补偿检查自动触发';
-  if (trigger === 'settings') return '启用设置后自动触发';
-  if (trigger === 'installed') return '扩展更新后自动触发';
-  return '后台恢复后自动触发';
-}
-
-function confidenceLabel(confidence: CaptureLearningMemory['confidence']) {
-  if (confidence === 'high') return '高';
-  if (confidence === 'medium') return '中';
-  return '低';
-}
-
-function formatDate(value: number): string {
-  return new Date(value).toLocaleString('zh-CN', {
-    month: 'numeric',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
+  const enabled = snapshot?.configuration.enabled ?? false;
+  const changeConsent = (nextEnabled: boolean, proactive: boolean) => run(async () => {
+    await experiences.configure(nextEnabled, proactive);
+    return nextEnabled ? '本地学习已启用；只记录此后在 Siftmark 中的明确操作' : '本地学习已暂停：不再积累证据，也不应用学习经验';
   });
+  const respond = (session: CaptureSession, action: 'allow' | 'reject' | 'undo' | 'end') => run(async () => {
+    const response = await browser.runtime.sendMessage({ type: 'capture-agent-action', input: { sessionId: session.id, action } }) as { success?: boolean; error?: string };
+    if (!response?.success) throw new Error(response?.error ?? '后台 Agent 暂时不可用，请重试');
+    return action === 'end' ? '已结束中断的方案；原生书签保持当前状态' : action === 'undo' ? '已撤销方案，并修正相关学习证据' : action === 'reject' ? '已拒绝方案，本次反馈用于修正后续建议' : '已按确认方案执行；可撤销';
+  });
+
+  return <section className="capture-learning-section" aria-labelledby="capture-learning-title">
+    <div className="section-title-row"><BrainCircuit aria-hidden="true" /><div>
+      <h2 id="capture-learning-title">Agent 本地学习与复盘</h2>
+      <p>观察明确反馈 → 归纳经验 → 改进建议 → 根据结果修正。</p>
+    </div></div>
+    <div className="learning-status" data-state={enabled ? 'learned' : 'idle'}>
+      <span className="learning-status-mark" aria-hidden="true"><BrainCircuit /></span>
+      <div><strong>{enabled ? '本地学习运行中' : '本地学习已暂停'}</strong><p>
+        {snapshot?.evidenceCount ?? 0} 条短期证据 · {snapshot?.memories.length ?? 0} 条长期经验 · 学习记录不发送给模型
+      </p></div>
+      <span className="learning-memory-count">{snapshot?.memories.length ?? 0} 条经验</span>
+    </div>
+    <div className="preference-list">
+      <label className="preference-row"><span><strong>本地学习</strong><small>
+        授权记录 Siftmark 内的收藏确认、建议拒绝、分类调整和检索后选择；不观察其他浏览行为，不采集网页正文。
+      </small></span><span className="learning-toggle"><input type="checkbox" checked={enabled} disabled={busy || !snapshot}
+        onChange={(event) => void changeConsent(event.target.checked, snapshot?.configuration.proactive ?? false)} />
+        <span className="learning-toggle-track" aria-hidden="true" /></span></label>
+      <label className="preference-row"><span><strong>空闲时主动检查</strong><small>
+        每 12 小时最多一轮，扫描最多 200 个书签，最多保留 3 个待确认方案；仅本地运行，不调用模型。
+      </small></span><span className="learning-toggle"><input type="checkbox" checked={snapshot?.configuration.proactive ?? false}
+        disabled={!enabled || busy} onChange={(event) => void changeConsent(enabled, event.target.checked)} />
+        <span className="learning-toggle-track" aria-hidden="true" /></span></label>
+      <label className="preference-row"><span><strong>空闲判定</strong><small>扩展后台恢复后仍受同一冷却和方案上限约束。</small></span>
+        <span className="range-control"><input type="range" min="5" max="60" step="5" aria-label="睡眠回顾空闲判定" value={reviewSettings.idleMinutes} style={{ '--range-progress': `${((reviewSettings.idleMinutes - 5) / 55) * 100}%` } as CSSProperties}
+          onChange={(event) => setReviewSettings({ ...reviewSettings, idleMinutes: Number(event.target.value) })} /><output>{reviewSettings.idleMinutes} 分</output></span>
+      </label>
+    </div>
+    <div className="section-actions learning-actions">
+      <button type="button" disabled={busy} onClick={() => void run(async () => {
+        await settingsRepository.setSleepReviewSettings({ ...reviewSettings, enabled: enabled && (snapshot?.configuration.proactive ?? false) });
+        return '空闲判定已保存';
+      })}><Save aria-hidden="true" />保存设置</button>
+      <button type="button" disabled={!enabled || busy} onClick={() => void run(async () => {
+        const result = await browser.runtime.sendMessage({ type: 'capture-learning-review-now' }) as { summary?: string };
+        if (!result?.summary) throw new Error('后台 Agent 未返回结果，请重试');
+        return result.summary;
+      })}>
+        <Play aria-hidden="true" />现在回顾</button>
+      <button type="button" disabled={busy || !snapshot} onClick={() => {
+        if (window.confirm('清空短期证据、长期经验和未执行的主动方案？原生书签、固定规则和撤销记录保留。'))
+          void run(async () => { await experiences.clear(); return '学习数据已清空；旧任务不会重新生成这些记忆'; });
+      }}><Trash2 aria-hidden="true" />清空学习数据</button>
+    </div>
+    <output aria-live="polite">{message}</output>
+    <div className="learning-memory-heading"><h3>学到的偏好与可复用策略</h3><a href="#agent" className="learning-history-link">查看采用记录</a></div>
+    <p>任务上下文保留在 Agent 记录。短期证据保留 30 天，普通经验至少需要 2 个不同书签的一致反馈，90 天未更新则停止采用。用户纠正优先。</p>
+    {snapshot?.memories.length ? <ul className="learning-memory-list">{snapshot.memories.map((memory) =>
+      <MemoryRow key={memory.id} memory={memory} folders={snapshot.folders} disabled={busy || !enabled}
+        onForget={() => void run(async () => { await experiences.forget(memory.id); return `已删除 ${memory.domain} 的学习记忆`; })}
+        onCorrect={(folderId, action) => void run(async () => { await experiences.correct(memory.id, folderId, action); return '纠正已保存，后续建议将使用新的偏好'; })} />
+    )}</ul> : <p className="agent-rule-empty">暂无长期经验。开启本地学习后，对两个不同书签作出一致选择即可形成经验；单次操作只保留为短期证据。</p>}
+    <div className="learning-memory-heading"><h3>主动发现的待确认方案</h3></div>
+    {snapshot?.plans.length ? <ul className="learning-memory-list">{snapshot.plans.map((session) => <li key={session.id}>
+      <FolderInput aria-hidden="true" /><div className="memory-main"><strong>{session.sourceSnapshot.title}</strong>
+        <p>{session.plan?.reason}</p><small>{session.plan?.destination.path.map((folder) => folder.title).join(' / ')} · {session.state === 'applied' ? '已执行，可撤销' : '等待明确确认'}</small>
+        <div className="section-actions">{session.state === 'pending' ? <>
+          <button type="button" disabled={busy || !enabled} onClick={() => void respond(session, 'allow')}>确认执行</button>
+          <button type="button" disabled={busy} onClick={() => void respond(session, 'reject')}>拒绝建议</button>
+        </> : session.state === 'applied' ? <button type="button" disabled={busy} onClick={() => void respond(session, 'undo')}>撤销此方案</button> : <>
+          <p>{session.failure?.message}</p>
+          {session.operationBatchId ? <button type="button" disabled={busy} onClick={() => void respond(session, 'undo')}>撤销已记录操作</button> : null}
+          <button type="button" disabled={busy} onClick={() => void respond(session, 'end')}>结束此方案</button>
+        </>}</div>
+      </div></li>)}</ul> : <p className="agent-rule-empty">暂无待确认方案。已有经验后可点击「现在回顾」检查位置不一致的书签。</p>}
+  </section>;
+}
+
+function MemoryRow({ memory, folders, disabled, onForget, onCorrect }: {
+  memory: CaptureLearningMemory;
+  folders: LearningSnapshot['folders'];
+  disabled: boolean;
+  onForget(): void;
+  onCorrect(folderId: string, action: CapturePreference['action']): void;
+}) {
+  const [folderId, setFolderId] = useState(memory.destinationFolderId ?? '');
+  const [action, setAction] = useState(memory.action);
+  useEffect(() => { setFolderId(memory.destinationFolderId ?? ''); setAction(memory.action); }, [memory.destinationFolderId, memory.action]);
+  const expired = (memory.expiresAt ?? memory.updatedAt + 90 * 86_400_000) <= Date.now();
+  const missing = !folders.some((folder) => folder.id === memory.destinationFolderId);
+  return <li><FolderInput aria-hidden="true" /><div className="memory-main">
+    <strong>{memory.domain}</strong><p>{memory.reviewSummary}</p><small>
+      {memory.action === 'prefer-folder' ? '优先' : '避开'}：{memory.destinationPath.join(' / ') || '书签栏'} ·
+      {memory.queryTokens?.length ? `检索词：${memory.queryTokens.join(' ')} · ` : ''}
+      {memory.evidenceCount} 个来源 · {memory.confidence === 'high' ? '高' : memory.confidence === 'medium' ? '中' : '低'}置信度 ·
+      {missing ? '目录已失效' : expired ? '已过期，不再采用' : memory.status === 'conflicted' ? '反馈冲突，暂不采用' : memory.status === 'corrected' ? '用户已纠正' : '可采用'} ·
+      更新于 {new Date(memory.updatedAt).toLocaleString('zh-CN')}
+    </small>
+    <details><summary>查看来源与纠正</summary>
+      <p>来源：{memory.source === 'user-correction' ? '用户明确纠正' : memory.source === 'local-feedback' ? '本地操作反馈归纳' : '历史睡眠回顾'}；证据 ID：{memory.sourceEventIds?.join('、') ?? memory.sourceSessionId}</p>
+      <div className="section-actions">
+        <label>策略<select aria-label={`纠正 ${memory.domain} 的策略`} value={action} disabled={disabled} onChange={(event) => setAction(event.target.value as CapturePreference['action'])}>
+          <option value="prefer-folder">优先目录</option><option value="avoid-folder">避开目录</option></select></label>
+        <label>目录<select aria-label={`纠正 ${memory.domain} 的目录`} value={folderId} disabled={disabled} onChange={(event) => setFolderId(event.target.value)}>
+          <option value="">选择当前有效目录</option>{folders.map((folder) => <option key={folder.id} value={folder.id}>{folder.title || '书签'}</option>)}</select></label>
+        <button type="button" disabled={disabled || !folderId} onClick={() => onCorrect(folderId, action)}>保存纠正</button>
+      </div>
+    </details>
+  </div><button type="button" className="icon-button" aria-label={`删除 ${memory.domain} 的学习记忆`} onClick={onForget}><Trash2 aria-hidden="true" /></button></li>;
 }

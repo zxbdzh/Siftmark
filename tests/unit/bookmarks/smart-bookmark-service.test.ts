@@ -36,11 +36,13 @@ describe('SmartBookmarkService', () => {
       url: 'https://user:password@example.test/page?token=x#section'
     };
     const bookmarks = {
-      getTree: vi.fn().mockResolvedValue([
-        { id: 'bar', parentId: '0', index: 0, title: 'Bookmarks Bar' },
-        ...folders,
-        existing
-      ]),
+      getTree: vi
+        .fn()
+        .mockResolvedValue([
+          { id: 'bar', parentId: '0', index: 0, title: 'Bookmarks Bar' },
+          ...folders,
+          existing
+        ]),
       get: vi.fn().mockResolvedValue(existing),
       create: vi.fn(),
       update: vi.fn(),
@@ -114,5 +116,122 @@ describe('SmartBookmarkService', () => {
     expect(sent?.pageText).toHaveLength(6_000);
     expect(sent?.pageText).toContain('Bearer [REDACTED_TOKEN]');
     expect(sent?.availableFolderPaths).toHaveLength(24);
+  });
+
+  it('ranks a relevant directory beyond the first 24 and only moves existing bookmarks in organize mode', async () => {
+    const folders = Array.from({ length: 30 }, (_, index) => ({
+      id: `f${index}`,
+      parentId: 'bar',
+      title: `无关 ${index}`,
+      index
+    }));
+    const existing = {
+      id: 'bookmark',
+      parentId: 'f0',
+      title: '网络代理配置指南',
+      url: 'https://example.test/guide',
+      index: 0
+    };
+    const nodes = [
+      { id: 'bar', parentId: '0', index: 0, title: '书签栏' },
+      ...folders,
+      { id: 'proxy', parentId: 'bar', index: 30, title: '网络代理服务' },
+      existing
+    ];
+    const bookmarks = {
+      getTree: vi.fn().mockResolvedValue(nodes),
+      get: vi.fn().mockResolvedValue(existing),
+      move: vi.fn().mockResolvedValue({ ...existing, parentId: 'proxy' }),
+      create: vi.fn(),
+      update: vi.fn(),
+      remove: vi.fn()
+    } as unknown as BookmarkRepository;
+    const profiles = {
+      list: vi.fn().mockResolvedValue([profile])
+    } as unknown as ProfileRepository;
+    const settings = {
+      getProfileAssignments: vi.fn().mockResolvedValue({}),
+      getSmartBookmarkSettings: vi
+        .fn()
+        .mockResolvedValue({
+          allowNewFolders: true,
+          smartRename: true,
+          folderCreationLevel: 'strong',
+          preferredFolderDepth: 2,
+          renameMaxLength: 12
+        }),
+      getPromptRules: vi.fn().mockResolvedValue('')
+    } as unknown as ChromeSettingsRepository;
+    const history = {
+      add: vi.fn()
+    } as unknown as ChromeSmartBookmarkHistoryRepository;
+    const analyze = vi
+      .fn()
+      .mockResolvedValue({
+        folderPath: ['网络代理服务'],
+        title: '模型改名',
+        tags: [],
+        summary: '',
+        reason: '主要用途是网络代理',
+        confidence: 'high'
+      });
+    const adapters = new AiAdapterRegistry();
+    adapters.register({
+      protocol: 'openai-chat',
+      testConnection: vi.fn(),
+      analyze
+    });
+    const service = new SmartBookmarkService(
+      bookmarks,
+      profiles,
+      settings,
+      adapters,
+      history
+    );
+    const input = {
+      bookmarkId: existing.id,
+      title: existing.title,
+      url: existing.url,
+      contextNodes: nodes,
+      classifyProfile: { ...profile, model: 'locked-model' },
+      allowNewFolders: false,
+      classifyProfileKey: 'profile@1',
+      smartRename: false
+    };
+    const result = await service.save(input);
+    expect(result.analysis).toMatchObject({
+      sourceFolderPath: ['无关 0'],
+      candidateFolderPaths: expect.arrayContaining([
+        ['网络代理服务']
+      ]),
+      selectedFolderPath: ['网络代理服务'],
+      confidence: 'high',
+      reason: '主要用途是网络代理',
+      action: 'moved'
+    });
+    expect(analyze.mock.calls[0]![1]).toMatchObject({
+      folderCreationPolicy: 'off'
+    });
+    expect(analyze.mock.calls[0]![1].availableFolderPaths[0]).toBe(
+      '网络代理服务'
+    );
+    expect(bookmarks.move).toHaveBeenCalledWith('bookmark', 'proxy');
+    expect(bookmarks.create).not.toHaveBeenCalled();
+    expect(bookmarks.update).not.toHaveBeenCalled();
+    expect(history.add).not.toHaveBeenCalled();
+    vi.mocked(bookmarks.move).mockClear();
+    analyze.mockResolvedValueOnce({
+      folderPath: ['不存在'],
+      title: '',
+      tags: [],
+      summary: '',
+      reason: '',
+      confidence: 'high'
+    });
+    await expect(service.save(input)).rejects.toThrow('保留原位');
+    expect(bookmarks.move).not.toHaveBeenCalled();
+    vi.mocked(bookmarks.get).mockResolvedValueOnce(null);
+    await expect(service.save(input)).rejects.toThrow('已删除');
+    expect(bookmarks.create).not.toHaveBeenCalled();
   });
 });

@@ -499,6 +499,109 @@ button {
   overflow-wrap: anywhere;
 }
 
+/* 审批浮层总高度有 360px 上限，聊天区用紧凑内边距避免把弹窗撑出边界 */
+.siftmark-overlay-chat {
+  display: grid;
+  gap: 6px;
+  margin: 0 14px 6px;
+  padding: 7px;
+  border: 1px solid #c9ddd9;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.siftmark-overlay-chat-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.siftmark-overlay-chat-heading > div {
+  display: grid;
+  gap: 2px;
+}
+
+.siftmark-overlay-chat-heading small {
+  color: var(--siftmark-muted);
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.siftmark-overlay-chat-heading > svg {
+  width: 15px;
+  height: 15px;
+  color: var(--siftmark-blue);
+}
+
+.siftmark-overlay-messages {
+  display: grid;
+  gap: 5px;
+  max-height: 96px;
+  overflow-y: auto;
+  padding: 2px;
+}
+
+.siftmark-overlay-messages p {
+  max-width: 92%;
+  margin: 0;
+  padding: 6px 8px;
+  border-radius: 5px;
+  background: #f2f5f7;
+  color: #3f4855;
+  font-size: 11px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.siftmark-overlay-messages p[data-role="user"] {
+  justify-self: end;
+  background: #e1f2ef;
+  color: #135f58;
+}
+
+.siftmark-overlay-chat-empty {
+  margin: 0;
+  color: var(--siftmark-muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.siftmark-overlay-composer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+  align-items: end;
+}
+
+.siftmark-overlay-composer textarea {
+  min-height: 30px;
+  max-height: 76px;
+  resize: vertical;
+  padding: 8px;
+  border: 1px solid #cbd2dc;
+  border-radius: 5px;
+  background: #fff;
+  color: var(--siftmark-ink);
+  font: inherit;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.siftmark-overlay-composer textarea:focus-visible {
+  outline: 2px solid var(--siftmark-blue);
+  outline-offset: 1px;
+}
+
+.siftmark-overlay-composer .siftmark-button {
+  min-height: 34px;
+  padding-inline: 9px;
+}
+
+.siftmark-chat-spinner {
+  animation: siftmark-spin .9s linear infinite;
+}
+
 .siftmark-overlay-actions {
   position: sticky;
   bottom: 0;

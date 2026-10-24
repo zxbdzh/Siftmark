@@ -11,16 +11,34 @@ export interface ChromeBookmarkTreeNode {
 }
 
 export interface ChromeBookmarkApi {
-  get(id: string, callback?: (nodes: ChromeBookmarkTreeNode[]) => void): Promise<ChromeBookmarkTreeNode[]> | void;
-  getTree(callback?: (nodes: ChromeBookmarkTreeNode[]) => void): Promise<ChromeBookmarkTreeNode[]> | void;
-  create(details: { parentId: string; index?: number; title: string; url?: string }, callback?: (node: ChromeBookmarkTreeNode) => void): Promise<ChromeBookmarkTreeNode> | void;
-  update(id: string, changes: { title?: string }, callback?: (node: ChromeBookmarkTreeNode) => void): Promise<ChromeBookmarkTreeNode> | void;
-  move(id: string, destination: { parentId: string; index?: number }, callback?: (node: ChromeBookmarkTreeNode) => void): Promise<ChromeBookmarkTreeNode> | void;
-  remove(id: string, callback?: () => void): Promise<void> | void;
+  get(id: string): Promise<ChromeBookmarkTreeNode[]>;
+  getTree(): Promise<ChromeBookmarkTreeNode[]>;
+  create(details: {
+    parentId: string;
+    index?: number;
+    title: string;
+    url?: string;
+  }): Promise<ChromeBookmarkTreeNode>;
+  update(
+    id: string,
+    changes: { title?: string; url?: string }
+  ): Promise<ChromeBookmarkTreeNode>;
+  move(
+    id: string,
+    destination: { parentId: string; index?: number }
+  ): Promise<ChromeBookmarkTreeNode>;
+  remove(id: string): Promise<void>;
   onCreated: ChromeEvent<[string, ChromeBookmarkTreeNode]>;
-  onChanged: ChromeEvent<[string, { title?: string; url?: string }] >;
-  onMoved: ChromeEvent<[string, { parentId: string; index: number; oldParentId: string; oldIndex: number }] >;
-  onRemoved: ChromeEvent<[string, { parentId: string; index: number; node: ChromeBookmarkTreeNode }] >;
+  onChanged: ChromeEvent<[string, { title?: string; url?: string }]>;
+  onMoved: ChromeEvent<
+    [
+      string,
+      { parentId: string; index: number; oldParentId: string; oldIndex: number }
+    ]
+  >;
+  onRemoved: ChromeEvent<
+    [string, { parentId: string; index: number; node: ChromeBookmarkTreeNode }]
+  >;
 }
 
 export interface ChromeEvent<TArgs extends unknown[]> {

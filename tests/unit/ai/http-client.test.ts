@@ -82,4 +82,60 @@ describe('postProviderJson', () => {
     });
     expect(fetch).toHaveBeenCalledTimes(1);
   });
+  it('reports a timeout while reading an HTTP 200 body as a network failure', async () => {
+    vi.useFakeTimers();
+    const fetch = vi.fn((_url: string | URL | Request, init?: RequestInit) =>
+      Promise.resolve(new Response(new ReadableStream({
+        start(controller) {
+          init?.signal?.addEventListener('abort', () => controller.error(new Error('body aborted')));
+        }
+      })))
+    );
+    const operation = postProviderJson({
+      url: 'https://api.test/v1', headers: {}, body: {},
+      signal: new AbortController().signal, timeoutMs: 100, fetch
+    }).catch((error: unknown) => error);
+    await vi.advanceTimersByTimeAsync(100);
+    expect(await operation).toMatchObject({
+      kind: 'network', message: '模型请求超时'
+    });
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('preserves cancellation after HTTP headers arrive', async () => {
+    const controller = new AbortController();
+    const fetch = vi.fn((_url: string | URL | Request, init?: RequestInit) =>
+      Promise.resolve(new Response(new ReadableStream({
+        start(body) {
+          init?.signal?.addEventListener('abort', () => body.error(new Error('body aborted')));
+        }
+      })))
+    );
+    const operation = postProviderJson({
+      url: 'https://api.test/v1', headers: {}, body: {},
+      signal: controller.signal, timeoutMs: 1_000, fetch
+    });
+    const expectation = expect(operation).rejects.toMatchObject({
+      kind: 'abort', message: '模型请求已取消'
+    });
+    await Promise.resolve();
+    controller.abort();
+    await expectation;
+  });
+
+  it('keeps malformed completed JSON distinct from a body read failure', async () => {
+    const request = {
+      url: 'https://api.test/v1', headers: {}, body: {},
+      signal: new AbortController().signal, timeoutMs: 1_000
+    };
+    await expect(postProviderJson({
+      ...request, fetch: vi.fn().mockResolvedValue(new Response('not JSON'))
+    })).rejects.toMatchObject({ kind: 'validation', status: 200 });
+    const failedBody = new Response(new ReadableStream({
+      start(body) { body.error(new TypeError('connection closed')); }
+    }));
+    await expect(postProviderJson({
+      ...request, fetch: vi.fn().mockResolvedValue(failedBody)
+    })).rejects.toMatchObject({ kind: 'network', message: '模型网络请求失败' });
+  });
 });

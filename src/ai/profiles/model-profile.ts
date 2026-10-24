@@ -5,10 +5,9 @@ import {
 } from '../types';
 
 const endpointSchema = z.string().url().refine((value) => {
-  const url = new URL(value);
-  if (url.protocol === 'https:') return true;
-  return url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
-}, 'Endpoint must use HTTPS, except loopback HTTP');
+  // 兼容内网和自建 HTTP 网关，仍只允许模型请求使用 HTTP(S)。
+  return ['http:', 'https:'].includes(new URL(value).protocol);
+}, 'Endpoint 仅支持 HTTP 或 HTTPS');
 
 export const modelProfileSchema = z.object({
   id: z.string().min(1),

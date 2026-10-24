@@ -3,18 +3,16 @@ import { AnthropicMessagesAdapter } from './adapters/anthropic-messages';
 import { GeminiGenerateContentAdapter } from './adapters/gemini-generate-content';
 import { OpenAiChatAdapter } from './adapters/openai-chat';
 import { OpenAiResponsesAdapter } from './adapters/openai-responses';
-import {
-  MeteredAiAdapter,
-  type AiUsageSink
-} from './adapters/metered-adapter';
+import { MeteredAiAdapter, type AiUsageSink } from './adapters/metered-adapter';
 import { ProfileLimitedAiAdapter } from './adapters/profile-limited-adapter';
 import { ProfileLimiter } from './network/profile-limiter';
 
 export function createDefaultAiAdapterRegistry(
-  usage?: AiUsageSink
+  usage?: AiUsageSink,
+  concurrency = 2
 ): AiAdapterRegistry {
   const registry = new AiAdapterRegistry();
-  const limiter = new ProfileLimiter(2);
+  const limiter = new ProfileLimiter(concurrency);
   const adapters = [
     new OpenAiChatAdapter(),
     new OpenAiResponsesAdapter(),

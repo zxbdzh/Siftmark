@@ -4,7 +4,7 @@ Siftmark 直接调用用户配置的 Endpoint，不经过 Siftmark 服务端。�
 
 ## 通用约束
 
-- Endpoint 必须为 HTTPS；仅 `localhost`、`127.0.0.1`、`[::1]` 可使用 HTTP。
+- Endpoint 支持 HTTP 和 HTTPS，包括远程域名、IP、内网及本机地址；HTTP 不加密传输 API Key 和请求内容。
 - 超时解析后限制在 5,000–120,000 ms。
 - 档案先保存为草稿，连接探测成功后变为 `verified`，才可绑定能力。
 - 能力为 `classify`、`rename`、`summarize`、`embed`；任务锁定档案版本。

@@ -1,5 +1,24 @@
 import type { ImportNode } from './types';
+import { isBookmark, type BookmarkNode } from '../bookmarks/types';
 
+export function bookmarkNodesToImportNodes(
+  nodes: BookmarkNode[]
+): ImportNode[] {
+  const knownIds = new Set(nodes.map((node) => node.id));
+  return nodes
+    .filter((node) => node.id !== '0')
+    .map((node) => ({
+      sourceId: `chrome-${node.id}`,
+      kind: isBookmark(node) ? 'bookmark' : 'folder',
+      parentSourceId:
+        node.parentId !== '0' && knownIds.has(node.parentId)
+          ? `chrome-${node.parentId}`
+          : null,
+      title: node.title,
+      ...(isBookmark(node) ? { url: node.url } : {}),
+      index: node.index
+    }));
+}
 export function exportNetscapeBookmarkHtml(
   nodes: ImportNode[],
   title = 'Siftmark 书签'

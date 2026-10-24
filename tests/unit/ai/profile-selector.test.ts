@@ -13,5 +13,18 @@ describe('model profiles', () => {
     expect(parseModelProfile(profile({ endpoint: 'http://127.0.0.1:11434/v1', timeoutMs: 1 })).timeoutMs).toBe(5_000);
     expect(parseModelProfile(profile({ timeoutMs: 999_999 })).timeoutMs).toBe(120_000);
   });
-  it('rejects remote HTTP endpoints', () => expect(() => parseModelProfile(profile({ endpoint: 'http://api.test/v1' }))).toThrow());
+  it.each([
+    'https://api.test/v1',
+    'http://api.test/v1',
+    'http://203.0.113.10:56005/v1',
+    'http://192.168.1.10:8080/v1',
+    'http://localhost:11434/v1',
+    'http://[::1]:11434/v1'
+  ])('allows HTTP(S) endpoint %s without rewriting it', (endpoint) => {
+    expect(parseModelProfile(profile({ endpoint })).endpoint).toBe(endpoint);
+  });
+  it.each(['ftp://api.test/v1', 'file:///tmp/model', 'javascript:alert(1)', 'not-a-url'])(
+    'rejects unsupported or invalid endpoint %s',
+    (endpoint) => expect(() => parseModelProfile(profile({ endpoint }))).toThrow()
+  );
 });

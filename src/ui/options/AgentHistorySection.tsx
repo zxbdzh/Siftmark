@@ -374,6 +374,7 @@ function memoryInfluenceDetail(session: CaptureSession): string {
 }
 
 function triggerLabel(session: CaptureSession): string {
+  if (session.trigger === 'learning-review') return '本地经验复盘';
   if (session.trigger === 'native-bookmark') return 'Ctrl+D';
   if (session.trigger === 'keyboard-command') return '快捷键';
   if (session.trigger === 'context-menu') return '右键菜单';

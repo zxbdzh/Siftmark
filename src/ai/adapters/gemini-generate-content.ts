@@ -1,4 +1,8 @@
 import type { AiAdapter } from './adapter';
+import type { AiOrganizationContext } from '../organization-types';
+import { buildOrganizationPrompt } from '../prompts/organization-prompt';
+import { organizationSchemaFor } from '../schemas/organization-contract';
+import { parseOrganizationText } from '../schemas/organization-parser';
 import type {
   AiAnalysisResult,
   AiCaptureReviewContext,
@@ -14,7 +18,10 @@ import {
 import { buildCaptureReviewPrompt } from '../prompts/capture-review-prompt';
 import { captureReviewJsonSchema } from '../schemas/capture-review-contract';
 import { parseCaptureReviewText } from '../schemas/capture-review-parser';
-import { postProviderJson, type ProviderJsonRequest } from '../network/http-client';
+import {
+  postProviderJson,
+  type ProviderJsonRequest
+} from '../network/http-client';
 import { ProviderError } from '../network/errors';
 import {
   analysisJsonSchema,
@@ -23,15 +30,29 @@ import {
 } from './openai-common';
 
 type Poster = <T>(request: ProviderJsonRequest) => Promise<T>;
-interface GeminiResponse { candidates?: Array<{ finishReason?: string; content?: { parts?: Array<{ text?: string }> } }>; promptFeedback?: { blockReason?: string }; usageMetadata?: { totalTokenCount?: number }; }
-interface GeminiEmbeddingResponse { embeddings?: Array<{ values?: number[] }>; }
+interface GeminiResponse {
+  candidates?: Array<{
+    finishReason?: string;
+    content?: { parts?: Array<{ text?: string }> };
+  }>;
+  promptFeedback?: { blockReason?: string };
+  usageMetadata?: { totalTokenCount?: number };
+}
+interface GeminiEmbeddingResponse {
+  embeddings?: Array<{ values?: number[] }>;
+}
 
 export class GeminiGenerateContentAdapter implements AiAdapter {
   readonly protocol = 'gemini-generate-content' as const;
   constructor(private readonly post: Poster = postProviderJson) {}
 
-  async testConnection(profile: ModelProfile, signal: AbortSignal): Promise<CapabilityProbe> {
-    const needsText = profile.capabilities.some((capability) => capability !== 'embed') || profile.capabilities.length === 0;
+  async testConnection(
+    profile: ModelProfile,
+    signal: AbortSignal
+  ): Promise<CapabilityProbe> {
+    const needsText =
+      profile.capabilities.some((capability) => capability !== 'embed') ||
+      profile.capabilities.length === 0;
     let usageTokens: number | undefined;
     if (needsText) {
       const prompt = buildAnalysisProbePrompt();
@@ -52,60 +73,195 @@ export class GeminiGenerateContentAdapter implements AiAdapter {
       usageTokens = response.usageMetadata?.totalTokenCount;
       const candidate = response.candidates?.[0];
       const text = candidate?.content?.parts?.find((part) => part.text)?.text;
-      if (!text) throw new ProviderError('unknown-result', 'Provider returned no probe result');
+      if (!text)
+        throw new ProviderError(
+          'unknown-result',
+          'Provider returned no probe result'
+        );
       parseAnalysisText(text);
     }
     const embedding = profile.capabilities.includes('embed');
     if (embedding) await this.embed(profile, ['siftmark'], signal);
-    return { authentication: true, text: needsText, structuredOutput: needsText, embedding, usageTokens };
+    return {
+      authentication: true,
+      text: needsText,
+      structuredOutput: needsText,
+      embedding,
+      usageTokens
+    };
   }
 
-  async analyze(profile: ModelProfile, context: AiRequestContext, signal: AbortSignal): Promise<AiAnalysisResult> {
+  async analyze(
+    profile: ModelProfile,
+    context: AiRequestContext,
+    signal: AbortSignal
+  ): Promise<AiAnalysisResult> {
     const prompt = buildAnalysisPrompt(context);
     const response = await this.post<GeminiResponse>({
-      url: modelUrl(profile), headers: { 'x-goog-api-key': profile.apiKey }, signal, timeoutMs: profile.timeoutMs,
-      body: { systemInstruction: { parts: [{ text: prompt.system }] }, contents: [{ role: 'user', parts: [{ text: prompt.user }] }], generationConfig: { responseMimeType: 'application/json', responseJsonSchema: analysisJsonSchema } }
+      url: modelUrl(profile),
+      headers: { 'x-goog-api-key': profile.apiKey },
+      signal,
+      timeoutMs: profile.timeoutMs,
+      body: {
+        systemInstruction: { parts: [{ text: prompt.system }] },
+        contents: [{ role: 'user', parts: [{ text: prompt.user }] }],
+        generationConfig: {
+          responseMimeType: 'application/json',
+          responseJsonSchema: analysisJsonSchema
+        }
+      }
     });
-    if (response.promptFeedback?.blockReason) throw new ProviderError('unknown-result', 'Provider blocked the request');
+    if (response.promptFeedback?.blockReason)
+      throw new ProviderError('unknown-result', 'Provider blocked the request');
     const candidate = response.candidates?.[0];
-    if (!candidate || (candidate.finishReason && candidate.finishReason !== 'STOP')) throw new ProviderError('unknown-result', 'Provider returned an incomplete result');
+    if (
+      !candidate ||
+      (candidate.finishReason && candidate.finishReason !== 'STOP')
+    )
+      throw new ProviderError(
+        'unknown-result',
+        'Provider returned an incomplete result'
+      );
     const text = candidate.content?.parts?.find((part) => part.text)?.text;
-    if (!text) throw new ProviderError('unknown-result', 'Provider returned no text result');
+    if (!text)
+      throw new ProviderError(
+        'unknown-result',
+        'Provider returned no text result'
+      );
     return {
       ...parseAnalysisText(text),
       usageTokens: response.usageMetadata?.totalTokenCount
     };
   }
 
-  async reviewCaptureHistory(profile: ModelProfile, context: AiCaptureReviewContext, signal: AbortSignal): Promise<AiCaptureReviewResult> {
-    const prompt = buildCaptureReviewPrompt(context);
+  async planOrganization(
+    profile: ModelProfile,
+    context: AiOrganizationContext,
+    signal: AbortSignal
+  ) {
+    const prompt = buildOrganizationPrompt(context);
     const response = await this.post<GeminiResponse>({
-      url: modelUrl(profile), headers: { 'x-goog-api-key': profile.apiKey }, signal, timeoutMs: profile.timeoutMs,
-      body: { systemInstruction: { parts: [{ text: prompt.system }] }, contents: [{ role: 'user', parts: [{ text: prompt.user }] }], generationConfig: { responseMimeType: 'application/json', responseJsonSchema: captureReviewJsonSchema } }
+      url: modelUrl(profile),
+      headers: { 'x-goog-api-key': profile.apiKey },
+      signal,
+      timeoutMs: profile.timeoutMs,
+      body: {
+        systemInstruction: { parts: [{ text: prompt.system }] },
+        contents: [{ role: 'user', parts: [{ text: prompt.user }] }],
+        generationConfig: {
+          responseMimeType: 'application/json',
+          responseJsonSchema: organizationSchemaFor(context.mode),
+          maxOutputTokens: 8192
+        }
+      }
     });
-    if (response.promptFeedback?.blockReason) throw new ProviderError('unknown-result', 'Provider blocked the sleep review');
     const candidate = response.candidates?.[0];
-    if (!candidate || (candidate.finishReason && candidate.finishReason !== 'STOP')) throw new ProviderError('unknown-result', 'Provider returned an incomplete sleep review');
-    const text = candidate.content?.parts?.find((part) => part.text)?.text;
-    if (!text) throw new ProviderError('unknown-result', 'Provider returned no sleep review result');
-    return { ...parseCaptureReviewText(text), usageTokens: response.usageMetadata?.totalTokenCount };
+    if (
+      response.promptFeedback?.blockReason ||
+      !candidate ||
+      (candidate.finishReason && candidate.finishReason !== 'STOP')
+    )
+      throw new ProviderError('unknown-result', 'AI 未返回完整的全量规划');
+    const text = candidate.content?.parts
+      ?.map((part) => part.text ?? '')
+      .join('');
+    if (!text)
+      throw new ProviderError('unknown-result', 'AI 未返回全量规划结果');
+    return {
+      ...parseOrganizationText(text, context.mode),
+      usageTokens: response.usageMetadata?.totalTokenCount
+    };
   }
 
-  async embed(profile: ModelProfile, texts: string[], signal: AbortSignal): Promise<number[][]> {
+  async reviewCaptureHistory(
+    profile: ModelProfile,
+    context: AiCaptureReviewContext,
+    signal: AbortSignal
+  ): Promise<AiCaptureReviewResult> {
+    const prompt = buildCaptureReviewPrompt(context);
+    const response = await this.post<GeminiResponse>({
+      url: modelUrl(profile),
+      headers: { 'x-goog-api-key': profile.apiKey },
+      signal,
+      timeoutMs: profile.timeoutMs,
+      body: {
+        systemInstruction: { parts: [{ text: prompt.system }] },
+        contents: [{ role: 'user', parts: [{ text: prompt.user }] }],
+        generationConfig: {
+          responseMimeType: 'application/json',
+          responseJsonSchema: captureReviewJsonSchema
+        }
+      }
+    });
+    if (response.promptFeedback?.blockReason)
+      throw new ProviderError(
+        'unknown-result',
+        'Provider blocked the sleep review'
+      );
+    const candidate = response.candidates?.[0];
+    if (
+      !candidate ||
+      (candidate.finishReason && candidate.finishReason !== 'STOP')
+    )
+      throw new ProviderError(
+        'unknown-result',
+        'Provider returned an incomplete sleep review'
+      );
+    const text = candidate.content?.parts?.find((part) => part.text)?.text;
+    if (!text)
+      throw new ProviderError(
+        'unknown-result',
+        'Provider returned no sleep review result'
+      );
+    return {
+      ...parseCaptureReviewText(text),
+      usageTokens: response.usageMetadata?.totalTokenCount
+    };
+  }
+
+  async embed(
+    profile: ModelProfile,
+    texts: string[],
+    signal: AbortSignal
+  ): Promise<number[][]> {
     const model = `models/${profile.model}`;
     const response = await this.post<GeminiEmbeddingResponse>({
-      url: appendEndpointPath(profile.endpoint, `models/${encodeURIComponent(profile.model)}:batchEmbedContents`),
+      url: appendEndpointPath(
+        profile.endpoint,
+        `models/${encodeURIComponent(profile.model)}:batchEmbedContents`
+      ),
       headers: { 'x-goog-api-key': profile.apiKey },
-      body: { requests: texts.map((text) => ({ model, content: { parts: [{ text }] }, taskType: 'RETRIEVAL_DOCUMENT' })) },
+      body: {
+        requests: texts.map((text) => ({
+          model,
+          content: { parts: [{ text }] },
+          taskType: 'RETRIEVAL_DOCUMENT'
+        }))
+      },
       signal,
       timeoutMs: profile.timeoutMs
     });
     const vectors = (response.embeddings ?? []).map((item) => item.values);
-    if (vectors.length !== texts.length || vectors.some((vector) => !vector || vector.length === 0 || vector.some((value) => !Number.isFinite(value)))) throw new ProviderError('validation', 'Provider returned invalid embeddings');
+    if (
+      vectors.length !== texts.length ||
+      vectors.some(
+        (vector) =>
+          !vector ||
+          vector.length === 0 ||
+          vector.some((value) => !Number.isFinite(value))
+      )
+    )
+      throw new ProviderError(
+        'validation',
+        'Provider returned invalid embeddings'
+      );
     return vectors as number[][];
   }
 }
 
 function modelUrl(profile: ModelProfile): string {
-  return appendEndpointPath(profile.endpoint, `models/${encodeURIComponent(profile.model)}:generateContent`);
+  return appendEndpointPath(
+    profile.endpoint,
+    `models/${encodeURIComponent(profile.model)}:generateContent`
+  );
 }

@@ -353,7 +353,7 @@ describe('SmartCapturePlanner', () => {
     });
 
     expect(context?.availableFolderPaths?.[0]).toBe('研究');
-    expect(context?.additionalRules).toContain('连续三次批准归入研究');
+    expect(context?.additionalRules).not.toContain('连续三次批准归入研究');
   });
 
   it('uses folder identity when reporting whether a learned memory was adopted', async () => {
@@ -487,7 +487,7 @@ describe('SmartCapturePlanner', () => {
       ]
     });
 
-    expect(context?.additionalRules).toContain(
+    expect(context?.additionalRules).not.toContain(
       '"Other Bookmarks","Project"'
     );
     expect(result.memoryInfluence?.adoptedMemoryIds).toEqual(['memory']);

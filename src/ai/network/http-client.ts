@@ -34,7 +34,9 @@ export async function postProviderJson<T>(request: ProviderJsonRequest): Promise
     }
     try {
       return await response.json() as T;
-    } catch {
+    } catch (error) {
+      // HTTP 200 只代表响应头已到；读取中断交给外层区分超时、取消和网络失败。
+      if (request.signal.aborted || timedOut || !(error instanceof SyntaxError)) throw error;
       throw new ProviderError('validation', 'Provider returned invalid JSON', response.status);
     }
   } catch (error) {

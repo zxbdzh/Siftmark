@@ -24,6 +24,8 @@ export interface RenameCommand {
   batchId?: string;
   batchIndex?: number;
   expectedTitle?: string;
+  url?: string;
+  expectedUrl?: string;
 }
 
 export interface CreateCommand extends Omit<BookmarkNode, 'id'> {
@@ -166,26 +168,29 @@ export class BookmarkCommandService {
     const current = await this.bookmarks.get(command.bookmarkId);
     if (!current) return err({ code: 'not_found', id: command.bookmarkId });
     if (
+      command.expectedUrl !== undefined &&
+      current.url !== command.expectedUrl ||
       command.expectedTitle !== undefined &&
       current.title !== command.expectedTitle
     ) {
       return err({
         code: 'conflict',
         bookmarkId: command.bookmarkId,
-        expected: { title: command.expectedTitle },
+        expected: { title: command.expectedTitle, url: command.expectedUrl },
         actual: current
       });
     }
     const updated = await this.bookmarks.update(command.bookmarkId, {
-      title: command.title
+      title: command.title,
+      ...(command.url !== undefined ? { url: command.url } : {})
     });
     return this.record({
       type: 'rename',
       bookmarkId: command.bookmarkId,
       batchId: command.batchId,
       batchIndex: command.batchIndex,
-      before: { title: current.title },
-      after: { title: updated.title }
+      before: { title: current.title, url: current.url },
+      after: { title: updated.title, url: updated.url }
     });
   }
 

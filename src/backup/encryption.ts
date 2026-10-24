@@ -81,8 +81,8 @@ export async function decryptBackup(
       ciphertextCopy.buffer
     );
     return new Uint8Array(plaintext);
-  } catch {
-    throw new Error('encrypted-backup-authentication-failed');
+  } catch (cause) {
+    throw new Error('encrypted-backup-authentication-failed', {cause});
   } finally {
     passwordBytes.fill(0);
     ciphertextCopy.fill(0);

@@ -113,6 +113,17 @@ export interface CaptureSessionRecord {
   payload: Record<string, unknown>;
 }
 
+export interface SyncStateRecord {
+  id: 'webdav';
+  value: unknown;
+}
+
+
+export interface SyncDownloadBufferRecord {
+  id: 'webdav';
+  bytes: ArrayBuffer;
+  createdAt: number;
+}
 export interface CapturePreferenceRecord {
   id: string;
   kind: string;

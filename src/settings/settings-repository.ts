@@ -15,6 +15,7 @@ export const settingsKeys = {
   folderSorts: 'siftmark.settings.folder-sorts.v1',
   smartBookmark: 'siftmark.settings.smart-bookmark.v1',
   sleepReview: 'siftmark.settings.sleep-review.v1',
+  agentLearning: 'siftmark.settings.agent-learning.v1',
   sleepReviewStatus: 'siftmark.runtime.sleep-review-status.v1'
 } as const;
 
@@ -64,6 +65,17 @@ export interface SleepReviewSettings {
   batchSize: number;
 }
 
+export interface AgentLearningSettings {
+  enabled: boolean;
+  proactive: boolean;
+  since: number;
+  generation: number;
+  lastReviewAt: number;
+}
+
+export const defaultAgentLearningSettings: AgentLearningSettings = {
+  enabled: false, proactive: false, since: 0, generation: 0, lastReviewAt: 0
+};
 export type SleepReviewTrigger =
   | 'manual'
   | 'startup'
@@ -238,6 +250,21 @@ export class ChromeSettingsRepository {
       settingsKeys.smartBookmark,
       normalizeSmartBookmarkSettings(value)
     );
+  }
+
+  async getAgentLearningSettings(): Promise<AgentLearningSettings> {
+    const value = await this.read(settingsKeys.agentLearning);
+    if (!isRecord(value)) return { ...defaultAgentLearningSettings };
+    const number = (key: string) => typeof value[key] === 'number' && Number.isFinite(value[key])
+      ? Math.max(0, value[key] as number) : 0;
+    return {
+      enabled: value.enabled === true, proactive: value.proactive === true,
+      since: number('since'), generation: number('generation'), lastReviewAt: number('lastReviewAt')
+    };
+  }
+
+  setAgentLearningSettings(value: AgentLearningSettings): Promise<void> {
+    return this.write(settingsKeys.agentLearning, value);
   }
 
   async getSleepReviewSettings(): Promise<SleepReviewSettings> {

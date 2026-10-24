@@ -20,7 +20,7 @@ export default defineConfig({
     description: '__MSG_extensionDescription__',
     default_locale: 'zh_CN',
     icons: extensionIcons,
-    permissions: ['bookmarks', 'storage', 'tabs', 'scripting', 'contextMenus', 'alarms', 'idle', 'sidePanel'],
+    permissions: ['bookmarks', 'downloads', 'storage', 'tabs', 'scripting', 'contextMenus', 'alarms', 'idle', 'sidePanel', 'nativeMessaging'],
     optional_permissions: ['notifications'],
     host_permissions: ['<all_urls>'],
     action: { default_title: 'Siftmark', default_icon: extensionIcons },

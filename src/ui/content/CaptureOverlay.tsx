@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import {
   Check,
   CheckCircle2,
@@ -13,14 +14,14 @@ import {
   X,
   XCircle
 } from 'lucide-react';
-import type { CaptureActivity } from '../../capture-agent/types';
+import type { CaptureActivity, CaptureMessage } from '../../capture-agent/types';
 import { BrandMark } from '../components/BrandMark';
 
 export type CaptureOverlayPhase =
   'processing' | 'approval' | 'saved' | 'rejected' | 'error';
 
 export type CaptureOverlayAction =
-  'allow' | 'reject' | 'adjust' | 'undo' | 'retry';
+  'allow' | 'reject' | 'adjust' | 'undo' | 'retry' | 'message';
 
 export interface CaptureOverlayView {
   sessionId?: string;
@@ -32,6 +33,7 @@ export interface CaptureOverlayView {
   newFolderName?: string;
   message?: string;
   activities?: CaptureActivity[];
+  messages?: CaptureMessage[];
   canAdjust?: boolean;
   canUndo?: boolean;
 }
@@ -40,6 +42,7 @@ interface CaptureOverlayProps {
   view: CaptureOverlayView;
   busyAction?: CaptureOverlayAction;
   onAction: (action: CaptureOverlayAction) => void;
+  onMessage?: (message: string) => void;
   onDismiss: () => void;
 }
 
@@ -204,7 +207,8 @@ export function CaptureOverlay({
   view,
   busyAction,
   onAction,
-  onDismiss
+  onDismiss,
+  onMessage
 }: CaptureOverlayProps) {
   const copy = phaseCopy[view.phase];
   const isApproval = view.phase === 'approval';
@@ -213,6 +217,14 @@ export function CaptureOverlay({
   const hasRoute = Boolean(
     view.destinationPath?.length || newFolderNames.length
   );
+  const [draft, setDraft] = useState('');
+  const canChat = Boolean(view.sessionId && view.canAdjust);
+  const sendMessage = () => {
+    const text = draft.trim();
+    if (!text || busyAction || !onMessage) return;
+    onMessage(text);
+    setDraft('');
+  };
 
   return (
     <section
@@ -265,6 +277,55 @@ export function CaptureOverlay({
       {view.message ? (
         <p className="siftmark-overlay-message">{view.message}</p>
       ) : null}
+      {canChat ? (
+        <section className="siftmark-overlay-chat" aria-labelledby="siftmark-overlay-chat-title">
+          <div className="siftmark-overlay-chat-heading">
+            <div>
+              <span className="siftmark-field-label" id="siftmark-overlay-chat-title">直接和 Agent 对话</span>
+              <small>只调整这次收藏方案</small>
+            </div>
+            <MessageSquareText aria-hidden="true" />
+          </div>
+          {view.messages?.length ? (
+            <div className="siftmark-overlay-messages" role="log" aria-live="polite">
+              {view.messages.slice(-4).map((item) => (
+                <p key={item.id} data-role={item.role}>{item.text}</p>
+              ))}
+            </div>
+          ) : (
+            <p className="siftmark-overlay-chat-empty">可以直接说“换到开发目录”或“保留原标题”。</p>
+          )}
+          <div className="siftmark-overlay-composer">
+            <textarea
+              aria-label="与 Agent 对话"
+              rows={1}
+              value={draft}
+              maxLength={2_000}
+              disabled={Boolean(busyAction)}
+              placeholder="告诉 Agent 怎么改"
+              onChange={(event) => setDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && !event.shiftKey) {
+                  event.preventDefault();
+                  sendMessage();
+                }
+              }}
+            />
+            <button
+              type="button"
+              className="siftmark-button siftmark-button-primary"
+              aria-label="发送对话"
+              title="发送对话"
+              disabled={!draft.trim() || Boolean(busyAction)}
+              onClick={sendMessage}
+            >
+              {busyAction === 'message' ? <LoaderCircle className="siftmark-chat-spinner" aria-hidden="true" /> : <MessageSquareText aria-hidden="true" />}
+              <span>{busyAction === 'message' ? '处理中' : '发送'}</span>
+            </button>
+          </div>
+        </section>
+      ) : null}
+
 
       {isApproval ? (
         <div className="siftmark-overlay-actions">

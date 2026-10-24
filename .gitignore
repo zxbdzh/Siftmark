@@ -7,3 +7,8 @@ test-results/
 dist/*
 !dist/.gitkeep
 *.log
+public/siftmark-windows-updater.zip
+
+# Pi 会话本地任务输出，不属于仓库内容
+.pi/
+.archify/

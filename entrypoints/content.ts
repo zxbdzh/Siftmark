@@ -62,6 +62,7 @@ function viewFromSession(session: CaptureSession): CaptureOverlayView {
     newFolderNames: session.plan?.destination.newFolders,
     message: session.failure?.message,
     activities: session.activities,
+    messages: session.messages,
     canAdjust: phase === 'approval' || phase === 'saved',
     canUndo: phase === 'saved' && Boolean(session.operationBatchId)
   };
@@ -150,7 +151,7 @@ export function ContentEntry() {
     return () => globalThis.removeEventListener('keydown', onKeyDown);
   }, [dismiss, view]);
 
-  const act = async (action: CaptureOverlayAction) => {
+  const act = async (action: CaptureOverlayAction, message?: string) => {
     if (!view || busyAction) return;
     setBusyAction(action);
     try {
@@ -158,7 +159,8 @@ export function ContentEntry() {
         type: 'capture-agent-action',
         input: {
           action,
-          sessionId: view.sessionId
+          sessionId: view.sessionId,
+          ...(message ? { message } : {}),
         }
       })) as CaptureAgentActionResponse | undefined;
       const responseView = response?.view ?? response?.session;
@@ -195,7 +197,8 @@ export function ContentEntry() {
           view,
           busyAction,
           onAction: (action) => void act(action),
-          onDismiss: dismiss
+          onMessage: (message) => void act('message', message),
+          onDismiss: dismiss,
         })
       : null
   );

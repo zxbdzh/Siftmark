@@ -22,6 +22,9 @@ import type { TaskHandler } from '../src/tasks/types';
 import { logger } from '../src/utils/logger';
 import { ChromeNoteDraftRepository } from '../src/notes/draft-repository';
 import { DexieThumbnailRepository } from '../src/storage/thumbnail-repository';
+import { WebDavSyncService } from '../src/sync/webdav-sync-service';
+import { UpdateService, UPDATE_HOST, UPDATE_ALARM, type NativeUpdateReply } from '../src/updates/update-service';
+
 import { ThumbnailService } from '../src/capture/thumbnail-service';
 import {
   createCaptureThumbnailHandler,
@@ -73,12 +76,10 @@ import { SmartBookmarkService } from '../src/bookmarks/smart-bookmark-service';
 import { UsageRepository } from '../src/ai/network/usage-repository';
 import {
   CaptureAgent,
-  CaptureSleepReviewService,
-  DexieCaptureLearningRepository,
+  AgentExperienceService,
   DexieCapturePreferenceRepository,
   DexieCaptureSessionRepository,
   LocalCaptureExecutor,
-  ModelCaptureMemoryReviewer,
   SmartCapturePlanner,
   type CaptureAgentAction,
   type CaptureSession,
@@ -147,12 +148,32 @@ export default defineBackground(() => {
     Date.now,
     specialFolderPlacements
   );
+  const hasActiveBookmarkWork = async () => Boolean(await database.tasks.where('state').equals('running').count() || await database.captureSessions.filter(session => ['analyzing','ready','pending','adjusting','executing'].includes(session.state)).count());
+  const webDavSync = new WebDavSyncService({
+    local: browser.storage.local, session: browser.storage.session, database, bookmarks,
+    isBusy: hasActiveBookmarkWork
+  });
+  const updates = new UpdateService({
+    local: browser.storage.local, currentVersion: browser.runtime.getManifest().version,
+    native: (action) => new Promise<NativeUpdateReply>((resolve, reject) => {
+      const port = browser.runtime.connectNative(UPDATE_HOST);
+      const timer = setTimeout(() => {port.disconnect(); reject(new Error('更新器超时，保留当前版本'));}, 150000);
+      port.onMessage.addListener((reply) => {clearTimeout(timer); resolve(reply as NativeUpdateReply); port.disconnect();});
+      port.onDisconnect.addListener(() => {clearTimeout(timer); reject(new Error(browser.runtime.lastError?.message ?? '更新器连接已关闭，请确认已安装'));});
+      port.postMessage({action});
+    }),
+    isBusy: async () => await hasActiveBookmarkWork() || (await navigator.locks.query()).held?.some(lock => lock.name !== 'siftmark-updates' && lock.name !== 'siftmark-maintenance' && lock.name?.startsWith('siftmark-')) === true,
+    reload: () => browser.runtime.reload()
+  });
+  void updates.initialize();
+  void webDavSync.initialize().catch(() => undefined);
+  void browser.alarms.create(UPDATE_ALARM, {periodInMinutes: 5});
   const importRecoveryPoints = new DexieImportRecoveryRepository(database);
   const usage = new UsageRepository(database);
   const adapters = createDefaultAiAdapterRegistry(usage);
   const captureSessions = new DexieCaptureSessionRepository(database);
   const capturePreferences = new DexieCapturePreferenceRepository(database);
-  const captureLearning = new DexieCaptureLearningRepository(database);
+  const experiences = new AgentExperienceService(database, settings, bookmarks);
   const smartHistory = new ChromeSmartBookmarkHistoryRepository(
     browser.storage.local
   );
@@ -214,7 +235,14 @@ export default defineBackground(() => {
   const captureAgent = new CaptureAgent({
     bookmarks,
     sessions: captureSessions,
-    preferences: capturePreferences,
+    recordSoftPreferences: false,
+    preferences: {
+      put: (preference) => capturePreferences.put(preference),
+      listMatching: async (url, title) => [
+        ...(await capturePreferences.listMatching(url, title)).filter((preference) => preference.kind === 'fixed-rule'),
+        ...await experiences.matching(url)
+      ]
+    },
     planner: capturePlanner,
     executor: captureExecutor,
     onSessionChanged: async (session) => {
@@ -223,6 +251,7 @@ export default defineBackground(() => {
         captureBookmarkTabs.get(session.bookmarkId);
       if (tabId !== undefined) captureSessionTabs.set(session.id, tabId);
       await publishCaptureSession(session, tabId);
+      await experiences.observeSession(session).catch(() => undefined);
     },
     getSpecialFolderIds: async () => {
       const configured = await settings.getSpecialFolders();
@@ -233,27 +262,23 @@ export default defineBackground(() => {
       ].filter((id): id is string => Boolean(id));
     }
   });
-  const sleepReview = new CaptureSleepReviewService({
-    learning: captureLearning,
-    reviewer: new ModelCaptureMemoryReviewer({ profiles, settings, adapters }),
-    settings,
-    hasActiveCapture: async () =>
-      (await captureSessions.listPending(20)).some((session) =>
-        ['analyzing', 'adjusting', 'executing', 'ready'].includes(session.state)
-      )
-  });
   const publishSleepReview = async (
-    trigger: SleepReviewTrigger,
+    _trigger: SleepReviewTrigger,
     force = false
   ) => {
-    const result = await sleepReview.review({ force, trigger });
+    if ((await captureSessions.listPending(100)).some((session) => ['analyzing', 'adjusting', 'executing', 'ready'].includes(session.state)))
+      return { summary: '有收藏任务正在运行，本轮回顾稍后重试', planned: 0 };
+    const result = await experiences.review(force);
     void browser.runtime
       .sendMessage({ type: 'capture-learning-changed', result })
       .catch(() => undefined);
     return result;
   };
   const sleepReviewScheduler = new ChromeSleepReviewScheduler({
-    settings,
+    settings: { getSleepReviewSettings: async () => {
+      const [review, learning] = await Promise.all([settings.getSleepReviewSettings(), settings.getAgentLearningSettings()]);
+      return { ...review, enabled: learning.enabled && learning.proactive };
+    } },
     idle: browser.idle,
     alarms: browser.alarms,
     review: (trigger) => publishSleepReview(trigger)
@@ -643,6 +668,12 @@ export default defineBackground(() => {
       };
     } else action = { type: input.action };
     try {
+      const currentSession = await captureSessions.get(input.sessionId);
+      if (action.type === 'allow' && currentSession?.trigger === 'learning-review') {
+        const memories = await experiences.memories();
+        if (!memories.some((memory) => currentSession.plan?.memoryInfluence?.adoptedMemoryIds.includes(memory.id) && memory.action === 'prefer-folder' && memory.destinationFolderId === currentSession.plan.destination.folderId))
+          throw new Error('依据的学习经验已暂停、删除或纠正，请重新回顾后确认');
+      }
       if (tabId !== undefined) captureSessionTabs.set(input.sessionId, tabId);
       const session = await captureAgent.respond(input.sessionId, action);
       return { success: true, session };
@@ -834,8 +865,10 @@ export default defineBackground(() => {
   void processTasks();
   void enqueueConfiguredEmbeddings();
   void healthScheduler.restore();
+  void experiences.recover().catch(() => undefined);
   void sleepReviewScheduler.configure('startup');
   void visitAggregator.prune(Date.now());
+
   browser.runtime.onInstalled.addListener(() => {
     logger.info('扩展已安装');
     void browser.alarms.create(TASK_WAKE_ALARM, { periodInMinutes: 1 });
@@ -847,11 +880,29 @@ export default defineBackground(() => {
   });
   registerBrowserCommands(browser.commands, () => void saveActiveTab());
   browser.runtime.onMessage.addListener(
-    (message: unknown, sender: { tab?: { id?: number } }) => {
+    (message: unknown, sender: { tab?: { id?: number }; url?: string }) => {
       const value = message as {
         type?: string;
-        input?: RuntimeMessageInput;
+        input?: RuntimeMessageInput & Record<string, unknown>;
       };
+      if ((value.type?.startsWith('webdav-') || value.type?.startsWith('updater-')) && !sender.url?.startsWith(browser.runtime.getURL('/'))) return Promise.reject(new Error('仅允许扩展设置页操作同步与更新'));
+      if (value.type === 'updater-status') return updates.status();
+      if (value.type === 'updater-check') return updates.check();
+      if (value.type === 'updater-install') return updates.check(true);
+      if (value.type === 'updater-configure') return updates.configure(value.input?.enabled === true);
+      if (value.type === 'updater-rollback') return updates.rollback();
+      if (updates.isApplying()) return Promise.reject(new Error('正在替换新版文件，请稍后重试'));
+      if (value.type === 'webdav-sync-upload') return webDavSync.upload();
+      if (value.type === 'webdav-sync-download') return webDavSync.download();
+      if (value.type === 'webdav-sync-download-complete') return webDavSync.completeDownload();
+      if (value.type === 'webdav-sync-status') return webDavSync.status();
+      if (value.type === 'webdav-sync-forget') return webDavSync.forgetCredentials().then(() => ({ success: true }));
+      if (value.type === 'webdav-sync-configure') return webDavSync.config();
+      if (value.type === 'webdav-sync-connect') return (async () => {
+        const input = value.input as {endpoint?:string; username?:string; password?:string; encryptionPassword?:string} | undefined;
+        try { if (!input) throw new Error('缺少连接配置'); const config = await webDavSync.connect(input.endpoint ?? '', input.username ?? '', input.password ?? '', input.encryptionPassword ?? ''); return {success: true, config}; }
+        catch (error) {return {success: false, error: error instanceof Error ? error.message : 'WebDAV 验证失败'};}
+      })();
       if (value.type === 'capture-agent-list') return captureSessions.list(30);
       if (value.type === 'capture-agent-count-ended')
         return captureSessions.countEnded();
@@ -1046,7 +1097,7 @@ export default defineBackground(() => {
     });
   });
   browser.storage.onChanged.addListener((changes, areaName) => {
-    if (areaName === 'local' && changes[settingsKeys.sleepReview])
+    if (areaName === 'local' && (changes[settingsKeys.sleepReview] || changes[settingsKeys.agentLearning]))
       void sleepReviewScheduler.configure('settings');
   });
   browser.idle.onStateChanged.addListener((state) => {
@@ -1065,6 +1116,7 @@ export default defineBackground(() => {
       });
     else if (alarm.name === SLEEP_REVIEW_ALARM)
       void sleepReviewScheduler.handleAlarm(alarm);
+    else if (alarm.name === UPDATE_ALARM) void updates.status().then(state => {if (state.state === 'waiting' || state.auto && Date.now() - (state.checkedAt ?? 0) >= 6 * 60 * 60 * 1000) return updates.check(state.state === 'waiting');});
   });
 });
 

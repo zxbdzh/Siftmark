@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  bookmarkNodesToImportNodes,
   exportNetscapeBookmarkHtml,
   serializeNetscapeBookmarkHtml
 } from '../../../src/backup/netscape-html-exporter';
@@ -75,6 +76,37 @@ describe('Netscape bookmark HTML', () => {
     expect(
       await readBlobText(exportNetscapeBookmarkHtml(source.nodes))
     ).toContain('<DL><p>');
+  });
+
+  it('backs up all browser roots, empty folders, escaped URLs and internal bookmarks', () => {
+    const nodes = [
+      { id: '0', parentId: '', title: '', index: 0 },
+      { id: '1', parentId: '0', title: '书签栏', index: 0 },
+      { id: '2', parentId: '0', title: '其他书签', index: 1 },
+      { id: 'empty', parentId: '1', title: '空目录', index: 0 },
+      {
+        id: 'a',
+        parentId: '1',
+        title: '文档 <&>',
+        url: 'https://example.test/?a=1&b=2',
+        index: 1
+      },
+      {
+        id: 'b',
+        parentId: '2',
+        title: '设置',
+        url: 'chrome://settings',
+        index: 0
+      }
+    ];
+    const converted = bookmarkNodesToImportNodes(nodes);
+    expect(converted).toHaveLength(nodes.length - 1);
+    expect(bookmarkNodesToImportNodes(nodes.slice(1))).toEqual(converted);
+    const html = serializeNetscapeBookmarkHtml(converted);
+    expect(html).toContain('<H3>空目录</H3>');
+    expect(html).toContain('HREF="chrome://settings"');
+    expect(html).toContain('https://example.test/?a=1&amp;b=2');
+    expect(html.match(/<DT><A /g)).toHaveLength(2);
   });
 
   it('rejects files without bookmark entries and unsafe URLs', () => {

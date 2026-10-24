@@ -71,7 +71,7 @@ export class LocalCaptureExecutor implements CaptureExecutor {
     if (!sameBookmark(source, session.sourceSnapshot))
       throw new Error('书签已发生变化，请重新分析');
 
-    const batchId = this.createId();
+    const batchId = session.trigger === 'learning-review' ? `learning-execution:${session.id}` : this.createId();
     let batchIndex = 0;
     let destinationId = session.plan.destination.folderId;
     const destination = await this.dependencies.bookmarks.get(destinationId);
@@ -154,6 +154,8 @@ export class LocalCaptureExecutor implements CaptureExecutor {
       );
       current = { ...current, parentId: input.destinationId };
     }
+    // 主动复盘的授权仅覆盖位置调整，不改标题、笔记、标签、健康状态或分析元数据。
+    if (input.session.trigger === 'learning-review') return batchIndex;
     if (current.title !== plan.title) {
       await requireOperation(
         this.dependencies.commands.rename({

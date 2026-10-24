@@ -1,6 +1,6 @@
 {
   "name": "siftmark",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@10.15.0",
@@ -9,8 +9,8 @@
     "postinstall": "wxt prepare",
     "icons:generate": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/generate-icons.ps1",
     "dev": "wxt",
-    "build": "wxt build",
-    "zip": "wxt zip",
+    "build": "node scripts/prepare-updater.mjs && wxt build",
+    "zip": "node scripts/prepare-updater.mjs && wxt zip",
     "release:chromium": "%SystemRoot%\\System32\\WindowsPowerShell\\v1.0\\powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/package-release.ps1",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",

@@ -4,7 +4,7 @@ import type { Confidence } from '../storage/types';
 export const CAPTURE_SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1_000;
 
 export type CaptureTrigger =
-  'native-bookmark' | 'keyboard-command' | 'context-menu' | 'popup';
+  'native-bookmark' | 'keyboard-command' | 'context-menu' | 'popup' | 'learning-review';
 
 export type CaptureSessionState =
   | 'analyzing'
@@ -190,19 +190,25 @@ export interface CapturePreference {
   destinationFolderId?: string;
   destinationPath: string[];
   source:
-    'allow' | 'reject' | 'agent-adjustment' | 'sleep-review' | 'explicit-rule';
+    'allow' | 'reject' | 'agent-adjustment' | 'sleep-review' | 'explicit-rule' | 'local-feedback' | 'manual-move' | 'search' | 'user-correction';
   sourceSessionId: string;
   reviewSummary?: string;
   evidenceCount?: number;
   confidence?: Confidence;
   reviewedAt?: number;
+  status?: 'active' | 'corrected' | 'conflicted' | 'dismissed';
+  expiresAt?: number;
+  sourceBookmarkIds?: string[];
+  sourceEventIds?: string[];
+  queryTokens?: string[];
+  observationKind?: 'allow' | 'reject' | 'adjust' | 'undo' | 'move' | 'search';
   createdAt: number;
   updatedAt: number;
 }
 
 export interface CaptureLearningMemory extends CapturePreference {
   kind: 'learned';
-  source: 'sleep-review';
+  source: 'sleep-review' | 'local-feedback' | 'user-correction';
   reviewSummary: string;
   evidenceCount: number;
   confidence: Confidence;

@@ -1,5 +1,6 @@
 import Dexie, { type Table } from 'dexie';
 import type { SpecialFolderPlacement } from '../bookmarks/recycle-service';
+import type { OrganizationReviewRecord } from '../bookmarks/organization-review';
 import type { BookmarkMetadata } from './types';
 import type {
   AnalysisProposalRecord,
@@ -13,7 +14,9 @@ import type {
   SoftDeletedMetadata,
   TaskRecord,
   ThumbnailRecord,
-  VisitAggregate
+  VisitAggregate,
+  SyncDownloadBufferRecord,
+  SyncStateRecord,
 } from './schema';
 import {
   CURRENT_SCHEMA_VERSION,
@@ -33,9 +36,12 @@ export class SiftmarkDatabase extends Dexie {
   visitAggregates!: Table<VisitAggregate, string>;
   analysisProposals!: Table<AnalysisProposalRecord, string>;
   importRecoveryPoints!: Table<ImportRecoveryPointRecord, string>;
+  syncStates!: Table<SyncStateRecord, string>;
+  syncDownloadBuffers!: Table<SyncDownloadBufferRecord, string>;
   specialFolderPlacements!: Table<SpecialFolderPlacement, string>;
   captureSessions!: Table<CaptureSessionRecord, string>;
   capturePreferences!: Table<CapturePreferenceRecord, string>;
+  organizationReviews!: Table<OrganizationReviewRecord, string>;
 
   constructor(name = 'siftmark') {
     super(name);

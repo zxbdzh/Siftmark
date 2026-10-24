@@ -39,6 +39,7 @@ export class UndoService {
   async undo(id: string): Promise<Result<OperationRecord, OperationError>> {
     const operation = await this.operations.get(id);
     if (!operation) return err({ code: 'not_found', id });
+    if ('syncImported' in operation && operation.syncImported) return err({code: 'unsupported', type: 'synced-history'}); // 外来操作只作历史，不能在本机重放撤销。
     if (operation.undoneAt) return ok(operation);
 
     if (operation.type === 'create') {
@@ -91,10 +92,10 @@ export class UndoService {
       }
     } else if (operation.type === 'rename') {
       const current = await this.bookmarks.get(operation.bookmarkId);
-      if (!matches(current, operation.after, ['title']))
+      if (!matches(current, operation.after, Object.hasOwn(operation.after, 'url') ? ['title', 'url'] : ['title']))
         return conflict(operation, current);
       await this.bookmarks.update(operation.bookmarkId, {
-        title: String(operation.before.title)
+        title: String(operation.before.title), ...(Object.hasOwn(operation.before, 'url') ? { url: typeof operation.before.url === 'string' ? operation.before.url : undefined } : {})
       });
     } else if (operation.type === 'metadata' && this.metadata) {
       const current = await this.metadata.get(operation.bookmarkId);

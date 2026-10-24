@@ -1,6 +1,7 @@
-export const CURRENT_SCHEMA_VERSION = 5;
+export const CURRENT_SCHEMA_VERSION = 8;
 
 export const schemaStores = {
+  organizationReviews: '&id, state, updatedAt',
   bookmarkMetadata: '&bookmarkId, updatedAt, confidence, health',
   thumbnails: '&bookmarkId, hash, createdAt, lastAccessedAt',
   operationLog: '&id, batchId, idempotencyKey, createdAt',
@@ -13,6 +14,8 @@ export const schemaStores = {
   visitAggregates: '&bookmarkId, lastVisitedAt',
   analysisProposals: '&id, bookmarkId, state, createdAt',
   importRecoveryPoints: '&id, createdAt',
+  syncStates: '&id',
+  syncDownloadBuffers: '&id',
   specialFolderPlacements: '&bookmarkId, state, movedAt, [state+movedAt]',
   captureSessions:
     '&id, bookmarkId, state, createdAt, updatedAt, expiresAt, [state+updatedAt]',

@@ -138,28 +138,259 @@ section button {
 .ai-assignment-panel h3 {
   font-size: 15px;
 }
+.profile-list-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.profile-list-heading p {
+  margin: 4px 0 0;
+  color: var(--text-2);
+}
+.profile-list-heading > strong,
+.profile-list-heading-actions > strong {
+  flex: none;
+  color: var(--text-2);
+  font-size: 12px;
+}
+.profile-list-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.settings-eyebrow {
+  color: var(--text-2);
+  font-size: 10px;
+}
+.model-profile-add {
+  min-height: var(--control-height);
+  white-space: nowrap;
+}
+.model-profile-editor {
+  position: fixed;
+  inset: 0 0 0 auto;
+  width: min(700px, 100vw);
+  max-width: 700px;
+  min-height: 100vh;
+  max-height: 100vh;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md) 0 0 var(--radius-md);
+  background: var(--surface-0);
+  color: var(--text-1);
+  box-shadow: var(--shadow-lg);
+}
+.model-profile-editor::backdrop {
+  background: rgb(8 12 18 / 48%);
+}
+.model-editor-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border);
+}
+.model-editor-header h3,
+.model-editor-header p {
+  margin: 0;
+}
+.model-editor-header h3 {
+  margin-top: 5px;
+  font-size: 18px;
+}
+.model-editor-header p {
+  margin-top: 6px;
+  color: var(--text-2);
+  font-size: 12px;
+}
+.model-profile-editor form {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 16px;
+  padding: 20px 24px 24px;
+}
+.model-editor-fields {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.model-editor-fields > label {
+  display: contents;
+}
+.model-editor-fields > input,
+.model-editor-fields > label > input,
+.model-editor-fields > label > select {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.model-editor-fields > .form-fieldset {
+  grid-column: 2;
+  min-width: 0;
+}
+.model-profile-editor .form-actions {
+  justify-content: flex-end;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.model-profile-editor form > p,
+.model-profile-editor form > output {
+  margin: 0;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.model-profile-editor form > output {
+  color: var(--text-2);
+}
+.model-profile-toolbar {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) 130px 130px;
+  gap: 8px;
+  margin: 14px 0 10px;
+}
+.model-profile-search {
+  min-width: 0;
+  min-height: var(--control-height);
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+  padding: 0 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-0);
+  color: var(--text-3);
+}
+.model-profile-search:focus-within {
+  border-color: var(--settings-accent);
+}
+.model-profile-search input {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  outline: 0;
+}
+.model-profile-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.model-profile-list li {
+  min-width: 0;
+  min-height: 92px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 180px;
+  align-items: stretch;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-0);
+}
 .model-profile-list li[data-active='true'] {
   box-shadow: inset 3px 0 var(--focus);
+}
+.model-profile-list li[data-selected='true'] {
+  border-color: var(--settings-accent);
 }
 .model-profile-list li > button {
   min-width: 0;
   display: grid;
-  gap: 2px;
+  align-content: center;
+  justify-content: stretch;
+  justify-items: start;
+  gap: 5px;
+  padding: 12px 14px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   text-align: left;
 }
-.model-profile-list li > button span,
-.model-profile-list li > button small {
+.model-profile-title {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.model-profile-title strong,
+.model-profile-title code,
+.model-profile-list li > button > small {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.model-profile-list li > button small {
+.model-profile-title code {
+  color: var(--text-2);
+  font-size: 11px;
+}
+.model-profile-list li > button > small {
   color: var(--text-2);
 }
-.model-profile-list li > strong {
-  flex: none;
+.model-profile-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  overflow: visible;
+  white-space: normal;
+}
+.model-profile-tags > span {
+  padding: 2px 6px;
+  border-radius: var(--radius-full);
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: 10px;
+}
+.model-profile-tags > span[data-state='verified'] {
+  background: var(--success-subtle);
+  color: var(--success);
+}
+.model-profile-tags > span[data-state='draft'] {
+  background: var(--warning-subtle);
+  color: var(--warning);
+}
+.model-profile-tags > span[data-state='disabled'] {
+  background: var(--danger-subtle);
+  color: var(--danger);
+}
+.model-profile-list li > aside {
+  min-width: 0;
+  display: grid;
+  align-content: center;
+  gap: 4px;
+  padding: 12px 14px;
+  border-left: 1px solid var(--border);
+  background: var(--surface-1);
+}
+.model-profile-list li > aside strong,
+.model-profile-list li > aside small {
+  overflow-wrap: anywhere;
+}
+.model-profile-list li > aside strong {
   color: var(--focus);
   font-size: 12px;
+}
+.model-profile-list li > aside small {
+  color: var(--text-2);
+}
+.model-profile-list .model-profile-empty {
+  display: grid;
+  grid-template-columns: 1fr;
+  place-items: center;
+  min-height: 80px;
+  padding: 16px;
+  color: var(--text-2);
 }
 .ai-assignment-panel {
   display: grid;
@@ -2010,3 +2241,65 @@ input[type='range'] {
     background: Canvas;
   }
 }
+
+@media (max-width: 620px) {
+  .model-editor-fields {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+  .model-editor-fields > label {
+    display: grid;
+    gap: 6px;
+  }
+  .model-editor-fields > .form-fieldset {
+    grid-column: 1;
+    min-width: 0;
+  }
+  .model-profile-editor {
+    width: 100vw;
+    max-width: none;
+    border-radius: 0;
+  }
+  .model-profile-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .model-profile-list li {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .model-profile-list li > aside {
+    grid-template-columns: minmax(0, 1fr) auto;
+    border-top: 1px solid var(--border);
+    border-left: 0;
+  }
+}
+
+/* 同步与升级沿用设置页的字段行，长地址和冲突内容在现有主列内换行。 */
+.webdav-sync-section { min-width: 0; padding: 20px 0; border-top: 1px solid var(--border); }
+.webdav-sync-section h2 { display: flex; align-items: center; gap: 8px; margin: 0 0 6px; font-size: 18px; }
+.webdav-sync-section h3 { margin: 12px 0 8px; font-size: 15px; }
+.webdav-sync-section p { margin: 6px 0 12px; color: var(--text-2); font-size: 13px; line-height: 1.5; }
+.webdav-sync-section form { display: block; }
+.webdav-sync-section form > label:not(.inline-control) { display: grid; grid-template-columns: 140px minmax(0, 1fr); align-items: center; gap: 12px; min-height: 44px; border-bottom: 1px solid var(--border); font-size: 13px; }
+.webdav-sync-section input:not([type='checkbox']):not([type='radio']) { min-width: 0; width: 100%; height: 34px; box-sizing: border-box; padding: 0 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-1); color: var(--text-1); font: inherit; }
+.webdav-sync-section .inline-control { display: flex; align-items: center; gap: 8px; margin: 12px 0; font-size: 13px; }
+.webdav-sync-section input[type='checkbox'], .webdav-sync-section input[type='radio'] { width: 16px; height: 16px; flex: none; }
+.webdav-sync-section button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 32px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; background: transparent; color: var(--text-1); font: inherit; font-size: 13px; cursor: pointer; }
+.webdav-sync-section button:disabled { opacity: .5; cursor: default; }
+.webdav-sync-section button[type='submit'], .webdav-review > button { background: var(--settings-accent); border-color: var(--settings-accent); color: white; }
+.webdav-sync-section .form-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.webdav-sync-section output { display: block; margin: 10px 0; overflow-wrap: anywhere; color: var(--text-2); font-size: 13px; }
+.webdav-review { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 12px; }
+.webdav-review ul { margin: 8px 0; padding: 0; list-style: none; max-height: 440px; overflow: auto; }
+.webdav-review li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; padding: 9px 0; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; font-size: 13px; }
+.webdav-review li small { color: var(--text-2); }
+.webdav-review fieldset { grid-column: 1 / -1; min-width: 0; margin: 0; border: 1px solid var(--border); }
+.webdav-review fieldset label { display: flex; align-items: start; gap: 6px; margin: 6px 0; }
+.webdav-sync-section summary { margin: 10px 0; font-size: 13px; cursor: pointer; }
+.update-facts { margin: 10px 0; font-size: 13px; }
+.update-facts > div { display: grid; grid-template-columns: 140px minmax(0, 1fr); gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.update-facts dt { color: var(--text-2); }
+.update-facts dd { margin: 0; overflow-wrap: anywhere; }
+.update-install-command { display: block; padding: 10px; border: 1px solid var(--border); border-radius: 6px; overflow-wrap: anywhere; font-size: 12px; user-select: all; }
+@media (max-width: 640px) { .webdav-sync-section form > label:not(.inline-control), .update-facts > div { grid-template-columns: 1fr; gap: 6px; padding: 8px 0; } }

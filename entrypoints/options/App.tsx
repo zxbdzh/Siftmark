@@ -16,6 +16,8 @@ import type { RequestMetric } from '../../src/ai/network/request-metrics';
 import { UsageRepository } from '../../src/ai/network/usage-repository';
 import { ChromeProfileRepository } from '../../src/ai/profiles/profile-repository';
 import { ModelProfileService } from '../../src/ai/profiles/profile-service';
+import { WebDavSyncSection } from '../../src/ui/options/WebDavSyncSection';
+import { AutoUpdateSection } from '../../src/ui/options/AutoUpdateSection';
 import {
   DexieCapturePreferenceRepository,
   DexieCaptureSessionRepository
@@ -26,6 +28,7 @@ import type { ChromeBookmarkApi } from '../../src/platform/chrome/chrome-types';
 import { ChromeSettingsRepository } from '../../src/settings/settings-repository';
 import { ResetService } from '../../src/settings/reset-service';
 import { openSiftmarkDatabase } from '../../src/storage/database';
+
 import { BackupCenter } from '../../src/ui/backup/BackupCenter';
 import { BrandMark } from '../../src/ui/components/BrandMark';
 import { AiUsageSection } from '../../src/ui/options/AiUsageSection';
@@ -34,6 +37,7 @@ import { BlockedDomainsSection } from '../../src/ui/options/BlockedDomainsSectio
 import { BookmarkPreferencesSection } from '../../src/ui/options/BookmarkPreferencesSection';
 import { CapturePreferencesSection } from '../../src/ui/options/CapturePreferencesSection';
 import { CaptureLearningSection } from '../../src/ui/options/CaptureLearningSection';
+import { AgentExperienceService } from '../../src/capture-agent/experience-service';
 import { AgentHistorySection } from '../../src/ui/options/AgentHistorySection';
 import { HealthAutomationSection } from '../../src/ui/options/HealthAutomationSection';
 import { IncognitoSection } from '../../src/ui/options/IncognitoSection';
@@ -83,6 +87,7 @@ export default function App() {
     []
   );
   const usage = useMemo(() => new UsageRepository(database), [database]);
+  const experiences = useMemo(() => new AgentExperienceService(database, settings, bookmarks), [database, settings, bookmarks]);
   const capturePreferences = useMemo(
     () => new DexieCapturePreferenceRepository(database),
     [database]
@@ -185,9 +190,11 @@ export default function App() {
             <>
               <ModelProfilesSection repository={profiles} service={profileService} />
               <BookmarkPreferencesSection repository={settings} />
+              <WebDavSyncSection />
+              <AutoUpdateSection />
               <CaptureLearningSection
-                repository={capturePreferences}
                 settingsRepository={settings}
+                experiences={experiences}
               />
               <CapturePreferencesSection repository={capturePreferences} />
               <AppearanceSection repository={settings} />

@@ -1,4 +1,8 @@
 import type { AiAdapter } from './adapter';
+import type { AiOrganizationContext } from '../organization-types';
+import { buildOrganizationPrompt } from '../prompts/organization-prompt';
+import { organizationSchemaFor } from '../schemas/organization-contract';
+import { parseOrganizationText } from '../schemas/organization-parser';
 import type {
   AiAnalysisResult,
   AiCaptureReviewContext,
@@ -215,6 +219,57 @@ export class OpenAiResponsesAdapter implements AiAdapter {
           }
         : {})
     };
+  }
+
+  async planOrganization(
+    profile: ModelProfile,
+    context: AiOrganizationContext,
+    signal: AbortSignal
+  ) {
+    const prompt = buildOrganizationPrompt(context);
+    const startLevel = STRUCTURED_OUTPUT_PREFERENCES.indexOf(
+      structuredOutputFor(profile)
+    );
+    for (
+      let level = startLevel;
+      level < STRUCTURED_OUTPUT_PREFERENCES.length;
+      level += 1
+    ) {
+      let response: ResponsesResponse;
+      try {
+        response = await this.post<ResponsesResponse>({
+          url: appendEndpointPath(profile.endpoint, 'responses'),
+          headers: openAiHeaders(profile.apiKey),
+          signal,
+          timeoutMs: profile.timeoutMs,
+          body: {
+            model: profile.model,
+            instructions: prompt.system,
+            input: prompt.user,
+            max_output_tokens: 8192,
+            ...responsesTextObject(STRUCTURED_OUTPUT_PREFERENCES[level]!, {
+              name: 'siftmark_organization',
+              schema: organizationSchemaFor(context.mode)
+            })
+          }
+        });
+      } catch (error) {
+        if (
+          !isRejectableProviderError(error) ||
+          level === STRUCTURED_OUTPUT_PREFERENCES.length - 1
+        )
+          throw error;
+        continue;
+      }
+      const text = readResponseText(response);
+      if (!text)
+        throw new ProviderError('unknown-result', 'AI 未返回全量规划结果');
+      return {
+        ...parseOrganizationText(text, context.mode),
+        usageTokens: response.usage?.total_tokens
+      };
+    }
+    throw new ProviderError('validation', '所选模型不支持全量规划结构');
   }
 
   async reviewCaptureHistory(

@@ -17,6 +17,11 @@ test('restores the five-minute sleep-review alarm when enabled', async ({
         enabled: true,
         idleMinutes: 15,
         batchSize: 8
+      },
+      /* 睡眠复盘归属学习闭环，必须先开启学习授权，闹钟才会创建 */
+      'siftmark.settings.agent-learning.v1': {
+        enabled: true,
+        proactive: true
       }
     });
   });

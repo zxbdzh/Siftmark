@@ -23,6 +23,18 @@ describe('LocalCaptureExecutor', () => {
     });
   });
 
+  it('limits a proactive approval to one recorded move and keeps its batch identity across restarts', async () => {
+    const dependencies = createDependencies();
+    const executor = new LocalCaptureExecutor(dependencies);
+    const current = session({ trigger: 'learning-review' });
+    const result = await executor.execute(current);
+    expect(result.batchId).toBe(`learning-execution:${current.id}`);
+    expect(dependencies.commands.move).toHaveBeenCalledTimes(1);
+    expect(dependencies.commands.rename).not.toHaveBeenCalled();
+    expect(dependencies.commands.updateMetadata).not.toHaveBeenCalled();
+    expect(dependencies.commands.remove).not.toHaveBeenCalled();
+  });
+
   it('executes the displayed move, rename and metadata as one batch', async () => {
     const dependencies = createDependencies();
     dependencies.bookmarks.get.mockResolvedValueOnce({

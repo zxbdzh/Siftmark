@@ -49,11 +49,33 @@ describe('ModelProfileService', () => {
     );
 
     await expect(
-      service.assign(
-        { ...profile, capabilities: ['summarize'] },
-        ['agent']
-      )
+      service.assign({ ...profile, capabilities: ['summarize'] }, ['agent'])
     ).rejects.toThrow('模型不支持 agent');
     expect(settings.setProfileAssignments).not.toHaveBeenCalled();
+  });
+
+  it('does not replace stored configuration when verification is cancelled before the probe returns', async () => {
+    const controller = new AbortController();
+    const profiles = { put: vi.fn() };
+    const adapter = {
+      testConnection: vi.fn(async () => {
+        controller.abort();
+        return {
+          authentication: true,
+          text: true,
+          structuredOutput: true,
+          embedding: false
+        };
+      })
+    };
+    const service = new ModelProfileService(
+      profiles as never,
+      { get: () => adapter } as never,
+      {} as never
+    );
+    await expect(
+      service.verify(profile, controller.signal)
+    ).rejects.toMatchObject({ name: 'AbortError' });
+    expect(profiles.put).not.toHaveBeenCalled();
   });
 });

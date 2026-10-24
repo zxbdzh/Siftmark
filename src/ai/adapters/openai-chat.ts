@@ -1,4 +1,8 @@
 import type { AiAdapter } from './adapter';
+import type { AiOrganizationContext } from '../organization-types';
+import { buildOrganizationPrompt } from '../prompts/organization-prompt';
+import { organizationSchemaFor } from '../schemas/organization-contract';
+import { parseOrganizationText } from '../schemas/organization-parser';
 import type {
   AiAnalysisResult,
   AiCaptureReviewContext,
@@ -33,7 +37,7 @@ import {
 type Poster = <T>(request: ProviderJsonRequest) => Promise<T>;
 
 interface ChatResponse {
-  choices?: Array<{ message?: { content?: string } }>;
+  choices?: Array<{ message?: { content?: string }; finish_reason?: string }>;
   usage?: { total_tokens?: number };
 }
 interface EmbeddingResponse {
@@ -210,6 +214,70 @@ export class OpenAiChatAdapter implements AiAdapter {
           }
         : {})
     };
+  }
+
+  async planOrganization(
+    profile: ModelProfile,
+    context: AiOrganizationContext,
+    signal: AbortSignal
+  ) {
+    const prompt = buildOrganizationPrompt(context);
+    const startLevel = STRUCTURED_OUTPUT_PREFERENCES.indexOf(
+      structuredOutputFor(profile)
+    );
+    for (
+      let level = startLevel;
+      level < STRUCTURED_OUTPUT_PREFERENCES.length;
+      level += 1
+    ) {
+      let response: ChatResponse;
+      try {
+        response = await this.post<ChatResponse>({
+          url: appendEndpointPath(profile.endpoint, 'chat/completions'),
+          headers: openAiHeaders(profile.apiKey),
+          signal,
+          timeoutMs: profile.timeoutMs,
+          body: {
+            model: profile.model,
+            messages: [
+              { role: 'system', content: prompt.system },
+              { role: 'user', content: prompt.user }
+            ],
+            // 批量归属比单条分析长，预留足够输出以避免半个计划被执行。
+            max_tokens: 8192,
+            // DeepSeek 官方默认高强度思考，结构化规划关闭它，避免推理占完输出预算。
+            ...(new URL(profile.endpoint).hostname === 'api.deepseek.com'
+              ? { thinking: { type: 'disabled' } }
+              : {}),
+            ...chatResponseFormatObject(STRUCTURED_OUTPUT_PREFERENCES[level]!, {
+              name: 'siftmark_organization',
+              schema: organizationSchemaFor(context.mode)
+            })
+          }
+        });
+      } catch (error) {
+        if (
+          !isRejectableProviderError(error) ||
+          level === STRUCTURED_OUTPUT_PREFERENCES.length - 1
+        )
+          throw error;
+        continue;
+      }
+      // 即使截断片段恰好能解析成 JSON，也不能把未完整结束的计划交给执行器。
+      if (response.choices?.[0]?.finish_reason === 'length')
+        throw new ProviderError(
+          'unknown-result',
+          'AI 全量规划输出被截断，未执行移动，请重试或更换模型'
+        );
+      const text = response.choices?.[0]?.message?.content;
+      if (!text)
+        throw new ProviderError('unknown-result', 'AI 未返回全量规划结果');
+      return {
+        ...parseOrganizationText(text, context.mode),
+        usageTokens: response.usage?.total_tokens
+      };
+    }
+    throw new ProviderError('validation', '所选模型不支持全量规划结构');
   }
 
   async reviewCaptureHistory(
